@@ -1,0 +1,46 @@
+# ==============================================================================
+# STUDIO 4 Vol. 3 - Git Ignore
+# ==============================================================================
+
+# Variables de entorno y credenciales (¡NUNCA SUBIR A GITHUB!)
+.env
+.env.local
+.env.*.local
+*.pem
+credentials.json
+service_account.json
+gcp-key.json
+
+# Entornos virtuales Python
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Bytecode de Python y caché
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Archivos de medios temporales y renders de salida
+output/
+temp_clips/
+*.mp4
+*.wav
+*.mp3
+*.aac
+*.avi
+*.mkv
+
+# Configuración de editores y SO
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
