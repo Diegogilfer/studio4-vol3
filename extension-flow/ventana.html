@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>STUDIO #4 · Google Flow</title>
+  <style>
+    :root { --fondo: #0d0b14; --panel: #17131f; --borde: #2c2540; --texto: #ece9f5; --tenue: #9a93ad;
+            --violeta: #8b5cf6; --ok: #34d399; --aviso: #f59e0b; }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; width: 340px; background: var(--fondo); color: var(--texto);
+           font: 13px/1.45 system-ui, "Segoe UI", sans-serif; }
+    header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--borde); }
+    header img { width: 28px; height: 28px; }
+    header b { display: block; font-size: 14px; }
+    header span { color: var(--tenue); font-size: 12px; }
+    main { display: grid; gap: 12px; padding: 14px 16px 16px; }
+    label { display: grid; gap: 4px; font-size: 12px; color: var(--tenue); }
+    input[type=text], input[type=password] { width: 100%; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--borde);
+            background: var(--panel); color: var(--texto); font: inherit; }
+    .fila { display: flex; gap: 8px; align-items: center; }
+    button { flex: 1; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--borde); background: var(--panel);
+             color: var(--texto); font: inherit; cursor: pointer; }
+    button.primario { background: var(--violeta); border-color: var(--violeta); color: #fff; font-weight: 600; }
+    .estado { padding: 9px 11px; border-radius: 10px; border: 1px solid var(--borde); background: var(--panel); }
+    .estado.ok { border-color: color-mix(in oklab, var(--ok) 60%, transparent); }
+    .estado.mal { border-color: color-mix(in oklab, var(--aviso) 60%, transparent); }
+    .cifras { display: flex; justify-content: space-between; color: var(--tenue); font-size: 12px; }
+    .cifras b { color: var(--texto); }
+    .nota { color: var(--tenue); font-size: 11.5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icono-48.png" alt="">
+    <div><b>Recoger de Google Flow</b><span>Cada imagen que generas va a tu STUDIO #4</span></div>
+  </header>
+  <main>
+    <div id="estado" class="estado">Comprobando…</div>
+    <div id="escena" class="estado" hidden>
+      <b id="escena-titulo"></b>
+      <pre id="escena-prompt" style="white-space:pre-wrap;max-height:120px;overflow:auto;margin:6px 0;font:11px/1.4 ui-monospace,Consolas,monospace;color:var(--texto)"></pre>
+      <div class="fila"><button id="copiar" class="primario">Copiar instrucción</button></div>
+      <div id="referencia" class="fila" hidden style="margin-top:8px">
+        <img id="referencia-img" alt="" style="height:56px;border-radius:6px;object-fit:cover">
+        <button id="copiar-ref" title="Pégala en Flow con Ctrl+V como imagen de referencia">Copiar imagen base</button>
+      </div>
+      <p id="escena-nota" class="nota" style="margin:6px 0 0"></p>
+    </div>
+    <label>Código de emparejamiento
+      <input id="codigo" type="password" autocomplete="off" placeholder="Pégalo desde STUDIO #4 › Ajustes › Conexiones">
+    </label>
+    <label>Dónde está tu STUDIO #4
+      <input id="servidor" type="text" spellcheck="false">
+    </label>
+    <label class="fila" style="display:flex;color:var(--texto)">
+      <input id="activo" type="checkbox"> Recoger las imágenes nuevas
+    </label>
+    <div class="fila">
+      <button id="guardar" class="primario">Guardar y probar</button>
+      <button id="visibles" title="Manda también las imágenes que ya están en la pantalla de Flow">Enviar las de pantalla</button>
+    </div>
+    <div class="cifras"><span>Enviadas: <b id="enviadas">0</b></span><span id="ultima"></span></div>
+    <p class="nota">No escribe prompts ni pulsa nada en Flow, y no lee tu cuenta de Google: solo recoge lo que tú generas.</p>
+  </main>
+  <script src="ventana.js"></script>
+</body>
+</html>

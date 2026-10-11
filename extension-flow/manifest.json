@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "STUDIO #4 · Recoger de Google Flow",
+  "version": "1.1.0",
+  "description": "Manda a tu STUDIO #4 (en tu equipo) cada imagen que generas en Google Flow. No automatiza Flow ni lee tu cuenta.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://labs.google/*",
+    "https://*.googleusercontent.com/*",
+    "https://storage.googleapis.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
+  ],
+  "background": { "service_worker": "fondo.js" },
+  "content_scripts": [
+    { "matches": ["https://labs.google/*"], "js": ["recoger.js"], "run_at": "document_idle" },
+    { "matches": [
+        "http://127.0.0.1:8000/flow/emparejar*",
+        "http://localhost:8000/flow/emparejar*",
+        "http://127.0.0.1/flow/emparejar*",
+        "http://localhost/flow/emparejar*"
+      ],
+      "js": ["emparejar.js"], "run_at": "document_idle" }
+  ],
+  "action": {
+    "default_title": "STUDIO #4 · Google Flow",
+    "default_popup": "ventana.html",
+    "default_icon": { "16": "icono-16.png", "32": "icono-32.png", "48": "icono-48.png", "128": "icono-128.png" }
+  },
+  "icons": { "16": "icono-16.png", "32": "icono-32.png", "48": "icono-48.png", "128": "icono-128.png" }
+}

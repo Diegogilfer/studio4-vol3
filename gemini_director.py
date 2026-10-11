@@ -24,7 +24,7 @@ load_dotenv()
 
 logger = logging.getLogger("studio4.gemini_director")
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 
 # ==============================================================================
@@ -134,21 +134,41 @@ def estructurar_produccion(
         f"--- FIN DEL GUION ---"
     )
 
-    logger.info("Enviando guion a Gemini (%s) para estructuración de producción...", model)
+    logger.info("Enviando guion a Gemini para estructuración de producción...")
 
-    try:
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=ProductionPlan,
-                temperature=0.2,
-            ),
-        )
-    except Exception as e:
-        logger.error("Error al invocar Google GenAI: %s", e)
-        raise
+    modelos_candidatos = [model, "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.1-pro-preview"]
+    # Eliminar duplicados preservando orden
+    modelos_candidatos = list(dict.fromkeys(modelos_candidatos))
+    
+    response = None
+    ultimo_error = None
+
+    import time
+    for m in modelos_candidatos:
+        for intento in range(2):
+            try:
+                logger.info("Intentando con modelo %s (intento %d)...", m, intento + 1)
+                response = client.models.generate_content(
+                    model=m,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=ProductionPlan,
+                        temperature=0.2,
+                    ),
+                )
+                if response and response.text:
+                    break
+            except Exception as e:
+                ultimo_error = e
+                logger.warning("Fallo con modelo %s en intento %d: %s", m, intento + 1, e)
+                time.sleep(2)
+        if response and response.text:
+            break
+
+    if not response or not response.text:
+        logger.error("Todos los modelos de Gemini fallaron: %s", ultimo_error)
+        raise ultimo_error
 
     raw_text = response.text or ""
     if not raw_text.strip():

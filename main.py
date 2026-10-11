@@ -29,7 +29,8 @@ from dotenv import load_dotenv
 from writer import escribir_guion
 from gemini_director import estructurar_produccion
 from voice import generar_locucion
-from video_maker import descargar_broll, ensamblar_video
+from video_maker import descargar_broll, ensamblar_video, preparar_visuales_escenas
+import google_flow
 
 # Cargar variables de entorno
 load_dotenv()
@@ -171,6 +172,14 @@ def ejecutar_pipeline(
         json.dumps(plan_produccion, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     print(f"   📋 Metadatos y desglose guardados en: {plan_file}")
+
+    # Inicializar la sesión de escenas para Google Flow
+    google_flow.iniciar_sesion_flow(
+        scenes=scenes,
+        title=plan_produccion.get("title", ""),
+        style="cinematic photorealistic 4k",
+    )
+    print("   🌊 Sesión de Google Flow inicializada con las escenas preparadas.")
 
     # =========================================================================
     # FASE 3: LOCUCIÓN PROFESIONAL (GOOGLE CLOUD TTS)

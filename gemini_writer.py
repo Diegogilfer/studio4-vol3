@@ -19,7 +19,7 @@ load_dotenv()
 
 logger = logging.getLogger("studio4.gemini_writer")
 
-DEFAULT_MODEL = os.getenv("GEMINI_WRITER_MODEL", "gemini-2.5-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_WRITER_MODEL", "gemini-3.5-flash-lite")
 
 SYSTEM_INSTRUCTION = """Eres un guionista audiovisual de élite especializado en redacción magnética, storytelling viral y máxima retención para videos de YouTube y formatos modernos.
 
