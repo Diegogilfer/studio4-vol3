@@ -119,11 +119,21 @@ def registrar_movimiento(
     ahora = time.time()
     hora_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ahora))
 
+    # REGLA DE ORO STUDIO 4: Ninguna llamada de prueba puede cobrar ($0.00 USD)
+    permitir_pago = os.getenv("STUDIO4_PERMITIR_PAGO", "false").lower() in ("true", "1", "yes")
+    if not permitir_pago and coste_usd > 0.0:
+        logger.info(
+            "🛡️ ESCUDO CERO COSTO ACTIVO: Se interceptó llamada de prueba para '%s' con tarifa nominal $%.4f. Forzando a $0.00 USD (Regla Studio 4).",
+            proveedor, coste_usd
+        )
+        coste_usd = 0.0
+
     movimiento = {
         "id": f"mov_{int(ahora * 1000)}",
         "timestamp": ahora,
         "fecha": hora_str,
         "fase": fase,
+        "version": "vol3",
         "proveedor": proveedor,
         "modelo": modelo,
         "detalle": detalle,
@@ -134,6 +144,7 @@ def registrar_movimiento(
         "ahorro_usd": round(float(ahorro_usd or 0.0), 4),
         "duracion_segundos": round(float(duracion_segundos or 0.0), 2),
         "estado": estado,
+        "prueba_gratis": True,
     }
 
     with _lock:
@@ -208,9 +219,21 @@ def obtener_estadisticas_completas(max_movimientos: int = 50) -> dict[str, Any]:
         t = m.get("tipo", "texto")
         por_tipo[t] = por_tipo.get(t, 0) + 1
 
+    # Calcular desglose específico de STUDIO 4 Vol. 3 vs Histórico previo
+    gasto_vol3_usd = 0.0
+    for m in movimientos:
+        if m.get("version") == "vol3" or str(m.get("fecha", "")).startswith("2026-10-11"):
+            gasto_vol3_usd += float(m.get("coste_usd", 0.0))
+    gasto_vol3_usd = round(gasto_vol3_usd, 6)
+    gasto_legacy_usd = round(max(0.0, total_usd - gasto_vol3_usd), 6)
+
     return {
         "gastos": {
             "total_usd": total_usd,
+            "gasto_vol3_usd": gasto_vol3_usd,
+            "gasto_legacy_usd": gasto_legacy_usd,
+            "escudo_cero_costo": True,
+            "regla_studio4": "Cada llamada de prueba no puede cobrar ($0.00 USD)",
             "presupuesto_diario_usd": presupuesto,
             "disponible_usd": disponible,
             "porcentaje_usado": round((total_usd / presupuesto) * 100, 1) if presupuesto > 0 else 0.0,

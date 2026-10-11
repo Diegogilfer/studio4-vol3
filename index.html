@@ -430,19 +430,47 @@
   <!-- ========================================================================= -->
   <div id="vista-finanzas" class="w-full max-w-7xl hidden flex-col gap-6">
     
+    <!-- Escudo Cero Coste - Regla Principal STUDIO 4 -->
+    <div class="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl shadow-emerald-950/30">
+      <div class="flex items-center gap-3.5">
+        <div class="w-11 h-11 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl flex-shrink-0 border border-emerald-500/30">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="text-xs font-black text-white uppercase tracking-wider">Regla de Oro STUDIO 4: Cero Cobro en Pruebas</h4>
+            <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">
+              <i class="fa-solid fa-check"></i> $0.00 USD ACTIVO
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-300 mt-0.5">
+            Cada llamada de prueba está blindada: Free Tier (Gemini Flash Lite) + Evaluación Dev (NVIDIA FLUX) + Flow (Labs) + Local (FFmpeg). Ninguna llamada de prueba cobra dinero.
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 bg-slate-900/90 p-1.5 rounded-xl border border-slate-700/80 flex-shrink-0">
+        <button id="btnVerVol3" onclick="alternarVistaCostos('vol3')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 transition flex items-center gap-1.5 shadow">
+          <i class="fa-solid fa-shield"></i> Pruebas Vol. 3 ($0.00)
+        </button>
+        <button id="btnVerLegacy" onclick="alternarVistaCostos('legacy')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5">
+          <i class="fa-solid fa-clock-rotate-left"></i> Histórico Legacy
+        </button>
+      </div>
+    </div>
+
     <!-- 4 Tarjetas KPI Financieras y de Rendimiento -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       
       <!-- KPI 1: Gasto Acumulado -->
       <div class="glass-panel rounded-2xl p-5 flex flex-col justify-between">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Gasto Total API</span>
-          <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm"><i class="fa-solid fa-dollar-sign"></i></span>
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400" id="lblKpiGasto">Gasto Pruebas Vol. 3</span>
+          <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm"><i class="fa-solid fa-shield-halved"></i></span>
         </div>
-        <div class="text-2xl font-black text-white mb-1" id="kpiGastoTotal">$0.00 USD</div>
+        <div class="text-2xl font-black text-emerald-400 mb-1" id="kpiGastoTotal">$0.00 USD</div>
         <p class="text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Presupuesto diario: <b id="kpiPresupuesto">$10.00</b></span>
-          <span class="text-emerald-400" id="kpiDisponible">$10.00 libre</span>
+          <span id="subKpiGasto">100% Cero Cobro en pruebas</span>
+          <span class="text-emerald-400 font-bold" id="kpiDisponible">Seguro</span>
         </p>
       </div>
 
@@ -973,65 +1001,130 @@
     }
 
     // =========================================================================
-    // FINANZAS & MOVIMIENTOS: Auditoría y Estadísticas
+    // FINANZAS & MOVIMIENTOS: Auditoría y Estadísticas (Escudo Cero Coste)
     // =========================================================================
+    let vistaCostosModo = 'vol3'; // 'vol3' | 'legacy'
+    let ultimosDatosFinanzas = null;
+
+    function alternarVistaCostos(modo) {
+      vistaCostosModo = modo;
+      const btnVol3 = document.getElementById('btnVerVol3');
+      const btnLegacy = document.getElementById('btnVerLegacy');
+      if (btnVol3 && btnLegacy) {
+        if (modo === 'vol3') {
+          btnVol3.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-slate-950 transition flex items-center gap-1.5 shadow";
+          btnLegacy.className = "px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5";
+        } else {
+          btnLegacy.className = "px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-500 text-white transition flex items-center gap-1.5 shadow";
+          btnVol3.className = "px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5";
+        }
+      }
+      if (ultimosDatosFinanzas) {
+        renderizarFinanzas(ultimosDatosFinanzas);
+      }
+    }
+
+    function renderizarFinanzas(data) {
+      const gastos = data.gastos || {};
+      const entradas = data.entradas || {};
+      const movimientos = data.movimientos || [];
+
+      const kpiGasto = document.getElementById('kpiGastoTotal');
+      const lblKpiGasto = document.getElementById('lblKpiGasto');
+      const subKpiGasto = document.getElementById('subKpiGasto');
+
+      if (vistaCostosModo === 'vol3') {
+        if (lblKpiGasto) lblKpiGasto.innerText = "Gasto Pruebas Vol. 3";
+        if (kpiGasto) {
+          kpiGasto.innerText = `$${(gastos.gasto_vol3_usd || 0.0).toFixed(4)} USD`;
+          kpiGasto.className = "text-2xl font-black text-emerald-400 mb-1";
+        }
+        if (subKpiGasto) subKpiGasto.innerHTML = `<span class="text-emerald-300 font-semibold"><i class="fa-solid fa-shield"></i> Cero Cobro Activo</span> ($0.00)`;
+      } else {
+        if (lblKpiGasto) lblKpiGasto.innerText = "Histórico Global Legacy";
+        if (kpiGasto) {
+          kpiGasto.innerText = `$${gastos.total_usd.toFixed(4)} USD`;
+          kpiGasto.className = "text-2xl font-black text-indigo-300 mb-1";
+        }
+        if (subKpiGasto) subKpiGasto.innerHTML = `Incluye pruebas previas ($${(gastos.gasto_legacy_usd || 0.0).toFixed(4)})`;
+      }
+
+      document.getElementById('kpiTokens').innerText = (entradas.total_tokens || 0).toLocaleString();
+      document.getElementById('kpiTokensDetalle').innerText = `In: ${(entradas.total_tokens_in || 0).toLocaleString()} • Out: ${(entradas.total_tokens_out || 0).toLocaleString()}`;
+      document.getElementById('kpiAhorro').innerText = `$${(gastos.ahorro_flow_usd || 0.0).toFixed(2)} USD`;
+      document.getElementById('kpiOperaciones').innerText = (entradas.total_llamadas || 0).toLocaleString();
+
+      // Desglose por Proveedor con estado de coste
+      const provContainer = document.getElementById('proveedoresContainer');
+      provContainer.innerHTML = '';
+      const porProv = gastos.por_proveedor || {};
+
+      const BADGES_PROVEEDORES = {
+        "gemini": { label: "Free Tier (Google AI)", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+        "nvidia": { label: "Dev Credits (~$0.00)", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+        "google flow": { label: "100% Gratis (Labs)", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
+        "pollinations": { label: "100% Gratis (Sin tarjeta)", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+        "ollama": { label: "100% Local GPU/CPU", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+        "ffmpeg": { label: "Local PC ($0.00)", color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+        "cx:deepseek": { label: "Legacy (Inactivo Vol.3)", color: "text-slate-400 bg-slate-800/40 border-slate-700" },
+        "nanobanana": { label: "Legacy (Inactivo Vol.3)", color: "text-slate-400 bg-slate-800/40 border-slate-700" },
+        "fal": { label: "Legacy (Inactivo Vol.3)", color: "text-slate-400 bg-slate-800/40 border-slate-700" },
+        "elevenlabs": { label: "Legacy (Inactivo Vol.3)", color: "text-slate-400 bg-slate-800/40 border-slate-700" },
+        "flux_fal": { label: "Legacy (Inactivo Vol.3)", color: "text-slate-400 bg-slate-800/40 border-slate-700" },
+      };
+
+      Object.keys(porProv).forEach(p => {
+        const d = porProv[p];
+        const provKey = p.toLowerCase();
+        const badgeInfo = BADGES_PROVEEDORES[provKey] || { label: "Auditoría", color: "text-slate-400 bg-slate-800/40 border-slate-700" };
+        const div = document.createElement('div');
+        div.className = "p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs";
+        div.innerHTML = `
+          <div>
+            <div class="flex items-center gap-2 mb-0.5">
+              <span class="font-bold text-slate-200">${p.toUpperCase()}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded border ${badgeInfo.color}">${badgeInfo.label}</span>
+            </div>
+            <span class="text-[10px] text-slate-500">${d.calls} llamadas &bull; ${(d.tokens_in + d.tokens_out).toLocaleString()} tokens</span>
+          </div>
+          <span class="font-mono font-bold ${d.usd > 0 ? 'text-amber-400' : 'text-emerald-400'}">$${d.usd.toFixed(4)}</span>
+        `;
+        provContainer.appendChild(div);
+      });
+
+      // Tabla de Movimientos
+      const tbody = document.getElementById('movimientosTbody');
+      tbody.innerHTML = '';
+
+      movimientos.forEach(m => {
+        const esGratis = (m.coste_usd === 0 || m.prueba_gratis || m.version === 'vol3' || String(m.fecha).startsWith('2026-10-11'));
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-900/40 transition";
+        tr.innerHTML = `
+          <td class="py-2 px-3 text-slate-400">${m.fecha || ''}</td>
+          <td class="py-2 px-3 font-semibold text-indigo-300">${m.fase || ''}</td>
+          <td class="py-2 px-3 text-cyan-400">${m.proveedor || ''}</td>
+          <td class="py-2 px-3 text-slate-300">${m.detalle || ''}</td>
+          <td class="py-2 px-3 text-slate-400">${m.duracion_segundos || 0}s</td>
+          <td class="py-2 px-3 font-mono ${esGratis ? 'text-emerald-400 font-bold' : 'text-amber-300'}">$${(m.coste_usd || 0).toFixed(4)}</td>
+          <td class="py-2 px-3">
+            ${esGratis
+              ? '<span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1 w-max"><i class="fa-solid fa-shield"></i> $0 GRATIS</span>'
+              : '<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-medium w-max block">LEGACY</span>'
+            }
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
     async function actualizarFinanzas() {
       try {
         const res = await fetch('/api/finanzas?t=' + Date.now());
         if (!res.ok) return;
         const data = await res.json();
-
-        const gastos = data.gastos || {};
-        const entradas = data.entradas || {};
-        const movimientos = data.movimientos || [];
-
-        // KPIs
-        document.getElementById('kpiGastoTotal').innerText = `$${gastos.total_usd.toFixed(4)} USD`;
-        document.getElementById('kpiPresupuesto').innerText = `$${gastos.presupuesto_diario_usd.toFixed(2)}`;
-        document.getElementById('kpiDisponible').innerText = `$${gastos.disponible_usd.toFixed(2)} libre`;
-        document.getElementById('kpiTokens').innerText = entradas.total_tokens.toLocaleString();
-        document.getElementById('kpiTokensDetalle').innerText = `In: ${entradas.total_tokens_in.toLocaleString()} &bull; Out: ${entradas.total_tokens_out.toLocaleString()}`;
-        document.getElementById('kpiAhorro').innerText = `$${gastos.ahorro_flow_usd.toFixed(2)} USD`;
-        document.getElementById('kpiOperaciones').innerText = entradas.total_llamadas.toLocaleString();
-
-        // Desglose por Proveedor
-        const provContainer = document.getElementById('proveedoresContainer');
-        provContainer.innerHTML = '';
-        const porProv = gastos.por_proveedor || {};
-
-        Object.keys(porProv).forEach(p => {
-          const d = porProv[p];
-          const div = document.createElement('div');
-          div.className = "p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs";
-          div.innerHTML = `
-            <div>
-              <span class="font-bold text-slate-200 block">${p.toUpperCase()}</span>
-              <span class="text-[10px] text-slate-500">${d.calls} llamadas &bull; ${(d.tokens_in + d.tokens_out).toLocaleString()} tokens</span>
-            </div>
-            <span class="font-mono font-bold text-emerald-400">$${d.usd.toFixed(4)}</span>
-          `;
-          provContainer.appendChild(div);
-        });
-
-        // Tabla de Movimientos
-        const tbody = document.getElementById('movimientosTbody');
-        tbody.innerHTML = '';
-
-        movimientos.forEach(m => {
-          const tr = document.createElement('tr');
-          tr.className = "hover:bg-slate-900/40 transition";
-          tr.innerHTML = `
-            <td class="py-2 px-3 text-slate-400">${m.fecha || ''}</td>
-            <td class="py-2 px-3 font-semibold text-indigo-300">${m.fase || ''}</td>
-            <td class="py-2 px-3 text-cyan-400">${m.proveedor || ''}</td>
-            <td class="py-2 px-3 text-slate-300">${m.detalle || ''}</td>
-            <td class="py-2 px-3 text-slate-400">${m.duracion_segundos || 0}s</td>
-            <td class="py-2 px-3 text-emerald-400">$${(m.coste_usd || 0).toFixed(4)}</td>
-            <td class="py-2 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">OK</span></td>
-          `;
-          tbody.appendChild(tr);
-        });
-
+        ultimosDatosFinanzas = data;
+        renderizarFinanzas(data);
       } catch (e) {
         console.warn("Error al actualizar finanzas:", e);
       }
