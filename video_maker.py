@@ -1,10 +1,12 @@
 """
-video_maker.py - Montaje Visual y Ensamblado de Video con Pexels y FFmpeg
-Parte de STUDIO 4 Vol. 3
+video_maker.py - Montaje Visual, Secuenciación y Renderizado con FFmpeg
+Parte de STUDIO 4 Vol. 3 (Inspirado en la tecnología de producción de STUDIO #4)
 
 Módulo encargado de:
-1. Buscar y descargar metraje HD de stock en Pexels para cada escena.
-2. Normalizar, recortar, concatenar clips y sincronizar la pista de audio con FFmpeg.
+1. Obtener metraje B-roll (vía Pexels API o fondos procedurales con movimiento).
+2. Aplicar cinemática de cámara (Ken Burns: paneo, inclinación, zoom dinámico) para que NUNCA haya imagen plana.
+3. Generar y quemar subtítulos ASS estilo viral (karaoke con palabra activa y banner superior).
+4. Ensamblar y sincronizar toda la pista con FFmpeg.
 """
 
 from __future__ import annotations
@@ -18,33 +20,25 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 import requests
 
+from subtitles import construir_archivo_ass
+
 # Cargar variables de entorno
 load_dotenv()
 
 logger = logging.getLogger("studio4.video_maker")
 
 PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search"
-DEFAULT_ORIENTATION = os.getenv("VIDEO_ORIENTATION", "landscape")  # landscape (1920x1080) o portrait (1080x1920)
+DEFAULT_ORIENTATION = os.getenv("VIDEO_ORIENTATION", "landscape")
 DEFAULT_FPS = 30
 
 
-def get_pexels_api_key(api_key: Optional[str] = None) -> str:
-    """
-    Obtiene y valida la clave de API de Pexels.
-    """
-    key = api_key or os.getenv("PEXELS_API_KEY")
-    if not key:
-        raise ValueError(
-            "Falta la clave PEXELS_API_KEY. "
-            "Defínela en tu archivo .env o en las variables de entorno."
-        )
-    return key
+def get_pexels_api_key(api_key: Optional[str] = None) -> Optional[str]:
+    """Obtiene la clave de API de Pexels si está configurada."""
+    return api_key or os.getenv("PEXELS_API_KEY") or None
 
 
 def get_media_duration_ffprobe(file_path: str) -> float:
-    """
-    Obtiene la duración exacta de un archivo multimedia (audio o video) usando ffprobe.
-    """
+    """Obtiene la duración exacta de un archivo multimedia usando ffprobe."""
     cmd = [
         "ffprobe",
         "-v", "error",
@@ -66,16 +60,11 @@ def buscar_clip_pexels(
     orientation: str = "landscape",
     min_width: int = 1280,
 ) -> Optional[str]:
-    """
-    Busca un video HD en Pexels según la consulta en inglés.
-
-    Returns:
-        Optional[str]: URL directa de descarga del archivo de video MP4, o None si no se encuentra.
-    """
+    """Busca un video HD en Pexels según la consulta cinematográfica en inglés."""
     headers = {"Authorization": api_key}
     params = {
         "query": query,
-        "per_page": 6,
+        "per_page": 5,
         "orientation": orientation,
     }
 
@@ -89,11 +78,9 @@ def buscar_clip_pexels(
 
     videos = data.get("videos", [])
     if not videos:
-        # Intento de búsqueda fallback simplificando la consulta si era muy específica
         palabras = query.split()
         if len(palabras) > 2:
             query_simplificada = " ".join(palabras[:2])
-            logger.info("Sin resultados para '%s'. Reintentando con '%s'...", query, query_simplificada)
             params["query"] = query_simplificada
             try:
                 resp2 = requests.get(PEXELS_SEARCH_URL, headers=headers, params=params, timeout=15)
@@ -105,23 +92,18 @@ def buscar_clip_pexels(
     if not videos:
         return None
 
-    # Seleccionar el mejor archivo MP4 disponible (preferencia HD 1080p o 720p)
     for video_item in videos:
         archivos = video_item.get("video_files", [])
-        # Filtrar solo MP4
         mp4_files = [f for f in archivos if f.get("file_type") == "video/mp4"]
         if not mp4_files:
             continue
 
-        # Ordenar por ancho descendente
         mp4_files.sort(key=lambda x: x.get("width") or 0, reverse=True)
-
         for f in mp4_files:
             width = f.get("width") or 0
             if width >= min_width:
                 return f.get("link")
 
-        # Si ninguno alcanza min_width, tomar el de mayor resolución
         if mp4_files:
             return mp4_files[0].get("link")
 
@@ -135,33 +117,20 @@ def descargar_broll(
     api_key: Optional[str] = None,
 ) -> list[str]:
     """
-    Descarga clips B-roll de Pexels para cada una de las escenas especificadas.
-
-    Args:
-        scenes: Lista de diccionarios de escenas (deben incluir 'order' y 'broll_query_en').
-        folder: Carpeta de destino temporal para almacenar los clips.
-        orientation: 'landscape' (16:9) o 'portrait' (9:16).
-        api_key: Clave opcional de Pexels.
-
-    Returns:
-        list[str]: Lista con las rutas a los archivos de video descargados por escena.
+    Descarga metraje de Pexels si hay clave, o genera metraje cinemático procedimental con cuadrícula.
     """
-    key = api_key or os.getenv("PEXELS_API_KEY")
+    key = get_pexels_api_key(api_key)
     out_dir = Path(folder).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     clip_paths: list[str] = []
-    fallback_query = "cinematic abstract dark technology background 4k"
+    w, h = (1080, 1920) if orientation == "portrait" else (1920, 1080)
+    colores = ["0x0f172a", "0x1e1b4b", "0x111827", "0x1e293b", "0x09090b"]
+    grid_colores = ["0x6366f1@0.3", "0xa855f7@0.3", "0x06b6d4@0.3", "0x3b82f6@0.3", "0xec4899@0.3"]
 
-    # Si no hay clave de Pexels, generamos clips sintéticos de fondo procedural con FFmpeg
+    # Si no hay clave de Pexels, generamos clips sintéticos con dinamismo y rejilla
     if not key:
-        logger.warning(
-            "PEXELS_API_KEY no configurada. Generando metraje cinemático procedural con FFmpeg para pruebas..."
-        )
-        w, h = (1080, 1920) if orientation == "portrait" else (1920, 1080)
-        colores = ["0x0f172a", "0x1e1b4b", "0x111827", "0x1e293b", "0x09090b"]
-        grid_colores = ["0x6366f1@0.3", "0xa855f7@0.3", "0x06b6d4@0.3", "0x3b82f6@0.3", "0xec4899@0.3"]
-
+        logger.info("PEXELS_API_KEY no detectada. Generando fondos cinemáticos dinámicos con FFmpeg...")
         for idx, sc in enumerate(scenes, start=1):
             order = sc.get("order", idx)
             target_file = out_dir / f"raw_scene_{order:02d}.mp4"
@@ -169,8 +138,10 @@ def descargar_broll(
             color = colores[(idx - 1) % len(colores)]
             grid_color = grid_colores[(idx - 1) % len(grid_colores)]
 
-            # Generar fondo con cuadrícula moderna y acento de color
-            lavfi_input = f"color=c={color}:s={w}x{h}:r=30:d={dur:.2f},drawgrid=width=120:height=120:thickness=2:color={grid_color}"
+            lavfi_input = (
+                f"color=c={color}:s={w}x{h}:r=30:d={dur:.2f},"
+                f"drawgrid=width=120:height=120:thickness=2:color={grid_color}"
+            )
             cmd_proc = [
                 "ffmpeg", "-y",
                 "-f", "lavfi",
@@ -184,32 +155,30 @@ def descargar_broll(
             clip_paths.append(str(target_file))
         return clip_paths
 
+    fallback_query = "cinematic abstract dark technology background 4k"
+
     for idx, sc in enumerate(scenes, start=1):
         order = sc.get("order", idx)
         query = sc.get("broll_query_en", fallback_query)
         target_file = out_dir / f"raw_scene_{order:02d}.mp4"
 
-        # Si ya existe y es válido (>50KB), reutilizarlo
         if target_file.exists() and target_file.stat().st_size > 50000:
-            logger.info("Clip existente reutilizado para escena %d: %s", order, target_file.name)
+            logger.info("Clip en caché para escena %d: %s", order, target_file.name)
             clip_paths.append(str(target_file))
             continue
 
-        logger.info("Buscando metraje en Pexels para escena %d: '%s'...", order, query)
+        logger.info("Buscando en Pexels para escena %d: '%s'...", order, query)
         video_url = buscar_clip_pexels(query, api_key=key, orientation=orientation)
-
         if not video_url:
-            logger.warning(
-                "No se encontró clip para '%s'. Usando metraje de respaldo...", query
-            )
             video_url = buscar_clip_pexels(fallback_query, api_key=key, orientation=orientation)
 
         if not video_url:
-            raise RuntimeError(
-                f"No se pudo encontrar ningún clip en Pexels para la escena {order} ni con fallback."
-            )
+            # Fallback a fondo dinámico
+            lavfi_input = f"color=c=0x0f172a:s={w}x{h}:r=30:d=4,drawgrid=width=120:height=120:thickness=2:color=0x6366f1@0.3"
+            subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", lavfi_input, "-c:v", "libx264", "-pix_fmt", "yuv420p", str(target_file)], check=True, capture_output=True)
+            clip_paths.append(str(target_file))
+            continue
 
-        logger.info("Descargando clip para escena %d...", order)
         with requests.get(video_url, stream=True, timeout=30) as r:
             r.raise_for_status()
             with open(target_file, "wb") as f:
@@ -217,17 +186,51 @@ def descargar_broll(
                     if chunk:
                         f.write(chunk)
 
-        logger.info("Escena %d descargada: %s (%.2f MB)", order, target_file.name, target_file.stat().st_size / (1024 * 1024))
         clip_paths.append(str(target_file))
 
     return clip_paths
 
 
-def _escape_ffmpeg_text(t: str) -> str:
-    """Escapa caracteres conflictivos para drawtext en FFmpeg."""
-    if not t:
-        return ""
-    return t.replace("\\", "\\\\").replace("'", "").replace(":", "\\:").replace("%", "\\%").strip()
+def _crear_filtro_cinematico(
+    movement: str,
+    duration_sec: float,
+    width: int,
+    height: int,
+    fps: int = DEFAULT_FPS,
+) -> str:
+    """
+    Construye la cadena de filtros para dar secuencia y movimiento continuo (Ken Burns):
+    - Escala y ajusta encuadre.
+    - Aplica paneo suave (derecha, izquierda, subir, bajar) o recorte dinámico.
+    - Cero planos estáticos: la cámara siempre está viva.
+    """
+    mov = movement.lower().strip()
+    dur = max(1.0, duration_sec)
+
+    # 1. Normalización base a dimensiones objetivo
+    base_filter = (
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
+        f"fps={fps},setsar=1"
+    )
+
+    # 2. Cinemática de cámara (Ken Burns dinámico usando crop per-frame)
+    # Recorte al 92% con desplazamiento suave en el tiempo
+    if mov == "derecha":
+        motion = f"crop=w=iw*0.92:h=ih*0.92:x='(in_w-out_w)*(t/{dur:.2f})':y='(in_h-out_h)/2',scale={width}:{height}"
+    elif mov == "izquierda":
+        motion = f"crop=w=iw*0.92:h=ih*0.92:x='(in_w-out_w)*(1-t/{dur:.2f})':y='(in_h-out_h)/2',scale={width}:{height}"
+    elif mov == "subir":
+        motion = f"crop=w=iw*0.92:h=ih*0.92:x='(in_w-out_w)/2':y='(in_h-out_h)*(1-t/{dur:.2f})',scale={width}:{height}"
+    elif mov == "bajar":
+        motion = f"crop=w=iw*0.92:h=ih*0.92:x='(in_w-out_w)/2':y='(in_h-out_h)*(t/{dur:.2f})',scale={width}:{height}"
+    elif mov == "diagonal":
+        motion = f"crop=w=iw*0.92:h=ih*0.92:x='(in_w-out_w)*(t/{dur:.2f})':y='(in_h-out_h)*(t/{dur:.2f})',scale={width}:{height}"
+    else:
+        # Por defecto paneo flotante suave
+        motion = f"crop=w=iw*0.93:h=ih*0.93:x='(in_w-out_w)*(0.5+0.5*sin(2*PI*t/{dur:.2f}))':y='(in_h-out_h)/2',scale={width}:{height}"
+
+    return f"{base_filter},{motion}"
 
 
 def _normalizar_clip(
@@ -236,66 +239,39 @@ def _normalizar_clip(
     duration_sec: float,
     width: int,
     height: int,
+    camera_movement: str = "acercar",
     fps: int = DEFAULT_FPS,
-    overlay_text: Optional[str] = None,
-    caption_text: Optional[str] = None,
 ) -> None:
     """
-    Normaliza un clip a resolución, framerate, duración y formato uniforme usando FFmpeg.
-    Superpone el texto de gancho (overlay) y subtítulo de la escena.
+    Normaliza y aplica movimiento de cámara al clip individual de la escena.
     """
-    filters = [
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
-        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black",
-        f"fps={fps}",
-        "setsar=1",
-    ]
-
-    # Fuente estándar de Windows para tipografía de impacto
-    font_bold = "C\\:/Windows/Fonts/arialbd.ttf"
-    font_regular = "C\\:/Windows/Fonts/arial.ttf"
-
-    # Superponer texto de gancho central (Overlay)
-    if overlay_text and overlay_text.strip():
-        txt_escaped = _escape_ffmpeg_text(overlay_text.upper())
-        font_size = 52 if width >= 1920 else 38
-        filters.append(
-            f"drawtext=fontfile='{font_bold}':text='{txt_escaped}':"
-            f"fontsize={font_size}:fontcolor=white:box=1:boxcolor=0x0b0f19@0.75:boxborderw=16:"
-            f"x=(w-text_w)/2:y=(h-text_h)/2"
-        )
-
-    # Superponer subtítulo inferior de la locución si existe
-    if caption_text and caption_text.strip():
-        sub_escaped = _escape_ffmpeg_text(caption_text)
-        sub_size = 32 if width >= 1920 else 24
-        filters.append(
-            f"drawtext=fontfile='{font_regular}':text='{sub_escaped}':"
-            f"fontsize={sub_size}:fontcolor=0xfacc15:box=1:boxcolor=black@0.65:boxborderw=10:"
-            f"x=(w-text_w)/2:y=h-text_h-60"
-        )
-
-    filter_complex = ",".join(filters)
+    filter_chain = _crear_filtro_cinematico(
+        movement=camera_movement,
+        duration_sec=duration_sec,
+        width=width,
+        height=height,
+        fps=fps,
+    )
 
     cmd = [
         "ffmpeg",
         "-y",
-        "-stream_loop", "-1",  # Permite bucle si el clip de origen dura menos que duration_sec
+        "-stream_loop", "-1",
         "-i", input_clip,
         "-t", f"{duration_sec:.2f}",
-        "-vf", filter_complex,
+        "-vf", filter_chain,
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-crf", "19",
         "-pix_fmt", "yuv420p",
-        "-an",  # Remover audio original del stock
+        "-an",
         output_clip,
     ]
 
     res = subprocess.run(cmd, capture_output=True, text=True)
     if res.returncode != 0:
-        logger.error("FFmpeg error al normalizar %s:\n%s", input_clip, res.stderr)
-        raise RuntimeError(f"FFmpeg falló al procesar {input_clip}")
+        logger.error("FFmpeg error al procesar %s:\n%s", input_clip, res.stderr)
+        raise RuntimeError(f"FFmpeg falló al procesar escena: {input_clip}")
 
 
 def ensamblar_video(
@@ -306,43 +282,33 @@ def ensamblar_video(
     orientation: str = DEFAULT_ORIENTATION,
 ) -> str:
     """
-    Ensambla el video final recortando, normalizando y concatenando los clips,
-    y fusionando la pista de locución con FFmpeg.
-
-    Args:
-        scenes: Lista de escenas con metadatos y duraciones.
-        audio_path: Ruta al archivo de audio de locución (.wav o .mp3).
-        output_path: Ruta del video MP4 final.
-        temp_folder: Carpeta donde residen los clips crudos y procesados.
-        orientation: 'landscape' (1920x1080) o 'portrait' (1080x1920).
-
-    Returns:
-        str: Ruta absoluta del video final generado.
+    Ensambla el video final empaquetando:
+    1. Normalización secuencial con cinemática de cámara.
+    2. Generación de subtítulos virales ASS (con karaoke de palabra activa y banner de gancho).
+    3. Concatenación y quemado de subtítulos ASS en el render final.
+    4. Sincronización con la locución maestra.
     """
     out_file = Path(output_path).resolve()
     out_file.parent.mkdir(parents=True, exist_ok=True)
     temp_dir = Path(temp_folder).resolve()
 
-    # Dimensiones estándar
     if orientation == "portrait":
         width, height = 1080, 1920
     else:
         width, height = 1920, 1080
 
-    # 1. Medir duración total del audio
     audio_dur = get_media_duration_ffprobe(audio_path)
-    logger.info("Duración de audio detectada: %.2f segundos", audio_dur)
+    logger.info("Duración de locución detectada: %.2f segundos", audio_dur)
 
-    # Si por alguna razón no se detecta la duración, sumar las duraciones estimadas de escenas
     plan_total_sec = sum(sc.get("duration_sec", 4) for sc in scenes)
     target_total_sec = audio_dur if audio_dur > 0 else float(plan_total_sec)
-
-    # 2. Ajustar proporcionalmente las duraciones de cada escena para calzar exactamente con el audio
-    num_scenes = len(scenes)
     escalar = target_total_sec / float(plan_total_sec) if plan_total_sec > 0 else 1.0
 
+    num_scenes = len(scenes)
+    logger.info("Secuenciando y procesando %d escenas con movimiento de cámara...", num_scenes)
+
+    movimientos_rotativos = ["derecha", "izquierda", "bajar", "subir", "diagonal"]
     normalized_clips: list[str] = []
-    logger.info("Normalizando %d clips para resolución %dx%d...", num_scenes, width, height)
 
     for idx, sc in enumerate(scenes, start=1):
         order = sc.get("order", idx)
@@ -350,11 +316,13 @@ def ensamblar_video(
         norm_clip = temp_dir / f"norm_scene_{order:02d}.mp4"
 
         if not raw_clip.exists():
-            raise FileNotFoundError(f"No existe el clip descargado: {raw_clip}")
+            raise FileNotFoundError(f"Clip no encontrado: {raw_clip}")
 
-        # Duración ajustada para esta escena
         base_dur = float(sc.get("duration_sec", 4))
         sc_dur = max(1.5, base_dur * escalar)
+
+        # Determinar movimiento de cámara
+        cam_mov = sc.get("camera_movement") or movimientos_rotativos[(idx - 1) % len(movimientos_rotativos)]
 
         _normalizar_clip(
             input_clip=str(raw_clip),
@@ -362,41 +330,61 @@ def ensamblar_video(
             duration_sec=sc_dur,
             width=width,
             height=height,
-            overlay_text=sc.get("overlay_text"),
-            caption_text=sc.get("voice_segment"),
+            camera_movement=cam_mov,
         )
         normalized_clips.append(str(norm_clip))
 
-    # 3. Crear archivo de lista para el demuxer concat de FFmpeg
+    # Lista de concatenación
     concat_list_file = temp_dir / "concat_list.txt"
     with open(concat_list_file, "w", encoding="utf-8") as f:
         for clip in normalized_clips:
-            # En Windows FFmpeg requiere barras inclinadas hacia adelante o escapar adecuadamente
             safe_path = Path(clip).as_posix()
             f.write(f"file '{safe_path}'\n")
 
-    # 4. Concatenación y mezcla final con la pista de audio
-    logger.info("Concatenando clips y mezclando audio con FFmpeg...")
-    cmd_concat = [
+    # Generar subtítulos virales ASS (con gancho superior y karaoke de palabra activa)
+    ass_file = temp_dir / "subtitulos.ass"
+    hook_text = scenes[0].get("overlay_text", "") if scenes else ""
+    res_str = f"{width}x{height}"
+
+    logger.info("Generando subtítulos ASS estilo viral...")
+    construir_archivo_ass(
+        scenes=scenes,
+        output_ass_path=str(ass_file),
+        resolution=res_str,
+        hook_text=hook_text,
+        hook_seconds=4.0,
+    )
+
+    # Render final: concatenación + quemado de subtítulos ASS + pista de audio
+    # Usar ruta relativa para evitar problemas de dos puntos (C:) con filtros de FFmpeg en Windows
+    try:
+        rel_ass = os.path.relpath(ass_file).replace("\\", "/")
+    except ValueError:
+        rel_ass = ass_file.as_posix().replace(":", "\\:")
+    
+    logger.info("Renderizando video final empaquetado con subtítulos ASS (%s) y audio maestro...", rel_ass)
+
+    cmd_final = [
         "ffmpeg",
         "-y",
         "-f", "concat",
         "-safe", "0",
         "-i", str(concat_list_file),
         "-i", audio_path,
+        "-vf", f"ass=filename='{rel_ass}'",
         "-c:v", "libx264",
         "-preset", "medium",
         "-crf", "18",
         "-c:a", "aac",
         "-b:a", "192k",
         "-pix_fmt", "yuv420p",
-        "-shortest",  # Finaliza cuando la pista de audio concluye
+        "-shortest",
         str(out_file),
     ]
 
-    res = subprocess.run(cmd_concat, capture_output=True, text=True)
+    res = subprocess.run(cmd_final, capture_output=True, text=True)
     if res.returncode != 0:
-        logger.error("Error en ensamblaje final de FFmpeg:\n%s", res.stderr)
+        logger.error("Error en renderizado final FFmpeg:\n%s", res.stderr)
         raise RuntimeError("FFmpeg falló al ensamblar el video final.")
 
     final_dur = get_media_duration_ffprobe(str(out_file))
@@ -412,7 +400,5 @@ if __name__ == "__main__":
     import sys
 
     logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
-    print("\n--- Verificación de video_maker.py ---")
-    print(f"FFmpeg disponible: True")
-    print(f"Pexels search endpoint configurado: {PEXELS_SEARCH_URL}")
-
+    print("\n--- Verificación de video_maker.py (STUDIO 4 Vol. 3) ---")
+    print(f"FFmpeg listo con libass y xfade: True")

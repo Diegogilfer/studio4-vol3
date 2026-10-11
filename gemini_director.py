@@ -53,6 +53,14 @@ class ScenePlan(BaseModel):
             "en mayúsculas o estilo subtítulo clave)."
         )
     )
+    camera_movement: str = Field(
+        default="acercar",
+        description="Movimiento de cámara dinámico: 'acercar', 'alejar', 'subir', 'bajar', 'derecha', 'izquierda'."
+    )
+    transition: str = Field(
+        default="crossfade",
+        description="Transición cinematográfica con la siguiente escena: 'crossfade', 'fadeblack', 'wipeleft', 'none'."
+    )
 
 
 class ProductionPlan(BaseModel):
