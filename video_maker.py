@@ -159,19 +159,22 @@ def descargar_broll(
             "PEXELS_API_KEY no configurada. Generando metraje cinemático procedural con FFmpeg para pruebas..."
         )
         w, h = (1080, 1920) if orientation == "portrait" else (1920, 1080)
-        colores = ["0x0f172a", "0x1e1b4b", "0x111827", "0x172554", "0x09090b"]
+        colores = ["0x0f172a", "0x1e1b4b", "0x111827", "0x1e293b", "0x09090b"]
+        grid_colores = ["0x6366f1@0.3", "0xa855f7@0.3", "0x06b6d4@0.3", "0x3b82f6@0.3", "0xec4899@0.3"]
 
         for idx, sc in enumerate(scenes, start=1):
             order = sc.get("order", idx)
             target_file = out_dir / f"raw_scene_{order:02d}.mp4"
             dur = max(3.0, float(sc.get("duration_sec", 4)))
             color = colores[(idx - 1) % len(colores)]
+            grid_color = grid_colores[(idx - 1) % len(grid_colores)]
 
-            # Generar fondo con gradiente dinámico sutil
+            # Generar fondo con cuadrícula moderna y acento de color
+            lavfi_input = f"color=c={color}:s={w}x{h}:r=30:d={dur:.2f},drawgrid=width=120:height=120:thickness=2:color={grid_color}"
             cmd_proc = [
                 "ffmpeg", "-y",
                 "-f", "lavfi",
-                "-i", f"color=c={color}:s={w}x{h}:r=30:d={dur:.2f}",
+                "-i", lavfi_input,
                 "-c:v", "libx264",
                 "-preset", "ultrafast",
                 "-pix_fmt", "yuv420p",
@@ -220,6 +223,13 @@ def descargar_broll(
     return clip_paths
 
 
+def _escape_ffmpeg_text(t: str) -> str:
+    """Escapa caracteres conflictivos para drawtext en FFmpeg."""
+    if not t:
+        return ""
+    return t.replace("\\", "\\\\").replace("'", "").replace(":", "\\:").replace("%", "\\%").strip()
+
+
 def _normalizar_clip(
     input_clip: str,
     output_clip: str,
@@ -227,16 +237,45 @@ def _normalizar_clip(
     width: int,
     height: int,
     fps: int = DEFAULT_FPS,
+    overlay_text: Optional[str] = None,
+    caption_text: Optional[str] = None,
 ) -> None:
     """
     Normaliza un clip a resolución, framerate, duración y formato uniforme usando FFmpeg.
-    Aplica escala y letterbox/pillarbox para evitar distorsión de aspecto.
+    Superpone el texto de gancho (overlay) y subtítulo de la escena.
     """
-    filter_complex = (
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
-        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
-        f"fps={fps},setsar=1"
-    )
+    filters = [
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease",
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black",
+        f"fps={fps}",
+        "setsar=1",
+    ]
+
+    # Fuente estándar de Windows para tipografía de impacto
+    font_bold = "C\\:/Windows/Fonts/arialbd.ttf"
+    font_regular = "C\\:/Windows/Fonts/arial.ttf"
+
+    # Superponer texto de gancho central (Overlay)
+    if overlay_text and overlay_text.strip():
+        txt_escaped = _escape_ffmpeg_text(overlay_text.upper())
+        font_size = 52 if width >= 1920 else 38
+        filters.append(
+            f"drawtext=fontfile='{font_bold}':text='{txt_escaped}':"
+            f"fontsize={font_size}:fontcolor=white:box=1:boxcolor=0x0b0f19@0.75:boxborderw=16:"
+            f"x=(w-text_w)/2:y=(h-text_h)/2"
+        )
+
+    # Superponer subtítulo inferior de la locución si existe
+    if caption_text and caption_text.strip():
+        sub_escaped = _escape_ffmpeg_text(caption_text)
+        sub_size = 32 if width >= 1920 else 24
+        filters.append(
+            f"drawtext=fontfile='{font_regular}':text='{sub_escaped}':"
+            f"fontsize={sub_size}:fontcolor=0xfacc15:box=1:boxcolor=black@0.65:boxborderw=10:"
+            f"x=(w-text_w)/2:y=h-text_h-60"
+        )
+
+    filter_complex = ",".join(filters)
 
     cmd = [
         "ffmpeg",
@@ -247,7 +286,7 @@ def _normalizar_clip(
         "-vf", filter_complex,
         "-c:v", "libx264",
         "-preset", "veryfast",
-        "-crf", "20",
+        "-crf", "19",
         "-pix_fmt", "yuv420p",
         "-an",  # Remover audio original del stock
         output_clip,
@@ -323,6 +362,8 @@ def ensamblar_video(
             duration_sec=sc_dur,
             width=width,
             height=height,
+            overlay_text=sc.get("overlay_text"),
+            caption_text=sc.get("voice_segment"),
         )
         normalized_clips.append(str(norm_clip))
 
