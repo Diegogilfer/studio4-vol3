@@ -36,12 +36,12 @@ ESTILOS_GRAFICOS = {
     "dark_fantasy": "dark fantasy oil painting, ethereal lighting, mysterious shadows, baroque art style, dramatic contrast",
 }
 
-# Catálogo de motores de imagen admitidos
+# Catálogo de motores de imagen admitidos (Ecosistema Google prioritario 80%+)
 MODELOS_IMAGEN = {
-    "google_flow": "Google Flow (labs.google - Gratuito, estilo consistente vía extensión)",
-    "nvidia_flux": "NVIDIA FLUX.1 Dev (Fotorrealismo ultrarrápido ~5s)",
-    "nano_banana": "Nano Banana / fal.ai (Generación ultra premium por API)",
-    "pexels_video": "Pexels Stock Video HD (Metraje de archivo real)",
+    "google_flow": "Google Flow (labs.google - Suscripción Google, flujo prioritario 80%+)",
+    "google_imagen": "Google Flow / Imagen (labs.google - Alta consistencia y fotorrealismo)",
+    "pexels_video": "Pexels Stock Video HD (Metraje de archivo complementario)",
+    "nvidia_flux": "NVIDIA FLUX.1 Dev (Respaldo técnico de evaluación local/dev)",
 }
 
 

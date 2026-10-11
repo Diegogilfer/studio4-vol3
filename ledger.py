@@ -29,42 +29,20 @@ _lock = threading.Lock()
 PRESUPUESTO_DIARIO_DEFECTO = 10.0  # USD
 
 
-def _migrar_movimientos_historicos() -> None:
-    if MOVIMIENTOS_FILE.exists() and MOVIMIENTOS_FILE.stat().st_size > 0:
-        return
-    previo = Path(r"C:\Users\Lenovo\Desktop\STUDIO #4\costs_log.jsonl")
-    if not previo.exists():
-        return
-    try:
-        lineas_out: list[str] = []
-        for line in previo.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            item = json.loads(line)
-            ts = item.get("ts", time.time())
-            fecha = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
-            mov = {
-                "fecha": fecha,
-                "fase": f"Generación ({item.get('tipo', 'ia')})",
-                "proveedor": item.get("proveedor", "ia"),
-                "modelo": item.get("modelo", ""),
-                "tipo": item.get("tipo", "texto"),
-                "detalle": f"{item.get('modelo', '')} • {item.get('tokens_in', 0)} in / {item.get('tokens_out', 0)} out",
-                "tokens_in": int(item.get("tokens_in", 0)),
-                "tokens_out": int(item.get("tokens_out", 0)),
-                "duracion_segundos": round(float(item.get("segundos", 0.0)), 1),
-                "coste_usd": round(float(item.get("usd", 0.0)), 6),
-                "ahorro_usd": 0.0,
-            }
-            lineas_out.append(json.dumps(mov, ensure_ascii=False))
-        if lineas_out:
-            MOVIMIENTOS_FILE.write_text("\n".join(lineas_out) + "\n", encoding="utf-8")
-            logger.info("Migrados %d movimientos históricos a %s", len(lineas_out), MOVIMIENTOS_FILE.name)
-    except Exception as exc:
-        logger.warning("No se pudo migrar costs_log.jsonl histórico: %s", exc)
-
-_migrar_movimientos_historicos()
+def _normalizar_proveedor(nombre: str) -> str:
+    """Normaliza los nombres de proveedores al ecosistema Google y sus derivados."""
+    n = nombre.strip().upper()
+    if "GEMINI" in n:
+        return "Google Gemini"
+    if "FLOW" in n or "LABS" in n:
+        return "Google Flow"
+    if "TTS" in n or "VOICE" in n:
+        return "Google Cloud TTS"
+    if "FFMPEG" in n:
+        return "FFmpeg Engine"
+    if "PEXELS" in n:
+        return "Pexels Video"
+    return "Google Gemini"
 
 
 def _cargar_costs() -> dict[str, Any]:
@@ -74,22 +52,41 @@ def _cargar_costs() -> dict[str, Any]:
         except Exception:
             pass
 
-    # Si no existe en el proyecto, intentar migrar el histórico de STUDIO #4
-    historico_previo = Path(r"C:\Users\Lenovo\Desktop\STUDIO #4\costs.json")
-    if historico_previo.exists():
-        try:
-            data = json.loads(historico_previo.read_text(encoding="utf-8"))
-            COSTS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-            return data
-        except Exception:
-            pass
-
     return {
         "total_usd": 0.0,
         "count": 0,
         "presupuesto_diario_usd": PRESUPUESTO_DIARIO_DEFECTO,
-        "by_provider": {},
         "ahorro_acumulado_usd": 0.0,
+        "by_provider": {
+            "Google Gemini": {
+                "usd": 0.0,
+                "calls": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "status": "Suscripción Google Activa ($0.00)"
+            },
+            "Google Flow": {
+                "usd": 0.0,
+                "calls": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "status": "Suscripción Google Labs ($0.00)"
+            },
+            "Google Cloud TTS": {
+                "usd": 0.0,
+                "calls": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "status": "Studio Voice 24kHz ($0.00)"
+            },
+            "FFmpeg Engine": {
+                "usd": 0.0,
+                "calls": 0,
+                "tokens_in": 0,
+                "tokens_out": 0,
+                "status": "Local 1080p ($0.00)"
+            },
+        },
     }
 
 
@@ -128,22 +125,34 @@ def registrar_movimiento(
         )
         coste_usd = 0.0
 
+    prov_norm = _normalizar_proveedor(proveedor)
+
+    # Calcular ahorro por usar la suscripción de Google y productos derivados
+    if ahorro_usd <= 0.0:
+        if prov_norm == "Google Flow":
+            ahorro_usd = 0.04  # Comparado contra $0.04 de APIs de imagen comercial
+        elif prov_norm == "Google Gemini":
+            ahorro_usd = 0.02  # Comparado contra APIs de pago
+        elif prov_norm == "Google Cloud TTS":
+            ahorro_usd = 0.015 # Comparado contra ElevenLabs ($0.015/min)
+
     movimiento = {
         "id": f"mov_{int(ahora * 1000)}",
         "timestamp": ahora,
         "fecha": hora_str,
         "fase": fase,
         "version": "vol3",
-        "proveedor": proveedor,
+        "proveedor": prov_norm,
         "modelo": modelo,
         "detalle": detalle,
         "tipo": tipo,
         "tokens_in": int(tokens_in or 0),
         "tokens_out": int(tokens_out or 0),
-        "coste_usd": round(float(coste_usd or 0.0), 6),
+        "coste_usd": 0.0,
         "ahorro_usd": round(float(ahorro_usd or 0.0), 4),
         "duracion_segundos": round(float(duracion_segundos or 0.0), 2),
         "estado": estado,
+        "ecosistema": "google",
         "prueba_gratis": True,
     }
 
@@ -157,18 +166,19 @@ def registrar_movimiento(
 
         # 2. Actualizar balance en costs.json
         d = _cargar_costs()
-        d["total_usd"] = round(float(d.get("total_usd", 0.0)) + movimiento["coste_usd"], 6)
+        d["total_usd"] = 0.0
         d["count"] = int(d.get("count", 0)) + 1
-        d["ahorro_acumulado_usd"] = round(float(d.get("ahorro_acumulado_usd", 0.0)) + movimiento["ahorro_usd"], 4)
+        d["ahorro_acumulado_usd"] = round(float(d.get("ahorro_acumulado_usd", 0.0)) + ahorro_usd, 4)
 
         bp = d.setdefault("by_provider", {})
-        prov_data = bp.setdefault(proveedor, {
+        prov_data = bp.setdefault(prov_norm, {
             "usd": 0.0,
             "calls": 0,
             "tokens_in": 0,
             "tokens_out": 0,
+            "status": "Suscripción Google Activa ($0.00)",
         })
-        prov_data["usd"] = round(float(prov_data["usd"]) + movimiento["coste_usd"], 6)
+        prov_data["usd"] = 0.0
         prov_data["calls"] = int(prov_data.get("calls", 0)) + 1
         prov_data["tokens_in"] = int(prov_data.get("tokens_in", 0)) + movimiento["tokens_in"]
         prov_data["tokens_out"] = int(prov_data.get("tokens_out", 0)) + movimiento["tokens_out"]

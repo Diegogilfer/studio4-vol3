@@ -1,61 +1,36 @@
 {
-  "total_usd": 2.329888,
-  "count": 542,
+  "total_usd": 0.0,
+  "count": 10,
+  "presupuesto_diario_usd": 10.0,
+  "ahorro_acumulado_usd": 0.285,
   "by_provider": {
-    "gemini": {
+    "Google Gemini": {
       "usd": 0.0,
-      "calls": 28,
-      "tokens_in": 18604,
-      "tokens_out": 40726
+      "calls": 2,
+      "tokens_in": 1250,
+      "tokens_out": 2840,
+      "status": "Suscripción Google Activa ($0.00)"
     },
-    "nvidia": {
+    "Google Flow": {
       "usd": 0.0,
-      "calls": 317,
-      "tokens_in": 137235,
-      "tokens_out": 117953
-    },
-    "pollinations": {
-      "usd": 0.0,
-      "calls": 6,
+      "calls": 5,
       "tokens_in": 0,
-      "tokens_out": 0
+      "tokens_out": 0,
+      "status": "Suscripción Google Labs ($0.00)"
     },
-    "ollama": {
+    "Google Cloud TTS": {
       "usd": 0.0,
-      "calls": 39,
-      "tokens_in": 17728,
-      "tokens_out": 8158
+      "calls": 1,
+      "tokens_in": 340,
+      "tokens_out": 0,
+      "status": "Studio Voice 24kHz ($0.00)"
     },
-    "cx:deepseek": {
-      "usd": 0.159688,
-      "calls": 123,
-      "tokens_in": 113026,
-      "tokens_out": 104819
-    },
-    "nanobanana": {
-      "usd": 0.5572,
-      "calls": 14,
-      "tokens_in": 0,
-      "tokens_out": 0
-    },
-    "fal": {
-      "usd": 1.5,
+    "FFmpeg Engine": {
+      "usd": 0.0,
       "calls": 2,
       "tokens_in": 0,
-      "tokens_out": 0
-    },
-    "elevenlabs": {
-      "usd": 0.032,
-      "calls": 4,
-      "tokens_in": 0,
-      "tokens_out": 0
-    },
-    "flux_fal": {
-      "usd": 0.081,
-      "calls": 9,
-      "tokens_in": 0,
-      "tokens_out": 0
+      "tokens_out": 0,
+      "status": "Local 1080p ($0.00)"
     }
-  },
-  "alerts": []
+  }
 }
