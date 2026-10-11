@@ -1,10 +1,7 @@
 """
 visual_generator.py - Generador y Gestor Visual para STUDIO 4 Vol. 3
-Combina Google Flow como motor principal con NVIDIA FLUX como respaldo cinematográfico inmediato.
-
-Garantía:
-NUNCA deja pantallas negras ni planos estáticos. Cada escena cuenta con una imagen
-real (de Google Flow o generada con IA) animada con movimiento de cámara Ken Burns.
+Permite seleccionar modelos de imagen (Google Flow, NVIDIA FLUX, Nano Banana)
+y estilos gráficos cinematográficos (Anime, Cyberpunk, Sci-Fi, Documental).
 """
 
 from __future__ import annotations
@@ -28,20 +25,54 @@ logger = logging.getLogger("studio4.visual_generator")
 
 NVIDIA_URL = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.1-dev"
 
+# Catálogo de estilos visuales predefinidos para dirección de arte
+ESTILOS_GRAFICOS = {
+    "cinematic": "cinematic photorealistic, 35mm lens, anamorphic lighting, 8k, hyperdetailed, dramatic atmosphere",
+    "anime": "Studio Ghibli and Makoto Shinkai anime aesthetic, vibrant atmospheric sky, soft painterly background, cel shaded, highly detailed anime artwork",
+    "cyberpunk": "cyberpunk neon aesthetic, rainy asphalt reflections, volumetric smog, futuristic city night, dark moody atmosphere, holographic glows",
+    "documentary": "National Geographic documentary photography, natural golden hour lighting, authentic real-world textures, 50mm lens, sharp crisp focus",
+    "scifi": "hard science fiction, deep space cosmos, nebula glow, quantum physics, interstellar scale, high-tech holographic elements",
+    "vintage": "retro vintage 1970s film stock, warm Kodak Kodachrome color grading, authentic film grain, nostalgic composition",
+    "dark_fantasy": "dark fantasy oil painting, ethereal lighting, mysterious shadows, baroque art style, dramatic contrast",
+}
 
-def generar_imagen_nvidia(prompt: str, output_path: str, width: int = 1024, height: int = 1024, retries: int = 2) -> Optional[str]:
-    """Genera una imagen fotorrealista de alta fidelidad usando NVIDIA FLUX."""
+# Catálogo de motores de imagen admitidos
+MODELOS_IMAGEN = {
+    "google_flow": "Google Flow (labs.google - Gratuito, estilo consistente vía extensión)",
+    "nvidia_flux": "NVIDIA FLUX.1 Dev (Fotorrealismo ultrarrápido ~5s)",
+    "nano_banana": "Nano Banana / fal.ai (Generación ultra premium por API)",
+    "pexels_video": "Pexels Stock Video HD (Metraje de archivo real)",
+}
+
+
+def generar_imagen_nvidia(
+    prompt: str,
+    output_path: str,
+    style: str = "cinematic",
+    width: int = 1024,
+    height: int = 1024,
+    retries: int = 2,
+) -> Optional[str]:
+    """Genera una imagen de alta fidelidad usando NVIDIA FLUX."""
     api_key = os.getenv("NVIDIA_API_KEY", "").strip()
     if not api_key:
         logger.warning("NVIDIA_API_KEY no configurada.")
         return None
 
-    # Ajustar dimensiones admitidas por FLUX (múltiplos de 64 cercanos a 1024 o 1344)
-    w = 1344 if width > height else 1024
-    h = 768 if width > height else (1344 if height > width else 1024)
+    # Enriquecer prompt con el estilo gráfico seleccionado
+    modificador_estilo = ESTILOS_GRAFICOS.get(style, ESTILOS_GRAFICOS["cinematic"])
+    prompt_completo = f"{prompt}, {modificador_estilo}"
+
+    # Ajustar dimensiones admitidas por FLUX (múltiplos de 64)
+    if width > height:
+        w, h = 1344, 768
+    elif height > width:
+        w, h = 768, 1344
+    else:
+        w, h = 1024, 1024
 
     payload = {
-        "prompt": prompt[:1500],
+        "prompt": prompt_completo[:1500],
         "width": w,
         "height": h,
         "steps": 28,
@@ -61,7 +92,8 @@ def generar_imagen_nvidia(prompt: str, output_path: str, width: int = 1024, heig
 
     for intento in range(retries):
         try:
-            logger.info("Generando imagen con NVIDIA FLUX (intento %d)...", intento + 1)
+            logger.info("Generando imagen con NVIDIA FLUX (estilo '%s', intento %d)...", style, intento + 1)
+            t0 = time.time()
             with urllib.request.urlopen(req, timeout=45) as r:
                 data = json.loads(r.read().decode("utf-8"))
                 artifacts = data.get("artifacts", [])
@@ -71,7 +103,8 @@ def generar_imagen_nvidia(prompt: str, output_path: str, width: int = 1024, heig
                 out_p = Path(output_path).resolve()
                 out_p.parent.mkdir(parents=True, exist_ok=True)
                 out_p.write_bytes(base64.b64decode(b64))
-                logger.info("Imagen NVIDIA FLUX generada en: %s (%d bytes)", out_p.name, out_p.stat().st_size)
+                dur = time.time() - t0
+                logger.info("Imagen NVIDIA FLUX generada en %.2fs: %s (%d bytes)", dur, out_p.name, out_p.stat().st_size)
                 return str(out_p)
         except Exception as e:
             logger.warning("Fallo al generar con NVIDIA FLUX en intento %d: %s", intento + 1, e)
@@ -84,32 +117,36 @@ def obtener_imagen_escena(
     order: int,
     prompt: str,
     folder: str = "temp_clips",
+    style: str = "cinematic",
+    model_provider: str = "google_flow",
     auto_fallback: bool = True,
     width: int = 1920,
     height: int = 1080,
 ) -> Optional[str]:
     """
-    Busca la imagen de la escena en el siguiente orden de prioridad:
-    1. Imagen recibida de Google Flow (scene_XX.png / .jpg / .webp).
-    2. Si auto_fallback es True: Genera con NVIDIA FLUX.
+    Busca o genera la imagen de la escena según el modelo y estilo seleccionados.
     """
     out_dir = Path(folder).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Verificar si ya existe imagen en disco (de Google Flow o anterior)
+    # 1. Si ya existe imagen recibida en disco (de Google Flow o subida manual)
     for ext in (".png", ".jpg", ".jpeg", ".webp"):
         cand = out_dir / f"scene_{order:02d}{ext}"
         if cand.exists() and cand.stat().st_size > 5000:
-            logger.info("Imagen encontrada en disco para Escena %d: %s", order, cand.name)
+            logger.info("Imagen lista en disco para Escena %d: %s", order, cand.name)
             return str(cand)
 
-    # 2. Generar con NVIDIA FLUX si está permitido
-    if auto_fallback:
+    # 2. Si el motor seleccionado es NVIDIA FLUX directo o fallback
+    if model_provider in ("nvidia_flux", "auto") or auto_fallback:
         target_file = out_dir / f"scene_{order:02d}.jpg"
-        prompt_enriquecido = f"{prompt}, cinematic lighting, photorealistic, 8k, detailed, dramatic atmosphere"
-        img_path = generar_imagen_nvidia(prompt_enriquecido, str(target_file), width=width, height=height)
+        img_path = generar_imagen_nvidia(
+            prompt=prompt,
+            output_path=str(target_file),
+            style=style,
+            width=width,
+            height=height,
+        )
         if img_path:
-            # Registrar en la sesión de Google Flow para que el dashboard también la vea
             google_flow.recibir_imagen(Path(img_path).read_bytes(), prompt=prompt, scene_order=order)
             return img_path
 
@@ -126,20 +163,14 @@ def convertir_imagen_a_clip_cinematico(
     fps: int = 30,
 ) -> str:
     """
-    Convierte una imagen fija en un clip de video HD con cinemática viva (Ken Burns):
-    - acercar (zoom-in suave)
-    - alejar (zoom-out suave)
-    - derecha (paneo lateral horizontal a la derecha)
-    - izquierda (paneo lateral horizontal a la izquierda)
-    - subir / bajar (paneo vertical)
+    Convierte una imagen fija en un clip de video HD con movimiento cinemático vivo (Ken Burns).
+    Soporta formato 16:9 (1920x1080), 9:16 (1080x1920) y 1:1 (1080x1080).
     """
     dur = max(1.5, float(duration_sec))
     mov = (movement or "acercar").lower().strip()
     out_path = Path(output_clip_path).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Base: escalar preservando aspecto para cubrir el lienzo con margen para el movimiento
-    # Usamos factor de escala 1.15x para tener margen de paneo y zoom
     w_zoom = int(width * 1.15)
     h_zoom = int(height * 1.15)
 
@@ -155,7 +186,7 @@ def convertir_imagen_a_clip_cinematico(
         motion = f"crop={width}:{height}:x='(in_w-out_w)/2':y='(in_h-out_h)*(t/{dur:.2f})'"
     elif mov == "diagonal":
         motion = f"crop={width}:{height}:x='(in_w-out_w)*(t/{dur:.2f})':y='(in_h-out_h)*(t/{dur:.2f})'"
-    else:  # acercar / cinemática flotante viva
+    else:  # acercar o cinemática flotante viva
         motion = f"crop={width}:{height}:x='(in_w-out_w)*(0.5+0.45*sin(2*PI*t/{dur:.2f}))':y='(in_h-out_h)*(0.5+0.45*cos(2*PI*t/{dur:.2f}))'"
 
     filter_complex = f"{base},{motion},fps={fps},setsar=1"

@@ -292,25 +292,30 @@ def ensamblar_video(
     output_path: str = "output/video_final.mp4",
     temp_folder: str = "temp_clips",
     orientation: str = DEFAULT_ORIENTATION,
+    subtitle_config: Optional[dict[str, Any]] = None,
 ) -> str:
     """
     Ensambla el video final empaquetando:
     1. Preparación visual (Google Flow / IA) con cinemática de cámara continua.
-    2. Subtítulos virales ASS (karaoke con palabra activa y gancho superior).
+    2. Subtítulos virales ASS configurables (paletas de color, posición, tamaño).
     3. Concatenación y quemado de subtítulos ASS en el render final.
     4. Sincronización exacta con la locución maestra.
+    Soporta formatos para redes: 'reels' (9:16), 'feed' (1:1), 'completo' (16:9).
     """
     out_file = Path(output_path).resolve()
     out_file.parent.mkdir(parents=True, exist_ok=True)
     temp_dir = Path(temp_folder).resolve()
 
-    if orientation == "portrait":
+    ori = str(orientation).lower().strip()
+    if ori in ("portrait", "reels", "shorts", "tiktok", "9:16"):
         width, height = 1080, 1920
-    else:
+    elif ori in ("square", "feed", "1:1", "instagram"):
+        width, height = 1080, 1080
+    else:  # landscape / youtube / completo / 16:9
         width, height = 1920, 1080
 
     audio_dur = get_media_duration_ffprobe(audio_path)
-    logger.info("Duración de locución detectada: %.2f segundos", audio_dur)
+    logger.info("Duración de locución detectada: %.2f segundos (%dx%d)", audio_dur, width, height)
 
     plan_total_sec = sum(sc.get("duration_sec", 4) for sc in scenes)
     target_total_sec = audio_dur if audio_dur > 0 else float(plan_total_sec)
@@ -359,14 +364,19 @@ def ensamblar_video(
     ass_file = temp_dir / "subtitulos.ass"
     hook_text = scenes[0].get("overlay_text", "") if scenes else ""
     res_str = f"{width}x{height}"
+    sub_cfg = subtitle_config or {}
 
     logger.info("Generando subtítulos ASS estilo viral...")
     construir_archivo_ass(
         scenes=scenes,
         output_ass_path=str(ass_file),
         resolution=res_str,
-        hook_text=hook_text,
-        hook_seconds=4.0,
+        hook_text=sub_cfg.get("hook_text") or hook_text,
+        hook_seconds=float(sub_cfg.get("hook_seconds", 4.0)),
+        palette_key=sub_cfg.get("palette_key", "viral_yellow"),
+        position=sub_cfg.get("position", "bottom"),
+        size_scale=sub_cfg.get("size_scale", "normal"),
+        show_hook=sub_cfg.get("show_hook", True),
     )
 
     try:

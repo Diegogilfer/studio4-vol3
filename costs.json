@@ -1,0 +1,61 @@
+{
+  "total_usd": 2.329888,
+  "count": 542,
+  "by_provider": {
+    "gemini": {
+      "usd": 0.0,
+      "calls": 28,
+      "tokens_in": 18604,
+      "tokens_out": 40726
+    },
+    "nvidia": {
+      "usd": 0.0,
+      "calls": 317,
+      "tokens_in": 137235,
+      "tokens_out": 117953
+    },
+    "pollinations": {
+      "usd": 0.0,
+      "calls": 6,
+      "tokens_in": 0,
+      "tokens_out": 0
+    },
+    "ollama": {
+      "usd": 0.0,
+      "calls": 39,
+      "tokens_in": 17728,
+      "tokens_out": 8158
+    },
+    "cx:deepseek": {
+      "usd": 0.159688,
+      "calls": 123,
+      "tokens_in": 113026,
+      "tokens_out": 104819
+    },
+    "nanobanana": {
+      "usd": 0.5572,
+      "calls": 14,
+      "tokens_in": 0,
+      "tokens_out": 0
+    },
+    "fal": {
+      "usd": 1.5,
+      "calls": 2,
+      "tokens_in": 0,
+      "tokens_out": 0
+    },
+    "elevenlabs": {
+      "usd": 0.032,
+      "calls": 4,
+      "tokens_in": 0,
+      "tokens_out": 0
+    },
+    "flux_fal": {
+      "usd": 0.081,
+      "calls": 9,
+      "tokens_in": 0,
+      "tokens_out": 0
+    }
+  },
+  "alerts": []
+}

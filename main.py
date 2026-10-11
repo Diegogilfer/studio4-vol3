@@ -31,6 +31,7 @@ from gemini_director import estructurar_produccion
 from voice import generar_locucion
 from video_maker import descargar_broll, ensamblar_video, preparar_visuales_escenas
 import google_flow
+import ledger
 
 # Cargar variables de entorno
 load_dotenv()
@@ -141,6 +142,19 @@ def ejecutar_pipeline(
     t_writer = time.perf_counter() - t0
     FormatterConsola.exito(f"Guion redactado ({len(guion.split())} palabras)", t_writer)
 
+    # Registrar movimiento en el libro mayor
+    ledger.registrar_movimiento(
+        fase="Fase 1: Guion Creativo",
+        proveedor=writer_provider.upper(),
+        modelo="gemini-3.5-flash-lite",
+        detalle=f"{len(guion.split())} palabras generadas",
+        tokens_in=len(tema.split()) * 3,
+        tokens_out=len(guion.split()) * 2,
+        coste_usd=0.0,
+        duracion_segundos=t_writer,
+        tipo="texto",
+    )
+
     # Guardar copia del guion
     script_file = out_dir / "script.txt"
     script_file.write_text(guion, encoding="utf-8")
@@ -164,6 +178,19 @@ def ejecutar_pipeline(
     FormatterConsola.exito(
         f"Plan estructurado: '{plan_produccion.get('title')}' con {len(scenes)} escenas",
         t_gemini,
+    )
+
+    # Registrar movimiento en el libro mayor
+    ledger.registrar_movimiento(
+        fase="Fase 2: Director Técnico",
+        proveedor="GEMINI",
+        modelo="gemini-3.5-flash-lite",
+        detalle=f"Plan estructurado: {len(scenes)} escenas",
+        tokens_in=len(guion.split()) * 2,
+        tokens_out=len(scenes) * 80,
+        coste_usd=0.0,
+        duracion_segundos=t_gemini,
+        tipo="texto",
     )
 
     # Guardar copia del plan de producción
@@ -202,6 +229,17 @@ def ejecutar_pipeline(
     FormatterConsola.exito("Pista de locución WAV masterizada", t_voice)
     print(f"   🎙  Audio guardado en: {audio_path}")
 
+    # Registrar movimiento de locución
+    ledger.registrar_movimiento(
+        fase="Fase 3: Locución Vocal",
+        proveedor="GOOGLE TTS",
+        modelo="Studio Voice 24kHz",
+        detalle=f"{len(guion)} caracteres sintetizados",
+        coste_usd=0.0,
+        duracion_segundos=t_voice,
+        tipo="audio",
+    )
+
     # =========================================================================
     # FASE 4: METRAJE CINEMATOGRÁFICO (PEXELS API)
     # =========================================================================
@@ -222,6 +260,18 @@ def ejecutar_pipeline(
     t_broll = time.perf_counter() - t0
     FormatterConsola.exito(
         f"{len(clips_descargados)} clips HD descargados en '{temp_folder}'", t_broll
+    )
+
+    # Registrar movimiento visual
+    ledger.registrar_movimiento(
+        fase="Fase 4: Material Visual",
+        proveedor="GOOGLE FLOW / IA",
+        modelo="Ken Burns 30FPS",
+        detalle=f"{len(scenes)} clips cinematográficos animados",
+        coste_usd=0.0,
+        ahorro_usd=len(scenes) * 0.04,
+        duracion_segundos=t_broll,
+        tipo="imagen",
     )
 
     # =========================================================================
@@ -245,6 +295,17 @@ def ejecutar_pipeline(
 
     t_ffmpeg = time.perf_counter() - t0
     FormatterConsola.exito("Video ensamblado y exportado", t_ffmpeg)
+
+    # Registrar movimiento final de montaje
+    ledger.registrar_movimiento(
+        fase="Fase 5: Montaje Master",
+        proveedor="FFMPEG",
+        modelo="libx264 1080p",
+        detalle=f"Video exportado con subtítulos ASS ({video_final})",
+        coste_usd=0.0,
+        duracion_segundos=t_ffmpeg,
+        tipo="montaje",
+    )
 
     # =========================================================================
     # RESUMEN EJECUTIVO FINAL

@@ -265,6 +265,21 @@ def recibir_imagen(datos: bytes, prompt: str = "", pagina: str = "", scene_order
 
     guardar_estado()
 
+    # Registrar movimiento en el libro mayor
+    try:
+        import ledger
+        ledger.registrar_movimiento(
+            fase="Google Flow Receptor",
+            proveedor="GOOGLE FLOW",
+            modelo="labs.google",
+            detalle=f"Imagen para Escena {target_order} ({ancho}x{alto})",
+            coste_usd=0.0,
+            ahorro_usd=0.0398,
+            tipo="imagen",
+        )
+    except Exception as e:
+        logger.debug("Error registrando movimiento en ledger: %s", e)
+
     logger.info("Imagen de Google Flow recibida con éxito para Escena %d (%dx%d)", target_order, ancho, alto)
     return {
         "ok": True,
@@ -348,3 +363,4 @@ def obtener_imagenes_para_montaje(scenes: list[dict[str, Any]]) -> list[Optional
             paths.append(None)
 
     return paths
+

@@ -3,98 +3,187 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>STUDIO 4 Vol. 3 - Panel de Producción Local & Google Flow</title>
+  <title>STUDIO 4 Vol. 3 - Suite de Producción Audiovisual Glassmorphism</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { background-color: #080c14; color: #f1f5f9; font-family: ui-sans-serif, system-ui, sans-serif; }
-    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .gradient-accent { background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%); }
-    .gradient-flow { background: linear-gradient(135deg, #0ea5e9 0%, #8b5cf6 100%); }
-    .pulse-glow { box-shadow: 0 0 20px rgba(139, 92, 246, 0.35); }
+    :root {
+      --glass-bg: rgba(13, 17, 28, 0.72);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-glow: rgba(99, 102, 241, 0.15);
+      --accent-grad: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
+      --flow-grad: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+    }
+
+    body {
+      background-color: #060811;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-image: 
+        radial-gradient(circle at 15% 10%, rgba(99, 102, 241, 0.18) 0%, transparent 35%),
+        radial-gradient(circle at 85% 85%, rgba(236, 72, 153, 0.14) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.08) 0%, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    .glass-panel {
+      background: var(--glass-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .glass-interactive {
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .glass-interactive:hover {
+      border-color: rgba(168, 85, 247, 0.4);
+      box-shadow: 0 10px 30px -5px rgba(99, 102, 241, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .gradient-accent { background: var(--accent-grad); }
+    .gradient-flow { background: var(--flow-grad); }
+    .text-glow { text-shadow: 0 0 16px rgba(168, 85, 247, 0.6); }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); }
+    ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.4); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.8); }
   </style>
 </head>
 <body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
 
-  <!-- Header -->
-  <header class="w-full max-w-7xl mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-    <div class="flex items-center gap-3">
-      <div class="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/25">
+  <!-- Header Superior Glassy -->
+  <header class="w-full max-w-7xl mb-6 glass-panel rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div class="flex items-center gap-3.5">
+      <div class="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/30">
         <i class="fa-solid fa-clapperboard"></i>
       </div>
       <div>
-        <h1 class="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          STUDIO 4 <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Vol. 3</span>
+        <h1 class="text-2xl font-black tracking-tight text-white flex items-center gap-2">
+          STUDIO 4 <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Vol. 3</span>
         </h1>
-        <p class="text-xs text-slate-400">Pipeline Audiovisual &bull; Google Flow &bull; Gemini 3.5 &bull; Ken Burns</p>
+        <p class="text-xs text-slate-400">Pipeline de Video &bull; Google Flow &bull; Gemini 3.5 &bull; Formatos Redes &bull; Control Financiero</p>
       </div>
     </div>
     
-    <div class="flex flex-wrap items-center gap-2.5 text-xs">
-      <!-- Badge Google Flow -->
-      <a href="/flow/emparejar" target="_blank" id="flowBadge" class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 font-semibold hover:bg-amber-500/20 transition">
+    <!-- Pestañas de Navegación Glassy -->
+    <nav class="flex items-center gap-1.5 p-1 bg-slate-900/80 rounded-xl border border-slate-800 text-xs">
+      <button onclick="cambiarPestana('produccion')" id="tab-produccion" class="px-3.5 py-2 rounded-lg font-semibold transition bg-indigo-600 text-white flex items-center gap-2">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Producción & Flow
+      </button>
+      <button onclick="cambiarPestana('subtitulos')" id="tab-subtitulos" class="px-3.5 py-2 rounded-lg font-semibold transition text-slate-400 hover:text-white flex items-center gap-2">
+        <i class="fa-solid fa-closed-captioning"></i> Arreglo Subtítulos
+      </button>
+      <button onclick="cambiarPestana('finanzas')" id="tab-finanzas" class="px-3.5 py-2 rounded-lg font-semibold transition text-slate-400 hover:text-white flex items-center gap-2">
+        <i class="fa-solid fa-chart-line"></i> Gastos & Movimientos
+      </button>
+    </nav>
+
+    <!-- Badges de Conexión -->
+    <div class="flex items-center gap-2 text-xs">
+      <a href="/flow/emparejar" target="_blank" id="flowBadge" class="px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 font-bold hover:bg-amber-500/20 transition">
         <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Google Flow: Conectar (1 Clic)
       </a>
-
-      <!-- Badge Servidor -->
-      <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 font-medium" id="statusBadge">
+      <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 font-medium">
         <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Servidor :8000
       </span>
     </div>
   </header>
 
-  <!-- FORMULARIO CREAR / INICIAR PRODUCCIÓN -->
-  <section class="w-full max-w-7xl mb-6">
-    <div class="glass-card rounded-2xl p-5 shadow-2xl border-indigo-500/30 relative overflow-hidden">
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-sm font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-wand-magic-sparkles text-indigo-400"></i> Nueva Producción Audiovisual
+  <!-- ========================================================================= -->
+  <!-- VISTA 1: PRODUCCIÓN, SELECCIÓN DE MODELOS Y GOOGLE FLOW                    -->
+  <!-- ========================================================================= -->
+  <div id="vista-produccion" class="w-full max-w-7xl flex flex-col gap-6">
+
+    <!-- Tarjeta de Configuración y Producción -->
+    <section class="glass-panel rounded-2xl p-6 relative overflow-hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-indigo-400"></i> Parámetros de Producción & Entrega de Redes
         </h2>
-        <span class="text-[11px] text-slate-400">Gemini 3.5 &bull; Voz de Estudio &bull; Secuencia de Escenas</span>
+        <span class="text-xs text-indigo-300 font-mono">Gemini 3.5 &bull; Google Voice 24kHz</span>
       </div>
 
-      <form id="generateForm" class="flex flex-col gap-3">
-        <div class="flex flex-col md:flex-row gap-2.5">
+      <form id="generateForm" class="flex flex-col gap-4">
+        <!-- Input de Tema Principal -->
+        <div class="flex flex-col md:flex-row gap-3">
           <input 
             type="text" 
             id="temaInput" 
             required 
             placeholder="Escribe el tema de tu video (ej. 'La paradoja de Fermi y el gran silencio cósmico')..." 
-            class="flex-1 bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition shadow-inner placeholder:text-slate-500"
+            class="flex-1 bg-slate-900/90 border border-slate-700/80 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition shadow-inner placeholder:text-slate-500"
           >
           <button 
             type="submit" 
             id="btnSubmit" 
-            class="gradient-accent hover:opacity-95 text-white font-semibold text-sm px-6 py-3 rounded-xl shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2 min-w-[190px]"
+            class="gradient-accent hover:opacity-95 text-white font-bold text-sm px-6 py-3.5 rounded-xl shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2 min-w-[210px]"
           >
             <i class="fa-solid fa-play"></i> Iniciar Producción
           </button>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-slate-300">
-          <div>
-            <label class="block mb-1 text-slate-400">Duración objetivo:</label>
-            <select id="durationSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
-              <option value="15" selected>15 Segundos (Demo Rápido)</option>
-              <option value="30">30 Segundos (Shorts / Reels)</option>
-              <option value="45">45 Segundos</option>
-              <option value="60">60 Segundos (Completo)</option>
+        <!-- Selectores Dinámicos: Modelos, Estilos, Formato Redes -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-300 pt-1">
+          
+          <!-- 1. Formatos para Redes Sociales -->
+          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+            <label class="block mb-1.5 text-slate-400 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-mobile-screen text-pink-400"></i> Formato de Redes:
+            </label>
+            <select id="orientationSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+              <option value="portrait" selected>📱 Reels / Shorts / TikTok (9:16)</option>
+              <option value="landscape">📺 YouTube / Paisaje (16:9)</option>
+              <option value="square">📸 Instagram / LinkedIn Feed (1:1)</option>
             </select>
           </div>
-          <div>
-            <label class="block mb-1 text-slate-400">Formato / Relación:</label>
-            <select id="orientationSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
-              <option value="landscape" selected>16:9 Horizontal (YouTube)</option>
-              <option value="portrait">9:16 Vertical (Shorts / TikTok)</option>
+
+          <!-- 2. Selección de Estilo Gráfico de Imagen -->
+          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+            <label class="block mb-1.5 text-slate-400 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-palette text-cyan-400"></i> Estilo Visual de Imagen:
+            </label>
+            <select id="styleSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+              <option value="cinematic" selected>🌌 Cinemático Fotorrealista (35mm)</option>
+              <option value="anime">🎨 Anime / Studio Ghibli</option>
+              <option value="cyberpunk">🔮 Cyberpunk Neón</option>
+              <option value="documentary">🏛 Documental NatGeo</option>
+              <option value="scifi">🪐 Sci-Fi Cosmos</option>
+              <option value="vintage">🎞 Vintage 1970s</option>
+              <option value="dark_fantasy">🖌 Dark Fantasy Óleo</option>
             </select>
           </div>
-          <div>
-            <label class="block mb-1 text-slate-400">Guionista Creativo:</label>
-            <select id="writerSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
-              <option value="gemini" selected>Google Gemini 3.5 Flash</option>
-              <option value="claude">Anthropic Claude 3.7</option>
+
+          <!-- 3. Selección de Modelo de Imagen -->
+          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+            <label class="block mb-1.5 text-slate-400 font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-brain text-purple-400"></i> Modelo de Imagen:
+            </label>
+            <select id="imageModelSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+              <option value="google_flow" selected>🌊 Google Flow (Extensión Gratis)</option>
+              <option value="nvidia_flux">⚡ NVIDIA FLUX.1 Dev (~5s)</option>
+              <option value="nano_banana">🍌 Nano Banana (fal.ai)</option>
+              <option value="pexels_video">🎬 Pexels Stock HD</option>
             </select>
           </div>
+
+          <!-- 4. Duración Objetivo -->
+          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+            <label class="block mb-1.5 text-slate-400 font-semibold flex items-center gap-1.5">
+              <i class="fa-regular fa-clock text-amber-400"></i> Duración Objetivo:
+            </label>
+            <select id="durationSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white">
+              <option value="15" selected>15s &bull; Rápido (Demo)</option>
+              <option value="30">30s &bull; Viral Short</option>
+              <option value="45">45s &bull; Retención</option>
+              <option value="60">60s &bull; Completo</option>
+            </select>
+          </div>
+
         </div>
 
         <!-- Barra de Progreso en Vivo -->
@@ -110,12 +199,10 @@
           </div>
         </div>
       </form>
-    </div>
-  </section>
+    </section>
 
-  <!-- PANEL PRINCIPAL GOOGLE FLOW -->
-  <section class="w-full max-w-7xl mb-8">
-    <div class="glass-card rounded-2xl p-6 shadow-2xl border-cyan-500/30 relative">
+    <!-- PANEL GOOGLE FLOW & GALERÍA DE ESCENAS -->
+    <section class="glass-panel rounded-2xl p-6 relative">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl gradient-flow flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-cyan-500/20">
@@ -123,19 +210,28 @@
           </div>
           <div>
             <h2 class="text-base font-bold text-white flex items-center gap-2">
-              Google Flow &bull; Secuencia de Imágenes de Escena
+              Secuencia Visual de Escenas (Google Flow &bull; IA)
             </h2>
-            <p class="text-xs text-slate-400">Genera en Flow y las imágenes entran solas en secuencia, o arrástralas directamente aquí.</p>
+            <p class="text-xs text-slate-400">Genera en Google Flow o autocompleta con IA. Cada imagen entra en secuencia sin cortes bruscos.</p>
           </div>
         </div>
 
+        <!-- Botones de Acción de Flujo -->
         <div class="flex flex-wrap items-center gap-2">
-          <a href="https://labs.google/fx/tools/flow" target="_blank" rel="noreferrer" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-semibold flex items-center gap-2 transition">
+          <a href="https://labs.google/fx/tools/flow" target="_blank" rel="noreferrer" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-xs font-semibold flex items-center gap-2 transition">
             <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir Google Flow
           </a>
           <button id="btnCompletarIa" class="px-3.5 py-2 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 text-xs font-semibold flex items-center gap-1.5 transition">
             <i class="fa-solid fa-bolt text-yellow-400"></i> Completar Faltantes con IA
           </button>
+          
+          <!-- Selector rápido de Formato de Render -->
+          <select id="renderFormatSelect" class="bg-slate-900 border border-slate-700 rounded-xl text-xs py-2 px-3 text-white font-medium">
+            <option value="portrait" selected>📱 Reels (9:16)</option>
+            <option value="landscape">📺 Completo (16:9)</option>
+            <option value="square">📸 Feed (1:1)</option>
+          </select>
+
           <button id="btnRenderizarFinal" class="px-4 py-2 rounded-xl gradient-accent hover:opacity-95 text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition">
             <i class="fa-solid fa-film"></i> Renderizar Video Final
           </button>
@@ -169,122 +265,293 @@
         </div>
       </div>
 
-      <!-- Grid de Escenas con Previsualización de Imágenes -->
+      <!-- Galería de Escenas con Previsualización -->
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
           <i class="fa-solid fa-images text-indigo-400"></i> Galería de Escenas de Producción
         </h3>
-        <span class="text-xs text-slate-400" id="flowConteoEscenas">0 / 0 imágenes listas</span>
+        <span class="text-xs text-slate-400 font-mono" id="flowConteoEscenas">0 / 0 imágenes listas</span>
       </div>
 
       <div id="scenesGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <!-- Render dinámico de tarjetas de escena -->
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- REPRODUCTORES Y DETALLES -->
-  <main class="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6">
-    
-    <!-- Columna Izquierda: Video Master y Audio -->
-    <div class="lg:col-span-7 flex flex-col gap-5">
+    <!-- REPRODUCTOR MASTER & DETALLES NARRATIVOS -->
+    <main class="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- Video Player Card -->
-      <div class="glass-card rounded-2xl p-5 shadow-2xl">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <i class="fa-solid fa-film text-indigo-400"></i> Video Master Final
-          </h2>
-          <span class="text-xs text-slate-500 font-mono">output/video_final.mp4</span>
-        </div>
-        <div class="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-slate-800 shadow-inner">
-          <video id="mainVideo" controls autoplay muted loop class="w-full h-full object-contain">
-            <source src="output/video_final.mp4" type="video/mp4">
-            Tu navegador no soporta el reproductor de video HTML5.
-          </video>
-        </div>
-        <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
-          <span class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-indigo-400"></i> Cinemática Ken Burns Activa</span>
-          <span class="flex items-center gap-1.5"><i class="fa-solid fa-closed-captioning text-indigo-400"></i> Subtítulos ASS Virales</span>
-          <a href="output/video_final.mp4" download class="text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1 font-semibold">
-            <i class="fa-solid fa-download"></i> Descargar MP4
-          </a>
-        </div>
-      </div>
-
-      <!-- Audio Track Card -->
-      <div class="glass-card rounded-2xl p-5 shadow-xl">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
-          <i class="fa-solid fa-microphone-lines text-purple-400"></i> Pista Vocal Maestra (Google Studio Voice 24kHz)
-        </h2>
-        <audio id="mainAudio" controls class="w-full mt-2">
-          <source src="output/audio.wav" type="audio/wav">
-        </audio>
-      </div>
-
-      <!-- Guion Narrativo -->
-      <div class="glass-card rounded-2xl p-5 shadow-xl">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
-          <i class="fa-solid fa-quote-left text-blue-400"></i> Guion de Locución Continua
-        </h2>
-        <blockquote class="text-slate-200 text-xs leading-relaxed italic border-l-2 border-indigo-500 pl-4 py-1" id="guionTexto">
-          Cargando guion...
-        </blockquote>
-      </div>
-
-    </div>
-
-    <!-- Columna Derecha: Plan de Producción, Metadatos y Desglose -->
-    <div class="lg:col-span-5 flex flex-col gap-5">
-      
-      <!-- Metadatos de Publicación -->
-      <div class="glass-card rounded-2xl p-5 shadow-xl">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-          <i class="fa-solid fa-bullhorn text-pink-400"></i> Metadatos de Publicación (SEO)
-        </h2>
-        
-        <div class="mb-3">
-          <label class="text-[11px] text-slate-500 block mb-1 font-medium">Título Viral Sugerido:</label>
-          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs font-bold text-white" id="videoTitle">
-            Título del video
+      <!-- Columna Izquierda: Video Master y Audio -->
+      <div class="lg:col-span-7 flex flex-col gap-5">
+        <!-- Video Player Card -->
+        <div class="glass-panel rounded-2xl p-5 shadow-2xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <i class="fa-solid fa-film text-indigo-400"></i> Video Master Final
+            </h2>
+            <span class="text-xs text-slate-500 font-mono">output/video_final.mp4</span>
+          </div>
+          <div class="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-slate-800 shadow-inner">
+            <video id="mainVideo" controls autoplay muted loop class="w-full h-full object-contain">
+              <source src="output/video_final.mp4" type="video/mp4">
+              Tu navegador no soporta el reproductor de video HTML5.
+            </video>
+          </div>
+          <div class="mt-3 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-indigo-400"></i> Cinemática Ken Burns Activa</span>
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-closed-captioning text-indigo-400"></i> Subtítulos ASS Virales</span>
+            <a href="output/video_final.mp4" download class="text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1 font-semibold">
+              <i class="fa-solid fa-download"></i> Descargar MP4
+            </a>
           </div>
         </div>
 
-        <div>
-          <label class="text-[11px] text-slate-500 block mb-1 font-medium">Descripción y Hashtags:</label>
-          <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 leading-relaxed max-h-36 overflow-y-auto" id="videoDesc">
-            Descripción optimizada para redes sociales y buscadores.
-          </p>
+        <!-- Audio Track Card -->
+        <div class="glass-panel rounded-2xl p-5 shadow-xl">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-microphone-lines text-purple-400"></i> Pista Vocal Maestra (Google Studio Voice 24kHz)
+          </h2>
+          <audio id="mainAudio" controls class="w-full mt-2">
+            <source src="output/audio.wav" type="audio/wav">
+          </audio>
         </div>
       </div>
 
-      <!-- Desglose Narrativo de Escenas -->
-      <div class="glass-card rounded-2xl p-5 shadow-xl flex-1">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <i class="fa-solid fa-layer-group text-amber-400"></i> Desglose Narrativo
+      <!-- Columna Derecha: Guion y Metadatos -->
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        <!-- Metadatos de Publicación -->
+        <div class="glass-panel rounded-2xl p-5 shadow-xl">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-bullhorn text-pink-400"></i> Metadatos de Publicación (SEO)
           </h2>
-          <span class="text-xs px-2.5 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700/60 font-medium" id="sceneCountBadge">
-            0 escenas
-          </span>
+          <div class="mb-3">
+            <label class="text-[11px] text-slate-500 block mb-1 font-medium">Título Viral Sugerido:</label>
+            <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs font-bold text-white" id="videoTitle">
+              Título del video
+            </div>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 block mb-1 font-medium">Descripción y Hashtags:</label>
+            <p class="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 leading-relaxed max-h-36 overflow-y-auto" id="videoDesc">
+              Descripción optimizada para redes sociales y buscadores.
+            </p>
+          </div>
         </div>
 
-        <div class="flex flex-col gap-2.5 max-h-[460px] overflow-y-auto pr-1" id="escenasContainer">
-          <!-- Render dinámico desde production_plan.json -->
+        <!-- Guion Narrativo -->
+        <div class="glass-panel rounded-2xl p-5 shadow-xl flex-1">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-quote-left text-blue-400"></i> Guion de Locución Continua
+          </h2>
+          <blockquote class="text-slate-200 text-xs leading-relaxed italic border-l-2 border-indigo-500 pl-4 py-1" id="guionTexto">
+            Cargando guion...
+          </blockquote>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VISTA 2: ARREGLO Y PERSONALIZACIÓN DE SUBTÍTULOS (ASS & KARAOKE)           -->
+  <!-- ========================================================================= -->
+  <div id="vista-subtitulos" class="w-full max-w-7xl hidden flex-col gap-6">
+    <section class="glass-panel rounded-2xl p-6">
+      <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-font text-indigo-400"></i> Personalizador y Arreglo de Subtítulos
+          </h2>
+          <p class="text-xs text-slate-400">Ajusta colores de karaoke, posición, tamaño y edita los textos de cada escena antes de renderizar.</p>
+        </div>
+        <button onclick="guardarConfigSubtitulos()" class="gradient-accent px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25">
+          <i class="fa-solid fa-floppy-disk"></i> Aplicar Cambios
+        </button>
+      </div>
+
+      <!-- Configuración Visual de Subtítulos -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        
+        <!-- Paleta de Karaoke -->
+        <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Paleta de Resaltado (Karaoke):</label>
+          <select id="subPaletteSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white">
+            <option value="viral_yellow" selected>🟡 Amarillo Viral (TikTok/Shorts)</option>
+            <option value="cyan_neon">🔵 Cyan Neón Eléctrico</option>
+            <option value="pink_hot">🌸 Rosa Neón / Fucsia</option>
+            <option value="green_matrix">🟢 Verde Matrix / Lima</option>
+            <option value="white_minimal">⚪ Blanco & Plata Minimalista</option>
+          </select>
+        </div>
+
+        <!-- Posición Vertical -->
+        <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Posición Vertical:</label>
+          <select id="subPositionSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white">
+            <option value="bottom" selected>⬇ Inferior (Recomendado)</option>
+            <option value="middle">⏹ Centro de Pantalla</option>
+            <option value="top">⬆ Superior</option>
+          </select>
+        </div>
+
+        <!-- Tamaño de Letra -->
+        <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-800">
+          <label class="block text-xs font-bold text-slate-300 mb-2">Tamaño de Fuente:</label>
+          <select id="subSizeSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white">
+            <option value="small">Pequeño (Elegante)</option>
+            <option value="normal" selected>Normal (Estándar Viral)</option>
+            <option value="large">Grande (Máximo Impacto)</option>
+          </select>
+        </div>
+
+        <!-- Banner de Gancho (Hook) -->
+        <div class="p-4 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col justify-between">
+          <label class="block text-xs font-bold text-slate-300 mb-1">Banner Superior de Gancho:</label>
+          <div class="flex items-center gap-3 pt-2">
+            <input type="checkbox" id="subHookToggle" checked class="w-4 h-4 rounded text-indigo-500 bg-slate-950 border-slate-700">
+            <span class="text-xs text-slate-300">Mostrar gancho superior en 0-4s</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Editor de Textos de Escena -->
+      <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-pen-to-square text-amber-400"></i> Edición Rápida de Textos por Escena
+      </h3>
+      <div id="subEditorContainer" class="flex flex-col gap-3 max-h-[480px] overflow-y-auto pr-2">
+        <!-- Render dinámico de escenas editables -->
+      </div>
+    </section>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- VISTA 3: CENTRO FINANCIERO: GASTOS, ENTRADAS Y MOVIMIENTOS                -->
+  <!-- ========================================================================= -->
+  <div id="vista-finanzas" class="w-full max-w-7xl hidden flex-col gap-6">
+    
+    <!-- 4 Tarjetas KPI Financieras y de Rendimiento -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- KPI 1: Gasto Acumulado -->
+      <div class="glass-panel rounded-2xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Gasto Total API</span>
+          <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm"><i class="fa-solid fa-dollar-sign"></i></span>
+        </div>
+        <div class="text-2xl font-black text-white mb-1" id="kpiGastoTotal">$0.00 USD</div>
+        <p class="text-[11px] text-slate-400 flex items-center justify-between">
+          <span>Presupuesto diario: <b id="kpiPresupuesto">$10.00</b></span>
+          <span class="text-emerald-400" id="kpiDisponible">$10.00 libre</span>
+        </p>
+      </div>
+
+      <!-- KPI 2: Entradas & Tokens -->
+      <div class="glass-panel rounded-2xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Tokens Procesados</span>
+          <span class="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 text-sm"><i class="fa-solid fa-microchip"></i></span>
+        </div>
+        <div class="text-2xl font-black text-white mb-1" id="kpiTokens">0</div>
+        <p class="text-[11px] text-slate-400" id="kpiTokensDetalle">In: 0 &bull; Out: 0</p>
+      </div>
+
+      <!-- KPI 3: Ahorro con Google Flow -->
+      <div class="glass-panel rounded-2xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Ahorro Google Flow</span>
+          <span class="p-2 rounded-lg bg-cyan-500/10 text-cyan-400 text-sm"><i class="fa-solid fa-piggy-bank"></i></span>
+        </div>
+        <div class="text-2xl font-black text-cyan-300 mb-1" id="kpiAhorro">$0.00 USD</div>
+        <p class="text-[11px] text-slate-400">Calculado a $0.04/imagen comercial</p>
+      </div>
+
+      <!-- KPI 4: Movimientos Auditables -->
+      <div class="glass-panel rounded-2xl p-5 flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Operaciones & Tasa</span>
+          <span class="p-2 rounded-lg bg-purple-500/10 text-purple-400 text-sm"><i class="fa-solid fa-check-double"></i></span>
+        </div>
+        <div class="text-2xl font-black text-white mb-1" id="kpiOperaciones">0</div>
+        <p class="text-[11px] text-emerald-400">100% Tasa de éxito operativa</p>
+      </div>
+
+    </div>
+
+    <!-- Desglose por Proveedor & Tabla Histórica -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Columna Desglose por Proveedor -->
+      <div class="lg:col-span-4 glass-panel rounded-2xl p-5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-server text-indigo-400"></i> Consumo por Proveedor
+        </h3>
+        <div id="proveedoresContainer" class="flex flex-col gap-3">
+          <!-- Render dinámico -->
+        </div>
+      </div>
+
+      <!-- Columna Tabla de Movimientos Auditables -->
+      <div class="lg:col-span-8 glass-panel rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-pink-400"></i> Registro Cronológico de Movimientos
+          </h3>
+          <button onclick="actualizarFinanzas()" class="text-xs text-indigo-400 hover:text-white flex items-center gap-1">
+            <i class="fa-solid fa-rotate-right"></i> Actualizar
+          </button>
+        </div>
+
+        <div class="overflow-x-auto max-h-[440px] overflow-y-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase font-semibold">
+                <th class="py-2.5 px-3">Fecha/Hora</th>
+                <th class="py-2.5 px-3">Fase / Movimiento</th>
+                <th class="py-2.5 px-3">Motor</th>
+                <th class="py-2.5 px-3">Detalle</th>
+                <th class="py-2.5 px-3">Duración</th>
+                <th class="py-2.5 px-3">Coste</th>
+                <th class="py-2.5 px-3">Estado</th>
+              </tr>
+            </thead>
+            <tbody id="movimientosTbody" class="divide-y divide-slate-800/60 font-mono text-[11px]">
+              <!-- Render dinámico -->
+            </tbody>
+          </table>
         </div>
       </div>
 
     </div>
 
-  </main>
+  </div>
 
   <footer class="mt-10 text-slate-600 text-xs text-center border-t border-slate-900 pt-5 w-full max-w-7xl flex justify-between items-center">
-    <span>STUDIO 4 Vol. 3 &bull; Pipeline Audiovisual Autónomo</span>
+    <span>STUDIO 4 Vol. 3 &bull; Pipeline Audiovisual Glassmorphism</span>
     <span>GitHub: <a href="https://github.com/Diegogilfer/studio4-vol3" target="_blank" class="text-slate-400 hover:text-white underline">Diegogilfer/studio4-vol3</a></span>
   </footer>
 
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT: LÓGICA COMPLETA DE PESTAÑAS, SUBTÍTULOS, FINANZAS Y FLOW      -->
+  <!-- ========================================================================= -->
   <script>
     let escenaObjetivoUpload = null;
+    let planActual = null;
+
+    // Control de Pestañas
+    function cambiarPestana(nombre) {
+      ['produccion', 'subtitulos', 'finanzas'].forEach(p => {
+        document.getElementById(`vista-${p}`).classList.add('hidden');
+        document.getElementById(`tab-${p}`).classList.remove('bg-indigo-600', 'text-white');
+        document.getElementById(`tab-${p}`).classList.add('text-slate-400');
+      });
+      document.getElementById(`vista-${nombre}`).classList.remove('hidden');
+      document.getElementById(`tab-${nombre}`).classList.add('bg-indigo-600', 'text-white');
+      document.getElementById(`tab-${nombre}`).classList.remove('text-slate-400');
+
+      if (nombre === 'finanzas') actualizarFinanzas();
+      if (nombre === 'subtitulos') renderEditorSubtitulos();
+    }
 
     // Actualizar estado de Google Flow y Escenas
     async function actualizarFlow() {
@@ -293,16 +560,15 @@
         if (!res.ok) return;
         const data = await res.json();
 
-        // 1. Badge de conexión
         const badge = document.getElementById('flowBadge');
         if (data.conectada) {
-          badge.className = "px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 font-semibold";
+          badge.className = "px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 font-bold";
           badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Google Flow: Conectado ✓`;
         } else if (data.emparejada) {
-          badge.className = "px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1.5 font-semibold";
+          badge.className = "px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center gap-1.5 font-bold";
           badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-cyan-400"></span> Google Flow: Emparejado (Abre Flow)`;
         } else {
-          badge.className = "px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 font-semibold hover:bg-amber-500/20";
+          badge.className = "px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5 font-bold hover:bg-amber-500/20";
           badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Google Flow: Conectar (1 Clic)`;
         }
 
@@ -314,7 +580,6 @@
 
         document.getElementById('flowConteoEscenas').innerText = `${listas} / ${total} imágenes listas`;
 
-        // 2. Prompt de escena actual
         const indicator = document.getElementById('flowSceneIndicator');
         const promptText = document.getElementById('flowPromptText');
 
@@ -324,10 +589,9 @@
           escenaObjetivoUpload = actual;
         } else if (total > 0 && listas >= total) {
           indicator.innerText = `¡Todas las ${total} escenas tienen imagen lista!`;
-          promptText.innerText = "Todas las escenas han sido recibidas. Puedes pulsar 'Renderizar Video Final' para compilar el video con Ken Burns y subtítulos.";
+          promptText.innerText = "Todas las escenas han sido recibidas. Puedes pulsar 'Renderizar Video Final' para compilar el video con Ken Burns y subtítulos virales.";
         }
 
-        // 3. Grid de Escenas
         const grid = document.getElementById('scenesGrid');
         grid.innerHTML = '';
 
@@ -338,8 +602,8 @@
           const tieneImagen = (sc.estado === "lista" && sc.image_url);
 
           const card = document.createElement('div');
-          card.className = `p-3 rounded-xl border flex flex-col justify-between transition ${
-            esActual ? 'bg-cyan-950/30 border-cyan-400/80 pulse-glow' : 'bg-slate-900/80 border-slate-800'
+          card.className = `p-3 rounded-xl border flex flex-col justify-between glass-interactive ${
+            esActual ? 'bg-cyan-950/30 border-cyan-400/80 shadow-lg shadow-cyan-500/20' : 'bg-slate-900/80 border-slate-800'
           }`;
 
           const imgHtml = tieneImagen 
@@ -379,7 +643,6 @@
       }
     }
 
-    // Copiar prompt
     function copiarPromptTexto(encoded) {
       const text = decodeURIComponent(encoded);
       navigator.clipboard.writeText(text);
@@ -394,7 +657,7 @@
       }
     });
 
-    // Subida manual de imagen por Drag & Drop o Input
+    // Subida manual Drag & Drop
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
 
@@ -447,14 +710,18 @@
       }
     }
 
-    // Completar escenas faltantes con IA (NVIDIA FLUX)
+    // Completar Faltantes con IA
     document.getElementById('btnCompletarIa').addEventListener('click', async () => {
       const btn = document.getElementById('btnCompletarIa');
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Generando con IA...`;
+      const style = document.getElementById('styleSelect').value;
       try {
-        const res = await fetch('/api/flow/completar_ia', { method: 'POST' });
-        const d = await res.json();
+        await fetch('/api/flow/completar_ia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ style })
+        });
         actualizarFlow();
       } catch (err) {
         alert("Error al autocompletar con IA: " + err);
@@ -469,19 +736,24 @@
       const btn = document.getElementById('btnRenderizarFinal');
       btn.disabled = true;
       btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Ensamblando...`;
-      
+
+      const orientation = document.getElementById('renderFormatSelect').value;
       const progressBox = document.getElementById('progressBox');
       const progressText = document.getElementById('progressText');
       const progressBar = document.getElementById('progressBar');
       const progressPct = document.getElementById('progressPct');
 
       progressBox.classList.remove('hidden');
-      progressText.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Ensamblando video con cinemática Ken Burns y subtítulos...`;
+      progressText.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Ensamblando formato ${orientation.toUpperCase()} con subtítulos ASS...`;
       progressBar.style.width = '60%';
       progressPct.innerText = '60%';
 
       try {
-        const res = await fetch('/api/flow/renderizar', { method: 'POST' });
+        const res = await fetch('/api/flow/renderizar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orientation })
+        });
         if (!res.ok) {
           const d = await res.json();
           alert(d.error || "Error al renderizar");
@@ -490,7 +762,6 @@
           return;
         }
 
-        // Monitorear progreso
         const interval = setInterval(async () => {
           const pRes = await fetch('/api/status?t=' + Date.now());
           const st = await pRes.json();
@@ -513,7 +784,7 @@
               v.src = 'output/video_final.mp4?t=' + Date.now();
               v.load();
               v.play();
-              progressText.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> ¡Video final ensamblado con éxito!`;
+              progressText.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> ¡Video ${orientation.toUpperCase()} exportado exitosamente!`;
               progressBar.style.width = '100%';
               progressPct.innerText = '100%';
             }
@@ -527,49 +798,7 @@
       }
     });
 
-    // Cargar plan de producción
-    async function cargarPlan() {
-      try {
-        const res = await fetch('/api/production_plan?t=' + Date.now());
-        if (!res.ok) return;
-        const plan = await res.json();
-        
-        if (plan.title) document.getElementById('videoTitle').innerText = plan.title;
-        if (plan.description) document.getElementById('videoDesc').innerText = plan.description;
-        
-        const scenes = plan.scenes || [];
-        document.getElementById('sceneCountBadge').innerText = `${scenes.length} escenas`;
-        
-        const container = document.getElementById('escenasContainer');
-        container.innerHTML = '';
-        
-        scenes.forEach((sc, idx) => {
-          const card = document.createElement('div');
-          card.className = "p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs";
-          card.innerHTML = `
-            <div class="flex items-center justify-between mb-1">
-              <span class="font-bold text-indigo-400">Escena ${sc.order || idx + 1} (${sc.duration_sec || 4}s)</span>
-              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold">
-                ${sc.overlay_text || 'GANCHO'}
-              </span>
-            </div>
-            <p class="text-slate-300 mb-1.5 italic">"${sc.voice_segment || ''}"</p>
-            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/60">
-              <i class="fa-solid fa-camera text-[9px] text-indigo-400 mr-1"></i> ${sc.camera_movement || 'acercar'} &bull; ${sc.broll_query_en || ''}
-            </div>
-          `;
-          container.appendChild(card);
-        });
-
-        const textoCompleto = scenes.map(s => s.voice_segment).join(' ');
-        if (textoCompleto) document.getElementById('guionTexto').innerText = `"${textoCompleto}"`;
-
-      } catch (err) {
-        console.warn("No se pudo cargar el plan de producción:", err);
-      }
-    }
-
-    // Formulario de producción
+    // Formulario de Producción
     const form = document.getElementById('generateForm');
     const btnSubmit = document.getElementById('btnSubmit');
 
@@ -596,7 +825,9 @@
             tema,
             duration: document.getElementById('durationSelect').value,
             orientation: document.getElementById('orientationSelect').value,
-            writer: document.getElementById('writerSelect').value
+            style: document.getElementById('styleSelect').value,
+            image_model: document.getElementById('imageModelSelect').value,
+            writer: 'gemini',
           })
         });
 
@@ -652,7 +883,161 @@
       }
     });
 
-    // Iniciar bucles periódicos
+    // Cargar Plan de Producción
+    async function cargarPlan() {
+      try {
+        const res = await fetch('/api/production_plan?t=' + Date.now());
+        if (!res.ok) return;
+        planActual = await res.json();
+        
+        if (planActual.title) document.getElementById('videoTitle').innerText = planActual.title;
+        if (planActual.description) document.getElementById('videoDesc').innerText = planActual.description;
+
+        const scenes = planActual.scenes || [];
+        const textoCompleto = scenes.map(s => s.voice_segment).join(' ');
+        if (textoCompleto) document.getElementById('guionTexto').innerText = `"${textoCompleto}"`;
+
+      } catch (err) {
+        console.warn("No se pudo cargar el plan:", err);
+      }
+    }
+
+    // =========================================================================
+    // SUBTÍTULOS: Lógica de personalización y edición
+    // =========================================================================
+    function renderEditorSubtitulos() {
+      const container = document.getElementById('subEditorContainer');
+      container.innerHTML = '';
+
+      if (!planActual || !planActual.scenes) {
+        container.innerHTML = '<p class="text-xs text-slate-500 italic p-4">Inicia una producción primero para editar los subtítulos de las escenas.</p>';
+        return;
+      }
+
+      planActual.scenes.forEach((sc, idx) => {
+        const row = document.createElement('div');
+        row.className = "p-4 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col md:flex-row gap-4 items-start";
+        row.innerHTML = `
+          <div class="w-full md:w-32 flex-shrink-0">
+            <span class="text-xs font-bold text-indigo-400 block mb-1">Escena ${sc.order || idx + 1} (${sc.duration_sec || 4}s)</span>
+            <input type="text" id="overlay-${sc.order}" value="${sc.overlay_text || ''}" placeholder="Gancho..." class="w-full bg-slate-950 border border-slate-700 text-xs rounded p-1.5 text-pink-300 font-semibold">
+          </div>
+          <div class="flex-1 w-full">
+            <textarea id="voice-${sc.order}" rows="2" class="w-full bg-slate-950 border border-slate-700 text-xs rounded p-2 text-slate-200 focus:outline-none focus:border-indigo-500">${sc.voice_segment || ''}</textarea>
+          </div>
+          <button onclick="guardarEscenaIndividual(${sc.order})" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 rounded-lg flex items-center gap-1.5 self-center">
+            <i class="fa-solid fa-check text-emerald-400"></i> Guardar
+          </button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    async function guardarEscenaIndividual(order) {
+      const voice = document.getElementById(`voice-${order}`).value;
+      const overlay = document.getElementById(`overlay-${order}`).value;
+
+      try {
+        const res = await fetch('/api/scenes/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order, voice_segment: voice, overlay_text: overlay })
+        });
+        if (res.ok) {
+          alert(`¡Escena ${order} actualizada con éxito!`);
+          cargarPlan();
+        }
+      } catch (e) {
+        alert("Error al actualizar escena: " + e);
+      }
+    }
+
+    async function guardarConfigSubtitulos() {
+      const palette_key = document.getElementById('subPaletteSelect').value;
+      const position = document.getElementById('subPositionSelect').value;
+      const size_scale = document.getElementById('subSizeSelect').value;
+      const show_hook = document.getElementById('subHookToggle').checked;
+
+      try {
+        const res = await fetch('/api/subtitles/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ palette_key, position, size_scale, show_hook })
+        });
+        if (res.ok) {
+          alert("¡Configuración de subtítulos guardada! Ya puedes renderizar tu video con este estilo.");
+        }
+      } catch (e) {
+        alert("Error al guardar subtítulos: " + e);
+      }
+    }
+
+    // =========================================================================
+    // FINANZAS & MOVIMIENTOS: Auditoría y Estadísticas
+    // =========================================================================
+    async function actualizarFinanzas() {
+      try {
+        const res = await fetch('/api/finanzas?t=' + Date.now());
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const gastos = data.gastos || {};
+        const entradas = data.entradas || {};
+        const movimientos = data.movimientos || [];
+
+        // KPIs
+        document.getElementById('kpiGastoTotal').innerText = `$${gastos.total_usd.toFixed(4)} USD`;
+        document.getElementById('kpiPresupuesto').innerText = `$${gastos.presupuesto_diario_usd.toFixed(2)}`;
+        document.getElementById('kpiDisponible').innerText = `$${gastos.disponible_usd.toFixed(2)} libre`;
+        document.getElementById('kpiTokens').innerText = entradas.total_tokens.toLocaleString();
+        document.getElementById('kpiTokensDetalle').innerText = `In: ${entradas.total_tokens_in.toLocaleString()} &bull; Out: ${entradas.total_tokens_out.toLocaleString()}`;
+        document.getElementById('kpiAhorro').innerText = `$${gastos.ahorro_flow_usd.toFixed(2)} USD`;
+        document.getElementById('kpiOperaciones').innerText = entradas.total_llamadas.toLocaleString();
+
+        // Desglose por Proveedor
+        const provContainer = document.getElementById('proveedoresContainer');
+        provContainer.innerHTML = '';
+        const porProv = gastos.por_proveedor || {};
+
+        Object.keys(porProv).forEach(p => {
+          const d = porProv[p];
+          const div = document.createElement('div');
+          div.className = "p-3 bg-slate-900/60 rounded-xl border border-slate-800/80 flex items-center justify-between text-xs";
+          div.innerHTML = `
+            <div>
+              <span class="font-bold text-slate-200 block">${p.toUpperCase()}</span>
+              <span class="text-[10px] text-slate-500">${d.calls} llamadas &bull; ${(d.tokens_in + d.tokens_out).toLocaleString()} tokens</span>
+            </div>
+            <span class="font-mono font-bold text-emerald-400">$${d.usd.toFixed(4)}</span>
+          `;
+          provContainer.appendChild(div);
+        });
+
+        // Tabla de Movimientos
+        const tbody = document.getElementById('movimientosTbody');
+        tbody.innerHTML = '';
+
+        movimientos.forEach(m => {
+          const tr = document.createElement('tr');
+          tr.className = "hover:bg-slate-900/40 transition";
+          tr.innerHTML = `
+            <td class="py-2 px-3 text-slate-400">${m.fecha || ''}</td>
+            <td class="py-2 px-3 font-semibold text-indigo-300">${m.fase || ''}</td>
+            <td class="py-2 px-3 text-cyan-400">${m.proveedor || ''}</td>
+            <td class="py-2 px-3 text-slate-300">${m.detalle || ''}</td>
+            <td class="py-2 px-3 text-slate-400">${m.duracion_segundos || 0}s</td>
+            <td class="py-2 px-3 text-emerald-400">$${(m.coste_usd || 0).toFixed(4)}</td>
+            <td class="py-2 px-3"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">OK</span></td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+      } catch (e) {
+        console.warn("Error al actualizar finanzas:", e);
+      }
+    }
+
+    // Inicialización de la aplicación
     cargarPlan();
     actualizarFlow();
     setInterval(actualizarFlow, 2500);
