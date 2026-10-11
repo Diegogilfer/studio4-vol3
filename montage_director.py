@@ -157,3 +157,4 @@ def generar_cadena_filtros_ffmpeg(
             f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black"
         )
         return f"{base_filter},{motion_expr},{color_filter},fps={fps},setsar=1"
+
