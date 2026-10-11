@@ -22,6 +22,7 @@ import requests
 
 from subtitles import construir_archivo_ass
 import google_flow
+from montage_director import generar_cadena_filtros_ffmpeg, planificar_montaje_escenas
 from visual_generator import convertir_imagen_a_clip_cinematico, obtener_imagen_escena
 
 load_dotenv()
@@ -254,15 +255,18 @@ def _normalizar_clip(
     duration_sec: float,
     width: int,
     height: int,
-    camera_movement: str = "acercar",
+    camera_movement: str = "zoom_in_dramatico",
+    color_grade: str = "hollywood",
     fps: int = DEFAULT_FPS,
 ) -> None:
-    filter_chain = _crear_filtro_cinematico(
+    filter_chain = generar_cadena_filtros_ffmpeg(
         movement=camera_movement,
         duration_sec=duration_sec,
         width=width,
         height=height,
         fps=fps,
+        color_grade=color_grade,
+        blurred_background=False,
     )
 
     cmd = [
@@ -327,7 +331,9 @@ def ensamblar_video(
     # 1. Asegurar que cada escena tenga su clip visual animado
     preparar_visuales_escenas(scenes, folder=temp_folder, orientation=orientation, auto_fallback_ai=True)
 
-    movimientos_rotativos = ["derecha", "izquierda", "bajar", "subir", "acercar", "alejar"]
+    # 2. Dirección de Montaje Cinematográfico inteligente (Claude / Reglas de retención)
+    scenes = planificar_montaje_escenas(scenes, orientation=orientation)
+
     normalized_clips: list[str] = []
 
     for idx, sc in enumerate(scenes, start=1):
@@ -341,7 +347,8 @@ def ensamblar_video(
         base_dur = float(sc.get("duration_sec", 4))
         sc_dur = max(1.5, base_dur * escalar)
 
-        cam_mov = sc.get("camera_movement") or movimientos_rotativos[(idx - 1) % len(movimientos_rotativos)]
+        cam_mov = sc.get("camera_movement", "zoom_in_dramatico")
+        color_gr = sc.get("color_grade", "hollywood")
 
         _normalizar_clip(
             input_clip=str(raw_clip),
@@ -350,6 +357,7 @@ def ensamblar_video(
             width=width,
             height=height,
             camera_movement=cam_mov,
+            color_grade=color_gr,
         )
         normalized_clips.append(str(norm_clip))
 
