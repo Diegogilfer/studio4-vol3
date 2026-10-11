@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>STUDIO 4 Vol. 3 - Monitor de Producción</title>
+  <title>STUDIO 4 Vol. 3 - Panel de Producción Local</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { background-color: #0b0f19; color: #f1f5f9; font-family: ui-sans-serif, system-ui, sans-serif; }
-    .glass-card { background: rgba(17, 24, 39, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .gradient-badge { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+    body { background-color: #080c14; color: #f1f5f9; font-family: ui-sans-serif, system-ui, sans-serif; }
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .gradient-accent { background: linear-gradient(135deg, #4f46e5 0%, #9333ea 100%); }
   </style>
 </head>
 <body class="min-h-screen p-6 md:p-10 flex flex-col items-center">
@@ -17,29 +17,100 @@
   <!-- Header -->
   <header class="w-full max-w-6xl mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
     <div class="flex items-center gap-3">
-      <div class="w-12 h-12 rounded-xl gradient-badge flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/20">
+      <div class="w-12 h-12 rounded-xl gradient-accent flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-indigo-500/25">
         <i class="fa-solid fa-clapperboard"></i>
       </div>
       <div>
         <h1 class="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
           STUDIO 4 <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Vol. 3</span>
         </h1>
-        <p class="text-sm text-slate-400">Pipeline de Generación Audiovisual Automatizada</p>
+        <p class="text-sm text-slate-400">Panel de Control & Generador Audiovisual</p>
       </div>
     </div>
     <div class="flex items-center gap-3 text-xs">
-      <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 font-medium">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Producción Lista
+      <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 font-medium" id="statusBadge">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Servidor Conectado
       </span>
-      <span class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 font-mono">
-        Gemini 3.5 + FFmpeg
+      <span class="px-3 py-1.5 rounded-lg bg-slate-800/80 text-slate-300 border border-slate-700/60 font-mono">
+        http://localhost:8000
       </span>
     </div>
   </header>
 
+  <!-- FORMULARIO CREAR VIDEO -->
+  <section class="w-full max-w-6xl mb-8">
+    <div class="glass-card rounded-2xl p-6 shadow-2xl border-indigo-500/30 relative overflow-hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles text-indigo-400"></i> Generar Nuevo Video
+        </h2>
+        <span class="text-xs text-indigo-300 font-mono">Google Gemini + FFmpeg</span>
+      </div>
+
+      <form id="generateForm" class="flex flex-col gap-4">
+        <div class="flex flex-col md:flex-row gap-3">
+          <input 
+            type="text" 
+            id="temaInput" 
+            required 
+            placeholder="Escribe el tema de tu video (ej. 'La paradoja de Fermi y el silencio cósmico')..." 
+            class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition shadow-inner placeholder:text-slate-500"
+          >
+          <button 
+            type="submit" 
+            id="btnSubmit" 
+            class="gradient-accent hover:opacity-95 text-white font-semibold text-sm px-6 py-3 rounded-xl shadow-lg shadow-indigo-500/25 transition flex items-center justify-center gap-2 min-w-[170px]"
+          >
+            <i class="fa-solid fa-play"></i> Producir Video
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1 text-slate-300">
+          <div>
+            <label class="block mb-1 text-slate-400">Duración objetivo:</label>
+            <select id="durationSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="15" selected>15 Segundos (Demo Rápido)</option>
+              <option value="30">30 Segundos (Shorts / Reels)</option>
+              <option value="45">45 Segundos</option>
+              <option value="60">60 Segundos (Video Completo)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block mb-1 text-slate-400">Formato / Relación:</label>
+            <select id="orientationSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="landscape" selected>16:9 Horizontal (YouTube)</option>
+              <option value="portrait">9:16 Vertical (Shorts/TikTok)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block mb-1 text-slate-400">Motor Guionista:</label>
+            <select id="writerSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="gemini" selected>Google Gemini 3.5 / 2.5</option>
+              <option value="claude">Anthropic Claude 3.7</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Barra de Progreso en Vivo -->
+        <div id="progressBox" class="hidden mt-3 p-4 bg-slate-950/80 rounded-xl border border-indigo-500/20">
+          <div class="flex items-center justify-between text-xs mb-2">
+            <span id="progressText" class="font-medium text-indigo-300 flex items-center gap-2">
+              <i class="fa-solid fa-spinner animate-spin"></i> Produciendo video...
+            </span>
+            <span id="progressPct" class="font-mono text-slate-400">40%</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+            <div id="progressBar" class="bg-indigo-500 h-full rounded-full transition-all duration-500" style="width: 40%"></div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- REPRODUCTORES Y DETALLES -->
   <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8">
     
-    <!-- Columna Izquierda: Reproductor de Video y Audio -->
+    <!-- Columna Izquierda: Video Master y Audio -->
     <div class="lg:col-span-7 flex flex-col gap-6">
       
       <!-- Video Player Card -->
@@ -51,15 +122,15 @@
           <span class="text-xs text-slate-500 font-mono">output/video_final.mp4</span>
         </div>
         <div class="relative rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center border border-slate-800 shadow-inner">
-          <video id="mainVideo" controls class="w-full h-full object-contain">
+          <video id="mainVideo" controls autoplay muted loop class="w-full h-full object-contain">
             <source src="output/video_final.mp4" type="video/mp4">
             Tu navegador no soporta el reproductor de video HTML5.
           </video>
         </div>
         <div class="mt-4 flex items-center justify-between text-xs text-slate-400">
-          <span class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-indigo-400"></i> ~15.7 Segundos</span>
-          <span class="flex items-center gap-1.5"><i class="fa-solid fa-expand text-indigo-400"></i> Full HD 1080p</span>
-          <a href="output/video_final.mp4" download class="text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1">
+          <span class="flex items-center gap-1.5"><i class="fa-regular fa-clock text-indigo-400"></i> Duración sincronizada</span>
+          <span class="flex items-center gap-1.5"><i class="fa-solid fa-closed-captioning text-indigo-400"></i> Subtítulos ASS Virales</span>
+          <a href="output/video_final.mp4" download class="text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1 font-medium">
             <i class="fa-solid fa-download"></i> Descargar MP4
           </a>
         </div>
@@ -70,7 +141,7 @@
         <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
           <i class="fa-solid fa-microphone-lines text-purple-400"></i> Pista Vocal Maestra (Google Studio Voice 24kHz)
         </h2>
-        <audio controls class="w-full mt-2">
+        <audio id="mainAudio" controls class="w-full mt-2">
           <source src="output/audio.wav" type="audio/wav">
           Tu navegador no soporta audio HTML5.
         </audio>
@@ -122,71 +193,13 @@
           <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
             <i class="fa-solid fa-layer-group text-amber-400"></i> Escenas & B-roll
           </h2>
-          <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400">5 escenas</span>
+          <span class="text-xs px-2.5 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700/60 font-medium" id="sceneCountBadge">
+            5 escenas
+          </span>
         </div>
 
         <div class="flex flex-col gap-3 max-h-[480px] overflow-y-auto pr-1" id="escenasContainer">
-          
-          <!-- Escena 1 -->
-          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-slate-700 transition">
-            <div class="flex items-center justify-between text-xs mb-1.5">
-              <span class="font-bold text-indigo-400">Escena 1 (4s)</span>
-              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold tracking-wider">DEVORA LA LUZ</span>
-            </div>
-            <p class="text-xs text-slate-300 mb-2 italic">"Un agujero negro no solo devora luz,"</p>
-            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/50">
-              <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-600 mr-1"></i> cinematic 4k black hole in deep space swallowing light gravitational lensing accretion disk close up
-            </div>
-          </div>
-
-          <!-- Escena 2 -->
-          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-slate-700 transition">
-            <div class="flex items-center justify-between text-xs mb-1.5">
-              <span class="font-bold text-indigo-400">Escena 2 (4s)</span>
-              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold tracking-wider">DESTRUYE EL TIEMPO</span>
-            </div>
-            <p class="text-xs text-slate-300 mb-2 italic">"destruye el mismísimo tejido del tiempo."</p>
-            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/50">
-              <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-600 mr-1"></i> surreal cosmic clock glowing distortion space time continuum physics slow motion
-            </div>
-          </div>
-
-          <!-- Escena 3 -->
-          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-slate-700 transition">
-            <div class="flex items-center justify-between text-xs mb-1.5">
-              <span class="font-bold text-indigo-400">Escena 3 (5s)</span>
-              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold tracking-wider">EL FIN DEL UNIVERSO</span>
-            </div>
-            <p class="text-xs text-slate-300 mb-2 italic">"Si cayeras en uno, verías el fin del universo en un parpadeo"</p>
-            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/50">
-              <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-600 mr-1"></i> first person pov falling into deep cosmic void hyperdrive warp speed glowing galaxies exploding
-            </div>
-          </div>
-
-          <!-- Escena 4 -->
-          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-slate-700 transition">
-            <div class="flex items-center justify-between text-xs mb-1.5">
-              <span class="font-bold text-indigo-400">Escena 4 (4s)</span>
-              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold tracking-wider">DESAPARECER PARA SIEMPRE</span>
-            </div>
-            <p class="text-xs text-slate-300 mb-2 italic">"antes de desaparecer para siempre."</p>
-            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/50">
-              <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-600 mr-1"></i> dramatic cinematic silhouette of astronaut disintegrating into glowing dark particles cosmic dust
-            </div>
-          </div>
-
-          <!-- Escena 5 -->
-          <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-slate-700 transition">
-            <div class="flex items-center justify-between text-xs mb-1.5">
-              <span class="font-bold text-indigo-400">Escena 5 (4s)</span>
-              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold tracking-wider">¿QUÉ HAY EN SU CENTRO?</span>
-            </div>
-            <p class="text-xs text-slate-300 mb-2 italic">"¿Qué crees que ocultan en su centro?"</p>
-            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/50">
-              <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-600 mr-1"></i> mysterious bright blinding light core singularity deep space zoom macro abstract quantum geometry
-            </div>
-          </div>
-
+          <!-- Render dinámico desde production_plan.json -->
         </div>
       </div>
 
@@ -195,10 +208,137 @@
   </main>
 
   <footer class="mt-12 text-slate-600 text-xs text-center border-t border-slate-900 pt-6 w-full max-w-6xl flex justify-between items-center">
-    <span>STUDIO 4 Vol. 3 &bull; Diseñado para producción audiovisual autónoma</span>
+    <span>STUDIO 4 Vol. 3 &bull; Pipeline Audiovisual Autónomo</span>
     <span>GitHub: <a href="https://github.com/Diegogilfer/studio4-vol3" target="_blank" class="text-slate-400 hover:text-white underline">Diegogilfer/studio4-vol3</a></span>
   </footer>
 
+  <script>
+    // Cargar plan de producción dinámicamente
+    async function cargarPlan() {
+      try {
+        const res = await fetch('/api/production_plan?t=' + Date.now());
+        if (!res.ok) return;
+        const plan = await res.json();
+        
+        if (plan.title) document.getElementById('videoTitle').innerText = plan.title;
+        if (plan.description) document.getElementById('videoDesc').innerText = plan.description;
+        
+        const scenes = plan.scenes || [];
+        document.getElementById('sceneCountBadge').innerText = `${scenes.length} escenas`;
+        
+        const container = document.getElementById('escenasContainer');
+        container.innerHTML = '';
+        
+        scenes.forEach((sc, idx) => {
+          const card = document.createElement('div');
+          card.className = "p-3 bg-slate-900/80 rounded-xl border border-slate-800 hover:border-slate-700 transition";
+          card.innerHTML = `
+            <div class="flex items-center justify-between text-xs mb-1.5">
+              <span class="font-bold text-indigo-400">Escena ${sc.order || idx + 1} (${sc.duration_sec || 4}s)</span>
+              <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 text-[10px] font-semibold tracking-wider">
+                ${sc.overlay_text || 'GANCHO'}
+              </span>
+            </div>
+            <p class="text-xs text-slate-300 mb-2 italic">"${sc.voice_segment || ''}"</p>
+            <div class="text-[11px] text-slate-500 font-mono bg-slate-950 p-2 rounded border border-slate-800/50">
+              <i class="fa-solid fa-magnifying-glass text-[9px] text-slate-600 mr-1"></i> ${sc.broll_query_en || ''}
+            </div>
+          `;
+          container.appendChild(card);
+        });
+
+        // Actualizar guion
+        const textoCompleto = scenes.map(s => s.voice_segment).join(' ');
+        if (textoCompleto) document.getElementById('guionTexto').innerText = `"${textoCompleto}"`;
+
+      } catch (err) {
+        console.warn("No se pudo cargar el plan de producción:", err);
+      }
+    }
+
+    cargarPlan();
+
+    // Manejar envío de formulario de producción
+    const form = document.getElementById('generateForm');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const progressBox = document.getElementById('progressBox');
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const progressPct = document.getElementById('progressPct');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const tema = document.getElementById('temaInput').value.trim();
+      if (!tema) return;
+
+      btnSubmit.disabled = true;
+      btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+      progressBox.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tema,
+            duration: document.getElementById('durationSelect').value,
+            orientation: document.getElementById('orientationSelect').value,
+            writer: document.getElementById('writerSelect').value
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(data.error || 'Error al iniciar');
+          btnSubmit.disabled = false;
+          btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+          progressBox.classList.add('hidden');
+          return;
+        }
+
+        // Iniciar sondeo de estado
+        const interval = setInterval(async () => {
+          const pollRes = await fetch('/api/status?t=' + Date.now());
+          const status = await pollRes.json();
+
+          if (status.fase) progressText.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> ${status.fase}`;
+          if (status.progreso) {
+            progressBar.style.width = status.progreso + '%';
+            progressPct.innerText = status.progreso + '%';
+          }
+
+          if (!status.ocupado) {
+            clearInterval(interval);
+            btnSubmit.disabled = false;
+            btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            if (status.error) {
+              alert('Error en producción: ' + status.error);
+            } else {
+              // Recargar video y audio
+              const v = document.getElementById('mainVideo');
+              const a = document.getElementById('mainAudio');
+              const cacheBuster = '?t=' + Date.now();
+              v.src = 'output/video_final.mp4' + cacheBuster;
+              a.src = 'output/audio.wav' + cacheBuster;
+              v.load();
+              v.play();
+              a.load();
+              cargarPlan();
+              progressText.innerHTML = `<i class="fa-solid fa-check text-emerald-400"></i> ¡Video producido exitosamente!`;
+              progressBar.style.width = '100%';
+              progressPct.innerText = '100%';
+            }
+          }
+        }, 2000);
+
+      } catch (err) {
+        alert('Error conectando con el servidor: ' + err);
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+        progressBox.classList.add('hidden');
+      }
+    });
+  </script>
 </body>
 </html>
-
