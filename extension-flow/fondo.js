@@ -37,6 +37,19 @@ async function anotar(cambio) {
   chrome.action.setBadgeText({ text: cambio.error ? "!" : n ? String(Math.min(n, 999)) : "" });
 }
 
+// Lo que ve y hace la extensión llega al panel de STUDIO #4 (Escenas › «Lo que ve la extensión»).
+async function diagnostico(tipo, detalle) {
+  try {
+    const a = await ajustes();
+    if (!a.codigo) return;
+    await fetch(`${a.servidor.replace(/\/+$/, "")}/api/flow/diagnostico`, {
+      method: "POST",
+      headers: { "X-Studio4-Token": a.codigo, "X-Flow-Version": VERSION, "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo, detalle: String(detalle).slice(0, 300) }),
+    });
+  } catch (_) { /* STUDIO cerrado: nada que anotar */ }
+}
+
 async function entregar(msg) {
   const a = await ajustes();
   if (!a.activo) return { omitida: true };
@@ -125,6 +138,10 @@ async function imagenPng(url) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _quien, responder) => {
+  if (msg?.tipo === "diagnostico") {
+    diagnostico(msg.evento, msg.detalle).then(() => responder({ ok: true }));
+    return true;
+  }
   if (msg?.tipo === "activa") {
     activa(Number(msg.escena)).then(responder).catch(() => responder({ ok: false }));
     return true;
@@ -147,6 +164,7 @@ chrome.runtime.onMessage.addListener((msg, _quien, responder) => {
           ? "STUDIO #4 no responde: ábrelo (python servidor.py) y vuelve a generar."
           : String(e.message || e);
         await anotar({ ok: false, error });
+        diagnostico("error", `${msg.esVideo ? "vídeo" : "imagen"}: ${error}`);
         responder({ ok: false, error });
       });
     return true;

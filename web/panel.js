@@ -37,6 +37,18 @@ function llenarSelect(sel, opciones, valor) {
 }
 
 // --- Flow: botón de vinculación ---------------------------------------------------------------
+function pintarRegistroFlow(ext) {
+  $("ext-vieja").hidden = !ext.desactualizada;
+  const ev = ext.eventos || [];
+  $("ext-resumen").textContent = ext.conectada
+    ? `· conectada${ext.version ? ` (v${ext.version})` : ""}${ev.length ? ` · último: ${ev[0].tipo} ${ev[0].t}` : ""}`
+    : "· sin conexión: abre Google Flow con la extensión cargada";
+  $("ext-eventos").innerHTML = ev.length
+    ? ev.map((e) => `<li class="${esc(e.tipo)}"><span>${esc(e.t)}</span><b>${esc(e.tipo)}</b><span>${esc(e.detalle)}</span></li>`).join("")
+    : `<li><span></span><b></b><span>Aún nada. En Flow pulsa «Copiar prompt», pega y genera.</span></li>`;
+  if (ev.some((e) => e.tipo === "error" || e.tipo === "rechazada")) $("ext-registro").open = true;
+}
+
 function pintarFlow(d) {
   const b = $("flow-boton");
   b.href = "/flow/emparejar#c=" + encodeURIComponent(d.codigo);
@@ -161,7 +173,7 @@ $("escenas").addEventListener("click", async (ev) => {
       await navigator.clipboard.writeText(p.escenas[n - 1].prompt_flow);
       t.textContent = "Copiado ✓";
       setTimeout(() => { t.textContent = "Copiar prompt"; }, 1500);
-      if (p.escena_activa !== n) await api("/api/escena/activa", { escena: n });
+      await api("/api/escena/activa", { escena: n });   // la extensión empieza a recoger para esta escena
     } else if (t.dataset.activar) {
       await api("/api/escena/activa", { escena: Number(t.dataset.activar) });
     } else if (t.dataset.borrar !== undefined) {
@@ -271,6 +283,7 @@ async function refrescar() {
   $("aviso-gemini").hidden = !o.salud.length;
   $("aviso-gemini").textContent = o.salud.join(" ");
   pintarFlow(d);
+  siCambia("registro-flow", d.extension, pintarRegistroFlow);
   siCambia("lista", { lista, activa: d.produccion?.id }, () => pintarLista(lista));
   siCambia("consumo", { consumo: d.consumo, restantes: d.elevenlabs_restantes }, pintarConsumo);
 

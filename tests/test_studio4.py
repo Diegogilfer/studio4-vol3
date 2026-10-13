@@ -222,3 +222,16 @@ def test_servidor_rechaza_host_origen_y_extension_sin_codigo(servidor):
     estado, cuerpo = pedir("POST", "/api/flow/hola", {"X-Studio4-Token": "codigo-de-prueba"})
     assert estado == 200 and json.loads(cuerpo)["ok"]
     assert pedir("GET", "/", {"Host": f"127.0.0.1:{puerto}"})[0] == 200
+
+
+def test_copiar_escena_arma_la_extension_y_queda_registro(servidor):
+    pedir, _ = servidor
+    _produccion("p6")
+    cab = {"X-Studio4-Token": "codigo-de-prueba", "Content-Type": "application/json"}
+    antes = json.loads(pedir("POST", "/api/flow/hola", cab)[1])["sesion"]["armado"]
+    sesion = json.loads(pedir("POST", "/api/flow/activa", cab, b'{"escena": 2}')[1])["sesion"]
+    assert sesion["armado"] > antes and sesion["siguiente"]["escena"] == 2
+    pedir("POST", "/api/flow/diagnostico", cab, json.dumps({"tipo": "error", "detalle": "prueba"}).encode())
+    pedir("POST", "/api/flow/recibir", {"X-Studio4-Token": "codigo-de-prueba", "Content-Type": "video/mp4"}, b"no es un video")
+    eventos = flow.estado_extension()["eventos"]
+    assert eventos[0]["tipo"] == "rechazada" and eventos[1]["detalle"] == "prueba"

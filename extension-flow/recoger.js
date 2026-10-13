@@ -3,24 +3,32 @@
 // Dos cosas, y ninguna toca Flow por ti (modo «Recoger + copiar», elegido por Diego):
 //  1. Un panelito flotante con la escena que toca: su texto de voz, su prompt y «Copiar».
 //     Tú lo pegas en Flow y pulsas Generar.
-//  2. Cuando aparece en la página un vídeo o una imagen NUEVOS del tamaño de una generación,
-//     los manda a STUDIO #4 marcados con la escena que copiaste.
+//  2. Desde que pulsas «Copiar prompt» (y durante 20 min), cada vídeo o imagen NUEVOS del tamaño de
+//     una generación van a STUDIO #4, a esa escena. Lo que ya había en Flow no se manda.
+//  Todo lo que ve, manda o falla se anota en el panel de STUDIO para poder diagnosticar.
 (() => {
   const VISTAS = new Set();
-  const LADO_MIN = 384;           // iconos, avatares y miniaturas de la interfaz quedan fuera
-  const ESPERA_BASE_MS = 4000;    // lo que ya estaba en pantalla al abrir Flow no se manda
-  let mirando = false;
+  const LADO_MIN = 384;              // iconos, avatares y miniaturas de la interfaz quedan fuera
+  const ARMADO_MS = 20 * 60 * 1000;  // tras «Copiar prompt», 20 min recogiendo lo nuevo
+  let armadoHasta = 0;               // antes de copiar no se manda nada: lo viejo del proyecto no se cuela
+  let escenaArmada = 0;
 
   const fuente = (el) => el.currentSrc || el.src || el.querySelector?.("source")?.src || "";
-  const lado = (el) => el.tagName === "VIDEO"
-    ? Math.min(el.videoWidth || 0, el.videoHeight || 0)
-    : Math.min(el.naturalWidth || 0, el.naturalHeight || 0);
+  const visible = (el) => { const r = el.getBoundingClientRect(); return Math.max(r.width, r.height) >= 140; };
+  // Un vídeo de Flow puede estar sin precargar (preload="none"): sin metadatos aún, decide su tamaño en pantalla
+  // y el servidor rechaza lo que resulte ser una miniatura.
   const esGenerada = (el) => {
     const src = fuente(el);
     if (!src || src.startsWith("data:image/svg")) return false;
-    return lado(el) >= LADO_MIN;
+    if (el.tagName === "VIDEO") {
+      return el.readyState >= 1 && el.videoWidth ? Math.min(el.videoWidth, el.videoHeight) >= LADO_MIN : visible(el);
+    }
+    return Math.min(el.naturalWidth || 0, el.naturalHeight || 0) >= LADO_MIN;
   };
-  const textoDe = (el) => (el.alt || el.getAttribute("aria-label") || el.title || "").trim();
+  const textoDe = (el) => (el.alt || el.getAttribute("aria-label") || el.title
+    || el.closest("[aria-label]")?.getAttribute("aria-label") || "").trim();
+  const avisar = (evento, detalle) => chrome.runtime.sendMessage({ tipo: "diagnostico", evento, detalle }).catch(() => {});
+  const origenDe = (src) => { try { const u = new URL(src); return u.protocol === "blob:" ? "blob" : u.host; } catch (_) { return "?"; } };
 
   const aBase64 = (blob) => new Promise((ok, mal) => {
     const lector = new FileReader();
@@ -29,36 +37,43 @@
     lector.readAsDataURL(blob);
   });
 
-  async function mandar(el) {
+  async function mandar(el, forzar = false) {
     const src = fuente(el);
     if (!src || VISTAS.has(src)) return;
     VISTAS.add(src);
+    const tipo = el.tagName === "VIDEO" ? "vídeo" : "imagen";
+    if (!forzar && Date.now() > armadoHasta) return;   // visto antes de copiar un prompt: se ignora
     const { activo = true } = await chrome.storage.local.get("activo");
     if (!activo) return;
     let b64 = "", mime = "";
-    // blob: solo se puede leer desde la página; lo demás lo baja el fondo con los permisos de la extensión
-    // (así un vídeo de varios MB no viaja dos veces).
+    // blob: solo se puede leer desde la página; lo demás lo baja el fondo con los permisos de la extensión.
     if (src.startsWith("blob:") || src.startsWith("data:")) {
       try {
         const blob = await (await fetch(src)).blob();
         mime = blob.type;
         b64 = await aBase64(blob);
-      } catch (_) { return; }
+      } catch (e) {
+        avisar("error", `${tipo} en ${origenDe(src)}: no se pudo leer (${e?.message || e}). Usa «Subir clip» en STUDIO.`);
+        return;
+      }
     }
+    avisar("enviando", `${tipo} de ${origenDe(src)} → escena ${escenaArmada || "activa"}`);
     chrome.runtime.sendMessage({
       tipo: "imagen", b64, mime, url: b64 ? "" : src,
       esVideo: el.tagName === "VIDEO", prompt: textoDe(el), pagina: location.href,
     });
   }
 
-  function revisar(el) {
-    if (!mirando) return;
-    if (el instanceof HTMLImageElement) {
-      if (el.complete && el.naturalWidth) { if (esGenerada(el)) mandar(el); }
-      else el.addEventListener("load", () => { if (esGenerada(el)) mandar(el); }, { once: true });
-    } else if (el instanceof HTMLVideoElement) {
-      if (el.readyState >= 1) { if (esGenerada(el)) mandar(el); }
-      else el.addEventListener("loadedmetadata", () => { if (esGenerada(el)) mandar(el); }, { once: true });
+  function revisar(el, forzar = false) {
+    if (!el || (el.tagName !== "IMG" && el.tagName !== "VIDEO")) return;
+    const probar = () => { if (esGenerada(el)) mandar(el, forzar); };
+    if (el.tagName === "IMG" && !(el.complete && el.naturalWidth)) {
+      el.addEventListener("load", probar, { once: true });
+      return;
+    }
+    probar();
+    if (el.tagName === "VIDEO" && el.readyState < 1) {
+      el.addEventListener("loadedmetadata", () => { VISTAS.delete(fuente(el)); probar(); }, { once: true });
     }
   }
 
@@ -67,27 +82,33 @@
       if (c.type === "attributes") revisar(c.target.tagName === "SOURCE" ? c.target.parentElement : c.target);
       for (const n of c.addedNodes || []) {
         if (n.nodeType !== 1) continue;
-        if (n.tagName === "IMG" || n.tagName === "VIDEO") revisar(n);
-        n.querySelectorAll?.("img, video").forEach(revisar);
+        if (n.tagName === "SOURCE") revisar(n.parentElement);
+        else revisar(n);
+        n.querySelectorAll?.("img, video").forEach((x) => revisar(x));
       }
     }
   });
+  observador.observe(document.documentElement, {
+    subtree: true, childList: true, attributes: true, attributeFilter: ["src", "srcset"],
+  });
 
-  setTimeout(() => {
+  function armar(escena) {
+    // Lo que ya está en pantalla al copiar es de antes: se marca como visto.
     document.querySelectorAll("img, video").forEach((el) => { const s = fuente(el); if (s) VISTAS.add(s); });
-    mirando = true;
-    observador.observe(document.documentElement, {
-      subtree: true, childList: true, attributes: true, attributeFilter: ["src", "srcset"],
-    });
-  }, ESPERA_BASE_MS);
+    armadoHasta = Date.now() + ARMADO_MS;
+    escenaArmada = escena;
+    const v = document.querySelectorAll("video").length;
+    avisar("armada", `escena ${escena}: recogiendo lo nuevo 20 min (en pantalla: ${v} vídeos, ${document.images.length} imágenes)`);
+  }
 
-  // «Enviar las que hay en pantalla» (desde la ventana de la extensión).
+  // «Enviar las que hay en pantalla» (desde la ventana de la extensión): manda todo lo visible ya.
   chrome.runtime.onMessage.addListener((msg, _quien, responder) => {
     if (msg?.tipo !== "enviar-visibles") return;
     let n = 0;
     document.querySelectorAll("img, video").forEach((el) => {
-      if (esGenerada(el)) { VISTAS.delete(fuente(el)); mandar(el); n += 1; }
+      if (esGenerada(el)) { VISTAS.delete(fuente(el)); mandar(el, true); n += 1; }
     });
+    avisar("pantalla", `enviando ${n} de la pantalla`);
     responder({ enviadas: n });
   });
 
@@ -133,6 +154,7 @@
     </div>`;
   const $ = (id) => sombra.getElementById(id);
   let sesion = null;
+  let armadoVisto = 0;   // último «empieza a recoger» del servidor ya aplicado aquí
   let servidor = "http://127.0.0.1:8000";
 
   function pintar() {
@@ -154,19 +176,26 @@
     }
     $("nota").textContent = s.referencia
       ? `Para que no salte: usa la imagen inicial (${s.referencia_de}) en «Fotogramas a vídeo».`
-      : "Copia el prompt, pégalo en Flow y genera. El vídeo llegará solo a esta escena.";
+      : "Pulsa «Copiar prompt» (así empieza a recoger), pégalo en Flow y genera. El vídeo llegará solo a esta escena.";
   }
 
   async function actualizar() {
     const d = await chrome.storage.local.get(["servidor"]);
     servidor = (d.servidor || servidor).replace(/\/+$/, "");
     const r = await chrome.runtime.sendMessage({ tipo: "hola" }).catch(() => null);
-    if (r?.ok) { sesion = r.sesion; pintar(); }
+    if (!r?.ok) return;
+    sesion = r.sesion;
+    // Copiaste el prompt desde el panel de STUDIO: también empieza a recoger aquí.
+    if (sesion?.viva && sesion.armado > armadoVisto) {
+      if (armadoVisto) armar(sesion.siguiente.escena);
+      armadoVisto = sesion.armado;
+    }
+    pintar();
   }
 
   async function irA(escena) {
     const r = await chrome.runtime.sendMessage({ tipo: "activa", escena }).catch(() => null);
-    if (r?.ok) { sesion = r.sesion; pintar(); }
+    if (r?.ok) { sesion = r.sesion; armadoVisto = sesion.armado || armadoVisto; pintar(); }
   }
 
   $("cab").addEventListener("click", (ev) => { if (!ev.target.closest("button")) $("caja").classList.toggle("min"); });
@@ -177,6 +206,7 @@
     $("copiar").textContent = "Copiado ✓ · pégalo en Flow";
     setTimeout(() => { $("copiar").textContent = "Copiar prompt"; }, 2000);
     irA(sesion.siguiente.escena);   // confirma que lo que llegue ahora es de esta escena
+    armar(sesion.siguiente.escena);
   });
   $("copiar-ref").addEventListener("click", async () => {
     try {

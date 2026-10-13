@@ -22,6 +22,8 @@ CONECTADA_S = 90          # la extensión saluda cada pocos segundos mientras Fl
 LADO_MINIMO = 256
 
 _extension: dict[str, Any] = {"ultima": 0.0, "version": ""}
+_eventos: list[dict[str, Any]] = []   # lo último que vio, mandó o falló la extensión (para diagnosticar)
+VERSION_EXTENSION = "2.1.0"           # la del manifest: si la cargada es más vieja, el panel pide recargarla
 
 _EXT_POR_MIME = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
                  "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
@@ -33,10 +35,18 @@ def latido(version: str = "") -> None:
         _extension["version"] = version[:20]
 
 
+def anotar_evento(tipo: str, detalle: str) -> None:
+    _eventos.insert(0, {"t": time.strftime("%H:%M:%S"), "tipo": str(tipo)[:20], "detalle": str(detalle)[:300]})
+    del _eventos[60:]
+    if tipo in ("error", "rechazada"):
+        logger.warning("Flow %s: %s", tipo, detalle)
+
+
 def estado_extension() -> dict[str, Any]:
     ultima = _extension["ultima"]
     return {"conectada": bool(ultima) and time.time() - ultima < CONECTADA_S,
-            "version": _extension["version"], "ultima": ultima}
+            "version": _extension["version"], "ultima": ultima, "eventos": _eventos[:25],
+            "desactualizada": bool(_extension["version"]) and _extension["version"] != VERSION_EXTENSION}
 
 
 def _palabras(texto: str) -> set[str]:
@@ -114,6 +124,8 @@ def marcar_activa(orden: int) -> None:
             raise ValueError(f"No existe la escena {orden}")
         p["escena_activa"] = orden
     produccion.modificar(pid, cambio)
+    # Al elegir/copiar una escena (desde Flow o desde el panel), la extensión empieza a recoger lo nuevo.
+    _extension["armado"] = time.time()
 
 
 def _referencia(pid: str, esc: dict[str, Any]) -> Optional[str]:
@@ -153,6 +165,7 @@ def sesion_para_extension() -> dict[str, Any]:
         "escenas": [{"escena": e["orden"], "prompt": e["prompt_flow"], "voz": e["texto_voz"],
                      "tomas": len(e["tomas"]), "video": any(t["tipo"] == "video" for t in e["tomas"])}
                     for e in p["escenas"]],
+        "armado": _extension.get("armado", 0),
         "siguiente": {
             "escena": activa["orden"], "estado": "esperando", "prompt": activa["prompt_flow"],
             "voz": activa["texto_voz"],

@@ -203,15 +203,23 @@ class Panel(BaseHTTPRequestHandler):
             if ruta == "/api/flow/activa":
                 flow.marcar_activa(int(self._cuerpo_json().get("escena", 0)))
                 return self._json({"ok": True, "sesion": flow.sesion_para_extension()})
+            if ruta == "/api/flow/diagnostico":
+                d = self._cuerpo_json()
+                flow.anotar_evento(d.get("tipo", "info"), d.get("detalle", ""))
+                return self._json({"ok": True})
             if ruta == "/api/flow/recibir":
                 pista = self.headers.get("X-Flow-Escena", "")
+                mime = self.headers.get("Content-Type", "")
                 tmp = self._cuerpo_a_temporal()
                 try:
-                    res = flow.recibir(tmp, self.headers.get("Content-Type", ""),
-                                       prompt=urllib.parse.unquote(self.headers.get("X-Flow-Prompt", ""))[:1500],
+                    res = flow.recibir(tmp, mime, prompt=urllib.parse.unquote(self.headers.get("X-Flow-Prompt", ""))[:1500],
                                        pista=int(pista) if pista.isdigit() else None)
+                except (ValueError, RuntimeError) as e:
+                    flow.anotar_evento("rechazada", f"{mime or 'archivo'}: {e}")
+                    raise
                 finally:
                     tmp.unlink(missing_ok=True)
+                flow.anotar_evento("recibida", f"{res.get('tipo', '')} → escena {res['escena']}" + (" (repetida)" if res.get("repetida") else ""))
                 return self._json(res)
             raise Error(404, "No existe")
 
