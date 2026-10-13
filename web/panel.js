@@ -359,25 +359,19 @@ function pintarAvisos(avisos) {
     `<div><b>Difícil de filmar:</b> «${esc(a.frase)}» — ${esc(a.problema)}<br><span class="meta">Sugerencia: ${esc(a.sugerencia)}</span></div>`).join("");
 }
 function portada(e) {
-  // La toma elegida si ya hay clip; si no, la imagen de referencia de esa escena.
+  // La toma elegida si ya hay clip; si no, negro.
   const toma = e.elegida !== null ? e.tomas[e.elegida] : null;
   if (toma) {
     return toma.tipo === "video"
       ? `<video src="${urlMedio(toma.archivo)}#t=0.5" muted preload="metadata" loop></video>`
       : `<img src="${urlMedio(toma.archivo)}" alt="">`;
   }
-  if (e.referencia) {
-    return `<img src="${urlMedio(e.referencia.archivo)}" alt="Referencia de la escena ${e.orden}" loading="lazy">
-      <span class="credito" title="${esc(`${e.referencia.fuente} · ${e.referencia.autor || "autor desconocido"} · ${e.referencia.licencia}`)}">Referencia · ${esc(e.referencia.fuente)}</span>`;
-  }
-  // Sin referencia: portada sobria con el plano que hay que conseguir en Flow.
-  return `<div class="sin-portada"><span>${esc([e.plano_en, e.camara_en].filter(Boolean).join(" · ") || "Plano por generar")}</span><small>Se verá aquí cuando llegue el clip de Flow</small></div>`;
+  return `<div class="sin-portada"></div>`;   // en negro hasta que llegue su clip
 }
 
 function pintarEscenas({ escenas, activa }) {
   const vertical = estado.produccion.formato === "vertical";
   $("escenas").style.setProperty("--portada", vertical ? "3 / 4" : estado.produccion.formato === "cuadrado" ? "1" : "16 / 9");
-  $("buscar-refs").hidden = !escenas.length || escenas.slice(0, 3).every((e) => e.referencia);
   const listas = escenas.filter((e) => e.elegida !== null).length;
   $("e-cuenta").textContent = escenas.length ? `· ${listas}/${escenas.length} con clip` : "";
   $("escenas").innerHTML = escenas.map((e) => {
@@ -401,7 +395,6 @@ function pintarEscenas({ escenas, activa }) {
           <div class="acciones">
             <button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>
             <label class="boton">Subir clip<input type="file" accept="video/*,image/*" data-subir="${e.orden}"></label>
-            ${e.elegida === null && e.orden <= 3 ? `<button class="boton" data-otra-ref="${e.orden}" title="Trae otra imagen de referencia para esta escena">Otra referencia</button>` : ""}
           </div>
         </div>
       </article>`;
@@ -411,10 +404,7 @@ $("escenas").addEventListener("click", async (ev) => {
   const t = ev.target;
   const p = estado.produccion;
   try {
-    if (t.dataset.otraRef) {
-      t.textContent = "Buscando…"; t.disabled = true;
-      await api("/api/referencias", { escena: Number(t.dataset.otraRef) });
-    } else if (t.dataset.copiarPrompt) {
+    if (t.dataset.copiarPrompt) {
       const n = Number(t.dataset.copiarPrompt);
       await navigator.clipboard.writeText(p.escenas[n - 1].prompt_flow);
       t.textContent = "Copiado";
@@ -443,9 +433,6 @@ $("escenas").addEventListener("change", async (ev) => {
 });
 $("escenas").addEventListener("mouseover", (ev) => ev.target.closest(".toma, .portada")?.querySelector("video")?.play().catch(() => {}));
 $("escenas").addEventListener("mouseout", (ev) => ev.target.closest(".toma, .portada")?.querySelector("video")?.pause());
-$("buscar-refs").addEventListener("click", async () => {
-  try { await api("/api/referencias", {}); await refrescar(); } catch (e) { aviso(e); }
-});
 $("abrir-flow").addEventListener("click", () => {
   const ancho = Math.round(screen.availWidth / 2);
   window.open("https://labs.google/fx/tools/flow", "studio4-flow",

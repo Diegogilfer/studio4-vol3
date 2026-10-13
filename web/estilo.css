@@ -489,11 +489,7 @@ body::before {
 .portada-num, .portada-estado { position: absolute; top: 10px; z-index: 1; font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px #000; }
 .portada-num { left: 12px; } .portada-estado { right: 12px; font-weight: 500; color: rgb(255 255 255 / .85); }
 .escena.lista-ok .portada-estado { color: var(--ok); } .escena.activa .portada-estado { color: #c4b5fd; }
-.credito { position: absolute; left: 12px; bottom: 9px; z-index: 1; font-size: 11.5px; color: rgb(255 255 255 / .78); text-shadow: 0 1px 3px #000; }
-.sin-portada { position: absolute; inset: 0; display: grid; place-content: center; gap: 6px; padding: 24px; text-align: center;
-  background: radial-gradient(90% 80% at 30% 20%, rgb(99 102 241 / .16), transparent 70%), linear-gradient(160deg, #13151f, #0a0b10); }
-.sin-portada span { font-size: 14px; font-weight: 500; color: rgb(226 228 236 / .9); text-transform: capitalize; }
-.sin-portada small { font-size: 12px; color: var(--fg-faint); }
+.sin-portada { position: absolute; inset: 0; background: #000; }
 .escena-cuerpo { display: grid; gap: 10px; padding: 14px 16px 16px; }
 .escena .voz-txt { font-size: 15px; line-height: 1.5; }
 .prompt-plegado summary { cursor: pointer; font-size: 13px; color: var(--fg-muted); }

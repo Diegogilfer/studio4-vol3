@@ -31,7 +31,7 @@ logger = logging.getLogger("studio4.servidor")
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
 PAGINAS = {"/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
-MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg|ref_escenas/[\w.-]+\.jpg)$")
+MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
 class Error(Exception):
@@ -321,13 +321,6 @@ class Panel(BaseHTTPRequestHandler):
             if not 0 < limite <= 20:
                 raise Error(400, "Indica un presupuesto entre 0 y 20 $")
             produccion.generar_visuales_api(pid, limite, [int(x) for x in d.get("video", [])])
-            return self._json({"ok": True})
-        if ruta == "/api/referencias":
-            orden = int(self._cuerpo_json().get("escena") or 0)
-            if orden:
-                produccion.otra_referencia(pid, orden)   # una sola escena: rápido, sin trabajo en segundo plano
-            else:
-                produccion.buscar_referencias(pid)
             return self._json({"ok": True})
         if ruta == "/api/miniaturas/generar":
             produccion.generar_miniaturas(pid)
