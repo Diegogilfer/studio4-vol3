@@ -322,6 +322,9 @@ class Panel(BaseHTTPRequestHandler):
                 raise Error(400, "Indica un presupuesto entre 0 y 20 $")
             produccion.generar_visuales_api(pid, limite, [int(x) for x in d.get("video", [])])
             return self._json({"ok": True})
+        if ruta == "/api/escenas/tipos":
+            produccion.recomendar_tipos(pid)
+            return self._json({"ok": True})
         if ruta == "/api/miniaturas/generar":
             produccion.generar_miniaturas(pid)
             return self._json({"ok": True})

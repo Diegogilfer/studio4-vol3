@@ -43,6 +43,9 @@ class Escena(BaseModel):
                                                           "narrativo, intrigante, tenso, emocionante, cinematografico, intimo, "
                                                           "solemne, asombro o triunfal.")
     ritmo_voz: str = Field(default="normal", description="lento, normal o rapido.")
+    tipo_clip: str = Field(default="video", description="Qué generar en Flow: 'video' (acción, movimiento, gancho, clímax) "
+                                                         "o 'imagen' (momento descriptivo o de pausa; se anima en el montaje).")
+    motivo_tipo: str = Field(default="", description="Por qué vídeo o imagen, en una frase corta en español.")
 
 
 class Aviso(BaseModel):
@@ -78,22 +81,74 @@ REGLAS:
    arco (presentación → tensión → giro → clímax → cierre) y lo que se ve en el plano: misterio = intrigante o
    tenso y lento; revelación o acción = emocionante y rápido; plano épico o clímax = cinematografico; dato
    humano = intimo; cierre = solemne o triunfal. Varía: no repitas el mismo tono más de dos escenas seguidas.
-9. Si una frase es abstracta o difícil de ver, NO la cambies: búscale la mejor imagen posible y añádela a «avisos»
+9. VÍDEO O IMAGEN en Flow (tipo_clip): vídeo cuando hay acción, movimiento o emoción que se mueve (y siempre el
+   gancho y el clímax); imagen en momentos descriptivos, datos, retratos o pausas (el montaje la anima con un
+   movimiento de cámara suave). Intercala: nunca más de 2 imágenes seguidas, y que ninguno de los dos domine.
+10. Si una frase es abstracta o difícil de ver, NO la cambies: búscale la mejor imagen posible y añádela a «avisos»
    con una sugerencia de reescritura. El guion lo ha aprobado una persona."""
 
 
 def _prompt_flow(esc: dict[str, Any], biblia: dict[str, Any], estilo: str, aspecto: str) -> str:
-    """Prompt autosuficiente para pegar en Flow: plano + acción + biblia completa + estilo."""
+    """Prompt autosuficiente para pegar en Flow: plano + acción + biblia completa + estilo.
+    Para imagen pide una foto fija (sin movimiento de cámara); para vídeo, un plano de 8 s con su movimiento."""
+    imagen = esc.get("tipo_clip") == "imagen"
     looks = {p["nombre"].upper(): p["aspecto_en"] for p in biblia.get("personajes", [])}
     salen = [n.upper() for n in esc.get("personajes", []) if n.upper() in looks]
-    partes = [f"{esc['plano_en'].strip().capitalize()}, {esc['camara_en'].strip()}. {esc['accion_en'].strip().rstrip('.')}."]
+    if imagen:
+        partes = [f"{esc['plano_en'].strip().capitalize()}. {esc['accion_en'].strip().rstrip('.')}."]
+    else:
+        partes = [f"{esc['plano_en'].strip().capitalize()}, {esc['camara_en'].strip()}. {esc['accion_en'].strip().rstrip('.')}."]
     if salen:
         partes.append("Characters: " + "; ".join(f"{n} is {looks[n]}" for n in salen) + ".")
     partes.append(f"Setting: {biblia.get('escenario_en', '').strip().rstrip('.')}.")
     partes.append(f"Lighting: {biblia.get('luz_en', '').strip().rstrip('.')}. Palette: {biblia.get('paleta_en', '').strip().rstrip('.')}.")
     partes.append(f"Style: {estilo}.")
-    partes.append(f"Aspect ratio {aspecto}. Ambient sound effects only: no dialogue, no voice-over, no music. No on-screen text.")
+    if imagen:
+        partes.append(f"Single still photograph, frozen moment, aspect ratio {aspecto}. No text, no letters.")
+    else:
+        partes.append(f"Aspect ratio {aspecto}. Ambient sound effects only: no dialogue, no voice-over, no music. No on-screen text.")
     return " ".join(partes)
+
+
+def _intercalar(escenas: list[dict[str, Any]]) -> None:
+    """Reglas fijas sobre la recomendación: el gancho en vídeo y nunca 3 imágenes seguidas."""
+    seguidas = 0
+    for i, e in enumerate(escenas):
+        e["tipo_clip"] = "imagen" if e.get("tipo_clip") == "imagen" else "video"
+        if i == 0 and e["tipo_clip"] == "imagen":
+            e.update(tipo_clip="video", motivo_tipo="Es el gancho: el vídeo retiene en los primeros segundos.")
+        seguidas = seguidas + 1 if e["tipo_clip"] == "imagen" else 0
+        if seguidas > 2:
+            e.update(tipo_clip="video", motivo_tipo="Para no encadenar tres imágenes seguidas.")
+            seguidas = 0
+
+
+class Recomendacion(BaseModel):
+    tipo_clip: str
+    motivo_tipo: str
+
+
+class Recomendaciones(BaseModel):
+    escenas: list[Recomendacion]
+
+
+def recomendar_tipos(escenas: list[dict[str, Any]], biblia: dict[str, Any], estilo_en: str, aspecto: str,
+                     produccion: str = "") -> None:
+    """Para producciones hechas antes de esta función: decide vídeo o imagen por escena y rehace sus prompts."""
+    lista = "\n".join(f"{e['orden']}. {e['texto_voz']} | Plano: {e.get('plano_en', '')}, {e.get('accion_en', '')}" for e in escenas)
+    crudo = gemini.generar(
+        f"Escenas de un vídeo, en orden:\n{lista}\n\nPara cada escena decide si en Google Flow conviene generar 'video' "
+        "(acción, movimiento, gancho, clímax) o 'imagen' (momento descriptivo, dato, retrato o pausa; el montaje la anima). "
+        "Intercala: nunca más de 2 imágenes seguidas. Da el motivo en una frase corta en español. Una entrada por escena, en orden.",
+        esquema=Recomendaciones, temperatura=0.3, detalle="vídeo o imagen por escena", produccion=produccion)
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    recs = Recomendaciones.model_validate_json(m.group(0) if m else crudo).escenas
+    for e, r in zip(escenas, recs):
+        e["tipo_clip"], e["motivo_tipo"] = r.tipo_clip.strip().lower(), r.motivo_tipo.strip()
+    _intercalar(escenas)
+    for e in escenas:
+        if e.get("plano_en") and e.get("accion_en"):
+            e["prompt_flow"] = _prompt_flow(e, biblia, estilo_en, aspecto)
 
 
 def _palabras(texto: str) -> list[str]:
@@ -123,6 +178,7 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
         # La voz lee las escenas, no el guion original: así la sincronía con los clips siempre cuadra.
         logger.warning("Las escenas no reproducen el guion palabra por palabra; la narración será la de las escenas.")
 
+    _intercalar(plan["escenas"])
     for i, esc in enumerate(plan["escenas"], start=1):
         esc["orden"] = i
         esc["prompt_flow"] = _prompt_flow(esc, plan["biblia"], estilo_en, aspecto)

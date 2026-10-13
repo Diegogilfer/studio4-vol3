@@ -197,12 +197,13 @@ def sesion_para_extension() -> dict[str, Any]:
         "titulo": p["titulo"] or p["tema"],
         "total": len(p["escenas"]),
         "aspecto": config.FORMATOS[p["formato"]]["aspecto"],
-        "escenas": [{"escena": e["orden"], "prompt": e["prompt_flow"], "voz": e["texto_voz"],
+        "escenas": [{"escena": e["orden"], "prompt": e["prompt_flow"], "voz": e["texto_voz"], "tipo": e.get("tipo_clip", "video"),
                      "tomas": len(e["tomas"]), "video": any(t["tipo"] == "video" for t in e["tomas"])}
                     for e in p["escenas"]],
         "armado": _extension.get("armado", 0),
         "siguiente": siguiente or {
             "escena": activa["orden"], "estado": "esperando", "prompt": activa["prompt_flow"],
+            "tipo": activa.get("tipo_clip", "video"), "motivo": activa.get("motivo_tipo", ""),
             "voz": activa["texto_voz"],
             "referencia": _referencia(pid, previa) if previa else None,
             "referencia_de": f"el final de la escena {previa['orden']}" if previa else "",

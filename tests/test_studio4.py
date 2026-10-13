@@ -437,3 +437,14 @@ def test_presupuesto_para_antes_de_pasarse_y_devuelve_lo_fallido():
     p.devolver(0.039)
     assert p.gastado == pytest.approx(0.039)
     assert v.estimar(23, 1) == pytest.approx(23 * 0.039 + 8 * 0.03)
+
+
+def test_intercalar_gancho_en_video_y_nunca_tres_imagenes_seguidas():
+    esc = [{"tipo_clip": t} for t in ("imagen", "imagen", "imagen", "imagen", "video", "imagen", "imagen", "imagen")]
+    director._intercalar(esc)
+    tipos = [e["tipo_clip"] for e in esc]
+    assert tipos[0] == "video"
+    assert "imagen,imagen,imagen" not in ",".join(tipos)
+    p = director._prompt_flow({"tipo_clip": "imagen", "plano_en": "close-up", "camara_en": "slow dolly-in",
+                               "accion_en": "a hanko stamp on paper"}, {}, "cinematic", "16:9")
+    assert "Single still photograph" in p and "dolly" not in p

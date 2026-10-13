@@ -370,6 +370,10 @@ function portada(e) {
 }
 
 function pintarEscenas({ escenas, activa }) {
+  const sinTipo = escenas.length && escenas.some((e) => !e.tipo_clip);
+  $("pedir-tipos").hidden = !sinTipo;
+  const videos = escenas.filter((e) => e.tipo_clip === "video").length;
+  $("reparto").textContent = escenas.length && !sinTipo ? `${videos} en vídeo · ${escenas.length - videos} en imagen, intercaladas` : "";
   const vertical = estado.produccion.formato === "vertical";
   $("escenas").style.setProperty("--portada", vertical ? "3 / 4" : estado.produccion.formato === "cuadrado" ? "1" : "16 / 9");
   const listas = escenas.filter((e) => e.elegida !== null).length;
@@ -382,12 +386,14 @@ function pintarEscenas({ escenas, activa }) {
         <button class="borrar" data-borrar="${i}" data-orden="${e.orden}" title="Borrar toma">✕</button>
       </div>`).join("");
     const estadoTxt = e.elegida !== null ? "Clip listo" : e.orden === activa ? "Genera esta en Flow" : "Pendiente";
+    const tipo = e.tipo_clip === "imagen" ? "imagen" : "video";
     const tono = e.tono_voz ? `Voz ${TONO[e.tono_voz] || e.tono_voz}${e.ritmo_voz && e.ritmo_voz !== "normal" ? `, ${e.ritmo_voz === "rapido" ? "rápida" : "lenta"}` : ""}` : "";
     return `
       <article class="escena ${e.orden === activa ? "activa" : ""} ${e.elegida !== null ? "lista-ok" : ""}">
         <div class="portada">${portada(e)}
           <span class="portada-num">Escena ${e.orden}</span><span class="portada-estado">${estadoTxt}</span></div>
         <div class="escena-cuerpo">
+          ${e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}</b><span>${esc(e.motivo_tipo || "")}</span></div>` : ""}
           <p class="voz-txt">«${esc(e.texto_voz)}»</p>
           ${tono ? `<span class="tono-voz">${esc(tono)}</span>` : ""}
           <details class="prompt-plegado"><summary>Prompt para Flow</summary><pre class="prompt">${esc(e.prompt_flow)}</pre></details>
@@ -433,6 +439,9 @@ $("escenas").addEventListener("change", async (ev) => {
 });
 $("escenas").addEventListener("mouseover", (ev) => ev.target.closest(".toma, .portada")?.querySelector("video")?.play().catch(() => {}));
 $("escenas").addEventListener("mouseout", (ev) => ev.target.closest(".toma, .portada")?.querySelector("video")?.pause());
+$("pedir-tipos").addEventListener("click", async () => {
+  try { await api("/api/escenas/tipos", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 $("abrir-flow").addEventListener("click", () => {
   const ancho = Math.round(screen.availWidth / 2);
   window.open("https://labs.google/fx/tools/flow", "studio4-flow",

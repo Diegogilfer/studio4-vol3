@@ -168,7 +168,8 @@
       : `Escena ${s.escena} de ${sesion.total}${e?.video ? " · ya tiene vídeo" : ""}`;
     $("voz").textContent = s.escena === 0 ? s.voz : `«${s.voz}»`;
     $("prompt").textContent = s.prompt;
-    $("aspecto").textContent = `Pon Flow en ${sesion.aspecto}`;
+    $("aspecto").textContent = s.escena === 0 ? `Pon Flow en ${sesion.aspecto}`
+      : `Haz ${s.tipo === "imagen" ? "una IMAGEN" : "un VÍDEO"} en Flow · ${sesion.aspecto}`;
     $("puntos").innerHTML = sesion.escenas.map((x) =>
       `<i class="${x.video ? "ok" : ""} ${x.escena === s.escena ? "ya" : ""}" title="Escena ${x.escena}"></i>`).join("");
     $("ref").hidden = !s.referencia;

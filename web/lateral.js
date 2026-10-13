@@ -44,7 +44,7 @@ function pintarAhora(s) {
   $("l-ahora-est").textContent = miniatura ? "genera una imagen" : e?.video ? "ya tiene vídeo" : "genera esta en Flow";
   $("l-voz").textContent = miniatura ? sig.voz : `«${sig.voz}»`;
   $("l-prompt").textContent = sig.prompt;
-  $("l-aspecto").textContent = `Flow en ${s.aspecto}`;
+  $("l-aspecto").textContent = miniatura ? `Flow en ${s.aspecto}` : `Haz ${sig.tipo === "imagen" ? "una imagen" : "un vídeo"} · ${s.aspecto}`;
   $("l-ref").hidden = !sig.referencia;
   if (sig.referencia && $("l-ref-img").dataset.src !== sig.referencia) {
     $("l-ref-img").src = sig.referencia; $("l-ref-img").dataset.src = sig.referencia;

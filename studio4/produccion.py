@@ -318,6 +318,19 @@ def renderizar(pid: str) -> None:
     _en_fondo(pid, "Render", fase)
 
 
+def recomendar_tipos(pid: str) -> None:
+    """Vídeo o imagen por escena para producciones creadas antes de esta recomendación."""
+    def fase():
+        p = cargar(pid)
+        escenas = p["escenas"]
+        _avisar(pid, "Gemini decide qué escenas hacer en vídeo y cuáles en imagen", 30)
+        director.recomendar_tipos(escenas, p.get("biblia") or {}, p.get("estilo_en", ""),
+                                  config.FORMATOS[p["formato"]]["aspecto"], produccion=pid)
+        modificar(pid, lambda q: q.update(escenas=[{**viejo, **{k: nuevo[k] for k in ("tipo_clip", "motivo_tipo", "prompt_flow")}}
+                                                   for viejo, nuevo in zip(q["escenas"], escenas)]))
+    _en_fondo(pid, "Vídeo o imagen", fase)
+
+
 # --- Imágenes y vídeo por la API de Google (de pago, con presupuesto) ---------------------------
 def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | None = None) -> None:
     """Rellena las escenas sin clip con imágenes (y vídeo Veo en las elegidas) sin pasar de `limite_usd`."""
