@@ -143,3 +143,50 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     )
     registro.apuntar("Render local (FFmpeg)", f"{n} escenas · {fmt['aspecto']} · {total:.1f}s", produccion=p["id"])
     return final
+
+
+def recorte(p: dict[str, Any], carpeta: Path, desde: int, hasta: int, destino: Path, ancho: int = 1080, alto: int = 1920,
+            gancho: str = "", avisar: Callable[[str, int], None] = lambda *_: None) -> Path:
+    """Un trozo del vídeo (de la escena `desde` a la `hasta`, ambas incluidas) montado en otro formato —vertical
+    para Reels y Shorts—, con su voz, ambiente y subtítulos ajustados al trozo y un rótulo propio al empezar."""
+    voz = p["voz"]
+    n = len(p["escenas"])
+    desde, hasta = max(1, desde), min(n, hasta)
+    if desde > hasta:
+        raise ValueError("Recorte vacío")
+    ini = voz["escenas"][desde - 1]["ini"]
+    fin = voz["escenas"][hasta - 1]["fin"] + (COLA_FINAL if hasta == n else 0.35)
+    trabajo = carpeta / "render" / f"recorte_{destino.stem}"
+    trabajo.mkdir(parents=True, exist_ok=True)
+
+    lista = []
+    for k, orden in enumerate(range(desde, hasta + 1)):
+        avisar(f"{destino.stem}: escena {orden}", 10 + int(60 * k / (hasta - desde + 1)))
+        esc, t = p["escenas"][orden - 1], voz["escenas"][orden - 1]
+        toma = esc["tomas"][esc["elegida"]]
+        d = t["fin"] - t["ini"] + (COLA_FINAL if orden == n else 0.4 if orden == hasta else 0)
+        seg = trabajo / f"seg_{orden:02d}.mp4"
+        (_segmento_video if toma["tipo"] == "video" else _segmento_imagen)(carpeta / toma["archivo"], seg, d, ancho, alto)
+        lista.append(seg)
+    concat = trabajo / "lista.txt"
+    concat.write_text("".join(f"file '{x.as_posix()}'\n" for x in lista), encoding="utf-8")
+    cuerpo = trabajo / "cuerpo.mp4"
+    medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(cuerpo))
+
+    largo = fin - ini
+    palabras = [{**w, "ini": w["ini"] - ini, "fin": w["fin"] - ini} for w in voz["palabras"]
+                if w["ini"] >= ini - 0.05 and w["ini"] < fin]
+    ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"), gancho=gancho)
+    mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
+              f"[0:a]volume={config.VOLUMEN_AMBIENTE}[amb];"
+              f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    medios.ffmpeg(
+        "-i", str(cuerpo), "-ss", f"{ini:.3f}", "-t", f"{largo:.3f}", "-i", str(carpeta / voz["archivo"]),
+        "-filter_complex", f"[0:v]ass={ass.name}[v];{mezcla}", "-map", "[v]", "-map", "[a]",
+        "-t", f"{largo:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", str(destino.resolve()),
+        cwd=trabajo,
+    )
+    registro.apuntar("Render local (FFmpeg)", f"recorte {destino.stem} · escenas {desde}-{hasta} · {largo:.1f}s", produccion=p["id"])
+    return destino

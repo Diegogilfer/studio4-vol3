@@ -192,12 +192,18 @@
           <h2>Genera las escenas en Flow <span class="meta" id="e-cuenta"></span></h2>
           <p class="meta" id="reparto"></p>
           <div class="guia-cajas">
-            <div><b>Qué haces</b><p>Copia el prompt de cada escena, pégalo en Flow y pulsa Generar.</p></div>
-            <div><b>Qué pasa</b><p>La extensión trae cada clip a su escena. Si salen varias variantes, eliges la mejor con un clic.</p></div>
-            <div><b>Consejo</b><p>Pulsa el icono S4 en la pestaña de Flow y tendrás esta lista al lado, sin cambiar de ventana.</p></div>
+            <div><b>Qué haces</b><p>Genera cada escena en Flow como se indica (vídeo o imagen), descárgala y déjala en tu carpeta de clips con su número.</p></div>
+            <div><b>Qué pasa</b><p>STUDIO la coloca sola en su escena. Si dejas varias tomas, eliges la mejor con un clic.</p></div>
+            <div><b>Consejo</b><p>Intercala vídeo e imagen como se recomienda: el vídeo respira mejor y gastas menos créditos de Flow.</p></div>
           </div>
         </div>
         <div class="guia-acciones"><button class="primario" id="pedir-tipos" hidden title="Gemini decide qué escenas conviene hacer en vídeo y cuáles en imagen">Recomendar vídeo o imagen</button><button class="boton" id="abrir-flow" title="Abre Google Flow en una ventana a la derecha de la pantalla">Abrir Flow al lado ↗</button></div>
+      </div>
+      <div class="carpeta-caja">
+        <div><b>Tu carpeta de esta producción</b><span id="carpeta-ruta"></span>
+          <small>Descarga cada clip de Flow y déjalo en «1 Clips de Flow» con el número de su escena en el nombre (escena 3.mp4). Entra solo.</small></div>
+        <div class="fila" style="margin-top:0"><button class="primario" data-abrir="1 Clips de Flow">Abrir carpeta de clips</button>
+          <button class="boton" data-abrir="">Abrir carpeta</button></div>
       </div>
       <p id="ext-vieja" class="error" hidden>La extensión cargada en el navegador es una versión antigua: abre chrome://extensions, pulsa ↻ en «STUDIO #4 · Google Flow» y recarga la pestaña de Flow.</p>
       <div id="avisos" class="avisos" hidden></div>
@@ -215,7 +221,7 @@
           <span class="paso-de">Paso 2 de 3</span>
           <h2>Monta el vídeo</h2>
           <div class="guia-cajas">
-            <div><b>Qué haces</b><p>Escucha la voz y elige cómo se ven los subtítulos mirando la vista previa.</p></div>
+            <div><b>Qué haces</b><p>Prueba hasta 3 voces y quédate con la mejor; ajusta los subtítulos mirando la vista previa.</p></div>
             <div><b>Qué pasa</b><p>STUDIO une los clips con la voz, el sonido de Flow y los subtítulos, en tu PC y gratis.</p></div>
             <div><b>Consejo</b><p>Si cambias una toma o los subtítulos, vuelve a pulsar Renderizar: tarda un par de minutos.</p></div>
           </div>
@@ -268,14 +274,22 @@
           <span class="paso-de">Paso 3 de 3</span>
           <h2>Entregas</h2>
           <div class="guia-cajas">
-            <div><b>Qué haces</b><p>Elige el texto y la imagen de la miniatura viéndolas ya montadas.</p></div>
-            <div><b>Qué pasa</b><p>Descargas el vídeo y la miniatura de cada plataforma, y copias el título y la descripción.</p></div>
+            <div><b>Qué haces</b><p>Prepara los 3 formatos y revisa sus títulos y descripciones; elige la miniatura viéndola montada.</p></div>
+            <div><b>Qué pasa</b><p>Se montan el vídeo completo, el Reels (mejor momento) y los Shorts (mejores recortes), subtitulados, en tu carpeta «3 Entregas».</p></div>
             <div><b>Consejo</b><p>Una miniatura funciona con un sujeto grande y 2-4 palabras que den curiosidad.</p></div>
           </div>
         </div>
         <div class="guia-acciones"><button class="primario" id="m-generar">Generar miniaturas <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
       <p class="estado-sec" id="m-info"></p>
+      <div class="paquete">
+        <div class="paquete-cab">
+          <div><b>Paquete para publicar</b><span class="meta" id="pq-info">Vídeo completo, Reels (el mejor momento) y Shorts (los mejores recortes), subtitulados y con sus textos.</span></div>
+          <div class="fila" style="margin-top:0"><button class="primario" id="pq-preparar">Preparar los 3 formatos <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+            <button class="boton" data-abrir="3 Entregas" id="pq-carpeta" hidden>Abrir carpeta de entregas</button></div>
+        </div>
+        <div class="piezas" id="pq-piezas"></div>
+      </div>
       <div id="m-cuerpo" hidden>
         <div class="entregas" id="m-entregas"></div>
         <div class="dos" style="margin-top:18px">

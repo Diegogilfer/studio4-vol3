@@ -92,7 +92,7 @@ def _prompt_flow(esc: dict[str, Any], biblia: dict[str, Any], estilo: str, aspec
     """Prompt autosuficiente para pegar en Flow: plano + acción + biblia completa + estilo.
     Para imagen pide una foto fija (sin movimiento de cámara); para vídeo, un plano de 8 s con su movimiento."""
     imagen = esc.get("tipo_clip") == "imagen"
-    looks = {p["nombre"].upper(): p["aspecto_en"] for p in biblia.get("personajes", [])}
+    looks = {p["nombre"].upper(): p["aspecto_en"].strip().rstrip(".") for p in biblia.get("personajes", [])}
     salen = [n.upper() for n in esc.get("personajes", []) if n.upper() in looks]
     if imagen:
         partes = [f"{esc['plano_en'].strip().capitalize()}. {esc['accion_en'].strip().rstrip('.')}."]

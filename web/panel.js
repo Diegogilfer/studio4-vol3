@@ -582,6 +582,47 @@ function pintarMiniaturas({ p, plataformas }) {
     <div class="toma ${i === m.elegido ? "elegida" : ""}" data-cand="${i}" title="${c.escena ? `Escena ${c.escena}` : c.origen === "flow" ? "Generada en Flow" : "Subida"}">
       <img src="${urlMedio(c.archivo)}" alt="" loading="lazy"><span>${c.escena ? `esc. ${c.escena}` : c.origen === "flow" ? "Flow" : "subida"}</span></div>`).join("");
 }
+// --- Paquete para publicar ---------------------------------------------------------------------
+function pintarPaquete({ p }) {
+  const pq = p.entregas;
+  $("pq-preparar").disabled = !p.final || p.trabajo.ocupado;
+  $("pq-preparar").firstChild.textContent = pq ? "Volver a preparar " : "Preparar los 3 formatos ";
+  $("pq-info").textContent = !p.final ? "Primero renderiza el vídeo completo en la pestaña Render."
+    : pq ? `Listo: ${pq.piezas.length} piezas en tu carpeta «3 Entregas».` : "Vídeo completo, Reels (el mejor momento) y Shorts (los mejores recortes), subtitulados y con sus textos.";
+  $("pq-carpeta").hidden = !pq;
+  $("pq-piezas").innerHTML = (pq?.piezas || []).map((z) => `
+    <article class="pieza ${z.clave === "completo" ? "ancha" : ""}">
+      <div class="pieza-media"><video src="${urlMedio(z.video)}" poster="${urlMedio(z.portada)}" controls preload="none"></video></div>
+      <div class="pieza-txt">
+        <span class="paso-de">${esc(z.plataforma)} · ${String(z.duracion).replace(".", ",")} s${z.desde ? ` · escenas ${z.desde}-${z.hasta}` : ""}</span>
+        <b>${esc(z.titulo)}</b>
+        <p>${esc(z.descripcion)}</p>
+        <p class="tags">${esc(z.hashtags.join(" "))}</p>
+        <div class="fila" style="margin-top:0">
+          <button class="boton" data-copiar-texto="${esc(`${z.titulo}\n\n${z.descripcion}\n\n${z.hashtags.join(" ")}`)}">Copiar texto</button>
+          <a class="boton" href="${urlMedio(z.video)}" download="${esc(nombreArchivo(p, z.plataforma, "mp4"))}">Vídeo</a>
+          <a class="boton" href="${urlMedio(z.portada)}" download="${esc(nombreArchivo(p, `${z.plataforma} portada`, "jpg"))}">Portada</a>
+        </div>
+      </div>
+    </article>`).join("");
+}
+$("pq-preparar").addEventListener("click", async () => {
+  try { await api("/api/entregas", {}); await refrescar(); } catch (e) { aviso(e); }
+});
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-abrir]");
+  if (b) {
+    try { await api("/api/carpeta/abrir", { sub: b.dataset.abrir }); } catch (e) { aviso(e); }
+    return;
+  }
+  const c = ev.target.closest("[data-copiar-texto]");
+  if (c) {
+    await navigator.clipboard.writeText(c.dataset.copiarTexto);
+    c.textContent = "Copiado";
+    setTimeout(() => { c.textContent = "Copiar texto"; }, 1500);
+  }
+});
+
 $("m-generar").addEventListener("click", async () => {
   try { await api("/api/miniaturas/generar", {}); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -676,6 +717,8 @@ async function refrescar() {
     fondo: p.escenas[0] ? [p.escenas[0].elegida, p.escenas[0].tomas.length] : null, voz: p.voz?.generada }, pintarSubtitulos);
   siCambia("render", { p }, pintarRender);
   siCambia("miniaturas", { p, plataformas: o.plataformas }, pintarMiniaturas);
+  siCambia("paquete", { id: p.id, e: p.entregas, f: p.final, o: p.trabajo.ocupado }, () => pintarPaquete({ p }));
+  $("carpeta-ruta").textContent = p.carpeta || "se crea al aprobar el guion";
   siCambia("textos", { id: p.id, t: p.titulo, d: p.descripcion, b: p.biblia }, () => pintarTextos(p));
 }
 

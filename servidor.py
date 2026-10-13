@@ -31,7 +31,7 @@ logger = logging.getLogger("studio4.servidor")
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
 PAGINAS = {"/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
-MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
+MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|entregas/[\w.-]+\.(mp4|jpg)|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
 class Error(Exception):
@@ -323,6 +323,15 @@ class Panel(BaseHTTPRequestHandler):
                 raise Error(400, "Indica un presupuesto entre 0 y 20 $")
             produccion.generar_visuales_api(pid, limite, [int(x) for x in d.get("video", [])])
             return self._json({"ok": True})
+        if ruta == "/api/entregas":
+            produccion.preparar_entregas(pid)
+            return self._json({"ok": True})
+        if ruta == "/api/carpeta/abrir":
+            base = produccion.preparar_carpeta(pid)
+            sub = str(self._cuerpo_json().get("sub", ""))
+            destino = base / sub if sub in ("1 Clips de Flow", "2 Guion y escenas", "3 Entregas") else base
+            os.startfile(str(destino))  # noqa: S606 - abre el Explorador de Windows en tu propio PC
+            return self._json({"ok": True, "ruta": str(destino)})
         if ruta == "/api/escenas/tipos":
             produccion.recomendar_tipos(pid)
             return self._json({"ok": True})
@@ -370,6 +379,21 @@ def main() -> None:
         print(f"  ↺ {n} producción(es) tenían una fase a medias: quedan libres para relanzarla.")
     for resto in config.PRODUCCIONES.glob("studio4_*"):  # subidas que se cortaron
         resto.unlink(missing_ok=True)
+    # Vigilante: los clips que dejes en «1 Clips de Flow» de la producción activa entran solos en su escena.
+    import threading
+    import time as _t
+
+    def vigilar():
+        while True:
+            _t.sleep(4)
+            try:
+                pid = produccion.activa()
+                if pid and (n := produccion.importar_carpeta(pid)):
+                    logger.info("Carpeta: %d clip(s) nuevos importados", n)
+                    flow.anotar_evento("recibida", f"{n} clip(s) desde tu carpeta «1 Clips de Flow»")
+            except Exception as e:  # noqa: BLE001 - el vigilante nunca se cae
+                logger.warning("Vigilante de la carpeta: %s", e)
+    threading.Thread(target=vigilar, name="studio4-carpeta", daemon=True).start()
     ThreadingHTTPServer.daemon_threads = True
     servidor = ThreadingHTTPServer(("127.0.0.1", config.PUERTO), Panel)
     print(f"\n  STUDIO 4 listo  →  http://127.0.0.1:{config.PUERTO}")

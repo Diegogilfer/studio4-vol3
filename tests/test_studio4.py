@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import pathlib
 import shutil
 import threading
 from http.server import ThreadingHTTPServer
@@ -26,7 +27,8 @@ def aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(produccion, "_ACTIVA", tmp_path / "activa.txt")
     monkeypatch.setattr(registro, "_MOVIMIENTOS", tmp_path / "movimientos.jsonl")
     monkeypatch.setattr(registro, "_CONSUMO", tmp_path / "consumo.json")
-    from studio4 import youtube   # las pruebas nunca consultan YouTube de verdad
+    from studio4 import carpetas, youtube   # las pruebas nunca consultan YouTube ni escriben en tus Vídeos
+    monkeypatch.setattr(carpetas, "RAIZ_USUARIO", tmp_path / "Videos")
     monkeypatch.setattr(config, "YOUTUBE_API_KEY", "")
     monkeypatch.setattr(youtube, "TOKEN", tmp_path / "youtube_token.json")
     return tmp_path
@@ -448,3 +450,71 @@ def test_intercalar_gancho_en_video_y_nunca_tres_imagenes_seguidas():
     p = director._prompt_flow({"tipo_clip": "imagen", "plano_en": "close-up", "camara_en": "slow dolly-in",
                                "accion_en": "a hanko stamp on paper"}, {}, "cinematic", "16:9")
     assert "Single still photograph" in p and "dolly" not in p
+
+
+# --- Carpeta de la producción y entregas ---------------------------------------------------------------
+from studio4 import carpetas, entregas  # noqa: E402
+
+
+def _prod_con_clips(aislado, pid="p9", n=4, formato="horizontal"):
+    """Producción sintética: n escenas de 2 s con clip, voz de 8 s y palabras (para render y recortes)."""
+    p = _produccion(pid, escenas=n, formato=formato, guion_aprobado=True, titulo="Prueba: el faro")
+    base = aislado / pid
+    (base / "tomas").mkdir()
+    medios.ffmpeg("-f", "lavfi", "-i", f"sine=f=300:d={2 * n}", "-ar", "24000", "-ac", "1", str(base / "voz.wav"))
+    for e in p["escenas"]:
+        clip = f"tomas/e{e['orden']}.mp4"
+        medios.ffmpeg("-f", "lavfi", "-i", "testsrc2=s=640x360:r=24:d=2", "-pix_fmt", "yuv420p", str(base / clip))
+        e.update(tomas=[{"archivo": clip, "tipo": "video"}], elegida=0)
+    p["voz"] = {"archivo": "voz.wav", "duracion": 2.0 * n,
+                "escenas": [{"ini": 2.0 * i, "fin": 2.0 * (i + 1)} for i in range(n)],
+                "palabras": [{"palabra": f"p{i}", "ini": 0.5 * i, "fin": 0.5 * i + 0.4} for i in range(4 * n)]}
+    produccion.guardar(p)
+    return p, base
+
+
+@hay_ffmpeg
+def test_clip_dejado_en_la_carpeta_entra_en_su_escena(aislado, monkeypatch):
+    monkeypatch.setattr(carpetas, "RAIZ_USUARIO", aislado / "Videos")
+    p, _ = _prod_con_clips(aislado, "p10")
+    p["escenas"][2].update(tomas=[], elegida=None)
+    produccion.guardar(p)
+    base = produccion.preparar_carpeta("p10")
+    assert (base / carpetas.CLIPS / "LEEME.txt").exists() and (base / carpetas.GUION / "Escenas para Flow.txt").exists()
+    medios.ffmpeg("-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=1", "-pix_fmt", "yuv420p", str(base / carpetas.CLIPS / "Escena 03 - buena.mp4"))
+    assert produccion.importar_carpeta("p10") == 1
+    assert produccion.cargar("p10")["escenas"][2]["elegida"] == 0
+    assert produccion.importar_carpeta("p10") == 0          # el mismo archivo no se importa dos veces
+
+
+@hay_ffmpeg
+def test_recorte_vertical_dura_lo_que_sus_escenas(aislado):
+    p, base = _prod_con_clips(aislado, "p11")
+    salida = render.recorte(p, base, 2, 3, base / "entregas" / "reels.mp4", 360, 640, gancho="EL FARO")
+    inf = medios.info(salida)
+    assert (inf["ancho"], inf["alto"]) == (360, 640) and inf["audio"]
+    assert inf["duracion"] == pytest.approx(4.0 + 0.35, abs=0.25)
+
+
+@hay_ffmpeg
+def test_paquete_de_entregas_completo_reels_y_shorts(aislado, monkeypatch):
+    monkeypatch.setattr(carpetas, "RAIZ_USUARIO", aislado / "Videos")
+    p, base = _prod_con_clips(aislado, "p12")
+    p["final"] = {"archivo": "final.mp4"}
+    shutil.copy(base / "tomas" / "e1.mp4", base / "final.mp4")
+    texto = {"titulo": "T", "descripcion": "D", "hashtags": ["#a"]}
+    monkeypatch.setattr(entregas, "elegir", lambda p: {"youtube": texto,
+        "reels": {**texto, "desde": 1, "hasta": 2, "gancho": "EL FARO", "duracion": 4.0},
+        "shorts": [{**texto, "desde": 2, "hasta": 4, "gancho": "SIN FARERO", "duracion": 6.0}]})
+    res = entregas.preparar(p, base)
+    claves = [z["clave"] for z in res["piezas"]]
+    assert claves == ["completo", "reels", "short_1"]
+    for z in res["piezas"]:
+        assert (base / z["video"]).exists() and (base / z["portada"]).exists()
+    assert (pathlib.Path(res["carpeta"]) / "Descripciones para publicar.txt").exists()
+
+
+def test_ajustar_momento_respeta_duraciones(aislado):
+    p = {"escenas": [{}] * 10, "voz": {"escenas": [{"ini": 10.0 * i, "fin": 10.0 * (i + 1)} for i in range(10)]}}
+    assert entregas._ajustar(p, {"desde": 1, "hasta": 9}, 15, 45)["hasta"] == 4      # 90 s → recorta a 40 s
+    assert entregas._ajustar(p, {"desde": 5, "hasta": 5}, 20, 58)["hasta"] == 6      # 10 s → amplía a 20 s

@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos,
+from . import (carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, render, subtitulos,
                visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -273,6 +273,7 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
                      estado="rodando", escena_activa=1, recoger_para="escenas")
             r["escenas"] = [{**e, "tomas": [], "elegida": None} for e in plan["escenas"]]
         modificar(pid, aplicar)
+        preparar_carpeta(pid)
         _generar_voz(pid)
 
     _en_fondo(pid, "Escenas y voz", fases)
@@ -348,6 +349,41 @@ def renderizar(pid: str) -> None:
         modificar(pid, lambda q: q.update(estado="terminado", final={
             "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
     _en_fondo(pid, "Render", fase)
+
+
+# --- Carpeta de la producción en tu PC -------------------------------------------------------------
+def preparar_carpeta(pid: str) -> Path:
+    p = cargar(pid)
+    base = carpetas.preparar(p)
+    if p.get("carpeta") != str(base):
+        modificar(pid, lambda q: q.update(carpeta=str(base)))
+    return base
+
+
+def importar_carpeta(pid: str) -> int:
+    """Clips nuevos en «1 Clips de Flow» → a su escena. Lo llama el vigilante del servidor cada pocos segundos."""
+    from . import flow
+    p = cargar(pid)
+    if not p.get("guion_aprobado") or not p.get("escenas") or p["trabajo"].get("ocupado"):
+        return 0
+    if not p.get("carpeta"):
+        preparar_carpeta(pid)
+        p = cargar(pid)
+    nuevas = carpetas.importar(p, lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="carpeta"))
+    if nuevas:
+        modificar(pid, lambda q: q.update(importados=[*q.get("importados", []), *nuevas]))
+    return len(nuevas)
+
+
+# --- Entregas: vídeo completo, Reels y Shorts --------------------------------------------------------
+def preparar_entregas(pid: str) -> None:
+    if not cargar(pid).get("final"):
+        raise ValueError("Primero renderiza el vídeo completo (pestaña Render).")
+
+    def fase():
+        res = entregas.preparar(cargar(pid), carpeta(pid), avisar=lambda f, n: _avisar(pid, f, n))
+        modificar(pid, lambda q: q.update(entregas=res))
+    _en_fondo(pid, "Entregas", fase)
 
 
 def recomendar_tipos(pid: str) -> None:
