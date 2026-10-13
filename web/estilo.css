@@ -430,3 +430,51 @@ h2 { font-size: 21px; letter-spacing: -0.02em; }
 .estado-sec:empty { display: none; }
 .pista { border-radius: 18px; padding: 12px 16px; font-size: 14px; color: var(--fg-muted); }
 .pista::before { content: "Pista · "; color: var(--accent-2); font-weight: 600; }
+
+
+/* ======================================================================= PESTAÑAS Y FONDO CON COLOR
+ * Fondo de color intenso: sin él el cristal no se aprecia. Encima, cristal esmerilado claro y legible. */
+body { background: linear-gradient(135deg, #1b1145 0%, #2c1470 30%, #12305a 62%, #0d4a56 100%) fixed; }
+body::before {
+  inset: -20%;
+  background:
+    radial-gradient(34% 30% at 18% 22%, rgb(168 85 247 / .85), transparent 70%),
+    radial-gradient(30% 28% at 82% 18%, rgb(45 212 191 / .7), transparent 70%),
+    radial-gradient(36% 32% at 64% 84%, rgb(244 114 182 / .65), transparent 70%),
+    radial-gradient(28% 28% at 8% 88%, rgb(59 130 246 / .6), transparent 70%),
+    radial-gradient(24% 24% at 46% 50%, rgb(99 102 241 / .45), transparent 70%);
+  filter: blur(50px);
+}
+:root {
+  --cristal: rgb(14 12 34 / .38);
+  --cristal-fuerte: rgb(8 8 20 / .55);
+  --cristal-borde: rgb(255 255 255 / .18);
+  --cristal-brillo: inset 0 1px 0 rgb(255 255 255 / .14);
+  --cristal-sombra: 0 30px 70px -40px rgb(5 3 20 / .95);
+}
+.barra { background: rgb(14 10 36 / .45); }
+.tarjeta, .hero { backdrop-filter: blur(30px) saturate(170%); -webkit-backdrop-filter: blur(30px) saturate(170%); }
+.escena, .formato, .estilos button, .entrega, .alt-vista, .a-trabajo, .avisos > div, .producciones button,
+.guia-cajas > div, .pista, .vista-subs, .resumen, .ajustes-render > div, .estado-sec { background: rgb(255 255 255 / .07); }
+.meta, .pista, .guia-cajas p { color: rgb(232 234 245 / .82); }
+
+/* Guía sin número decorativo: el paso va en texto */
+.guia { grid-template-columns: minmax(0, 1fr) auto; }
+.paso-de { font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--accent-2); text-transform: uppercase; }
+
+/* Pestañas de la producción: botones de verdad, con su estado */
+.pestanas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: min(100%, 640px); }
+.pestanas a { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 18px; text-decoration: none; color: var(--fg);
+  background: rgb(255 255 255 / .06); border: 1px solid var(--cristal-borde); transition: background .2s, border-color .2s; }
+.pestanas a:hover { background: rgb(255 255 255 / .12); }
+.pestanas a b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; font-size: 14px; flex-shrink: 0;
+  background: rgb(255 255 255 / .1); }
+.pestanas a span { display: grid; font-weight: 600; font-size: 15px; line-height: 1.25; }
+.pestanas a small { font-weight: 400; font-size: 12px; color: rgb(232 234 245 / .7); }
+.pestanas a.hecho b { background: var(--ok); color: #05130c; }
+.pestanas a.ahora b { background: var(--accent); color: #fff; }
+.pestanas a.abierta { background: rgb(139 92 246 / .28); border-color: rgb(167 139 250 / .8); box-shadow: 0 10px 30px -14px rgb(139 92 246 / .9); }
+@media (max-width: 800px) { .pestanas { grid-template-columns: 1fr; } }
+
+.vacia { display: grid; gap: 14px; justify-items: start; padding: 40px; }
+.vacia p { color: rgb(232 234 245 / .85); max-width: 640px; }

@@ -192,14 +192,21 @@ $("a-crear").addEventListener("click", async () => {
 $("a-otro").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); });
 $("a-nuevo").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); $("a-idea").focus(); });
 
-// La barra superior marca la sección que tienes delante.
-const secciones = ["crear", "flow-sec", "render-sec", "entregas-sec"];
-const navObservador = new IntersectionObserver((entradas) => {
-  const visible = entradas.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-  if (!visible) return;
-  document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("activo", a.getAttribute("href") === `#${visible.target.id}`));
-}, { rootMargin: "-80px 0px -45% 0px", threshold: [0, 0.25, 0.5] });
-secciones.forEach((id) => navObservador.observe($(id)));
+// Pestañas: cada parte del estudio es su propia vista (#crear, #flow, #render, #entregas).
+const VISTAS = ["crear", "flow", "render", "entregas"];
+const vistaActual = () => (VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "crear");
+function mostrarVista() {
+  const v = vistaActual();
+  const p = estado?.produccion;
+  const lista = !!(p && p.guion_aprobado);
+  $("crear").hidden = v !== "crear";
+  $("prod").hidden = v === "crear" || !lista;
+  $("sin-prod").hidden = v === "crear" || lista;
+  for (const id of ["flow", "render", "entregas"]) $(`${id}-sec`).hidden = v !== id;
+  document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("activo", a.getAttribute("href") === `#${v}`));
+  document.querySelectorAll("#pasos a").forEach((a) => a.classList.toggle("abierta", a.dataset.p === v));
+}
+window.addEventListener("hashchange", () => { mostrarVista(); window.scrollTo({ top: 0 }); });
 
 // Paso 4: progreso de la investigación y editor del guion
 function pintarProgresoGuion(p) {
@@ -278,7 +285,7 @@ $("g-aprobar").addEventListener("click", async () => {
   try {
     await api("/api/guion/aprobar", { guion: $("g-texto").value, forzar: conClips });
     await refrescar();
-    location.hash = "#flow-sec";
+    location.hash = "#flow";
   } catch (e) { aviso(e); }
 });
 $("p-reabrir").addEventListener("click", async () => {
@@ -303,9 +310,7 @@ $("lista").addEventListener("click", async (ev) => {
 
 // ============================================================== Ejecución (guion aprobado)
 function pasoActual(p) {
-  if (!p.escenas.length) return "escenas";
-  if (!p.voz) return "voz";
-  if (p.escenas.some((e) => e.elegida === null)) return "flow";
+  if (!p.escenas.length || !p.voz || p.escenas.some((e) => e.elegida === null)) return "flow";
   if (!p.final) return "render";
   return "entregas";
 }
@@ -313,12 +318,15 @@ function pintarCabecera(p) {
   $("p-titulo").textContent = p.titulo || p.tema;
   $("p-meta").textContent = [VERSION[p.version], estado.opciones.formatos[p.formato], ESTILOS[p.estilo]?.[0] || p.estilo].filter(Boolean).join(" · ");
   $("p-guion").textContent = p.guion;
-  const orden = ["escenas", "voz", "flow", "render", "entregas"];
+  const listas = p.escenas.filter((e) => e.elegida !== null).length;
+  const hecho = { flow: p.escenas.length > 0 && listas === p.escenas.length, render: !!p.final, entregas: !!p.miniaturas };
   const ahora = pasoActual(p);
-  document.querySelectorAll("#pasos li").forEach((li) => {
-    const i = orden.indexOf(li.dataset.p);
-    const hecho = (li.dataset.p === "voz" && p.voz) || (li.dataset.p === "entregas" && p.miniaturas) || i < orden.indexOf(ahora);
-    li.className = hecho ? "hecho" : li.dataset.p === ahora ? "ahora" : "";
+  $("est-flow").textContent = p.escenas.length ? `${listas} de ${p.escenas.length} clips` : "preparando escenas";
+  $("est-render").textContent = p.final ? "vídeo listo" : hecho.flow ? "listo para montar" : "espera a los clips";
+  $("est-entregas").textContent = p.miniaturas ? "miniaturas listas" : p.final ? "por hacer" : "después del render";
+  document.querySelectorAll("#pasos a").forEach((a) => {
+    a.classList.toggle("hecho", hecho[a.dataset.p]);
+    a.classList.toggle("ahora", !hecho[a.dataset.p] && a.dataset.p === ahora);
   });
 }
 function pintarTrabajo(t) {
@@ -594,7 +602,11 @@ async function refrescar() {
     siCambia("progreso-guion", { e: p.estado, t: p.trabajo, g: !!p.guion }, () => pintarProgresoGuion(p));
     siCambia("guion", { id: p.id, g: p.guion, ga: p.ganchos, ia: p.ia_detectada, o: p.trabajo.ocupado, h: p.hermanas, i: !!p.investigacion }, () => pintarGuion({ p }));
   }
-  $("prod").hidden = !(p && p.guion_aprobado);
+  if (!firmas.vistaInicial) {   // al abrir el panel con una producción en marcha, se va directo a su paso
+    firmas.vistaInicial = 1;
+    if (!location.hash && p?.guion_aprobado) history.replaceState(null, "", `#${pasoActual(p)}`);
+  }
+  mostrarVista();
   if (!p || !p.guion_aprobado) return;
   siCambia("cabecera", { p: { ...p, trabajo: null } }, () => pintarCabecera(p));
   siCambia("registro-flow", d.extension, pintarRegistroFlow);

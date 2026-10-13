@@ -25,9 +25,9 @@
   <a class="marca" href="#crear" title="STUDIO #4 — Inicio"><span class="logo">S4</span><span>STUDIO #4</span></a>
   <nav class="nav" aria-label="Navegación principal">
     <a href="#crear" class="activo"><svg><use href="#i-crear"/></svg><span>Crear</span></a>
-    <a href="#flow-sec"><svg><use href="#i-escenas"/></svg><span>Flow</span></a>
-    <a href="#render-sec"><svg><use href="#i-render"/></svg><span>Render</span></a>
-    <a href="#entregas-sec"><svg><use href="#i-entregas"/></svg><span>Entregas</span></a>
+    <a href="#flow"><svg><use href="#i-escenas"/></svg><span>Flow</span></a>
+    <a href="#render"><svg><use href="#i-render"/></svg><span>Render</span></a>
+    <a href="#entregas"><svg><use href="#i-entregas"/></svg><span>Entregas</span></a>
   </nav>
   <div class="barra-der">
     <span id="en-marcha" class="pildora marcha" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
@@ -47,7 +47,10 @@
       </div>
       <div class="compacta" id="a-compacta">
         <span class="meta" id="a-compacta-txt"></span>
-        <button class="primario" id="a-nuevo">Crear otro vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+        <div class="fila" style="margin-top:0">
+          <a class="primario" href="#flow">Continuar con esta producción <svg width="16" height="16"><use href="#i-flecha"/></svg></a>
+          <button class="boton" id="a-nuevo">Crear otro vídeo</button>
+        </div>
       </div>
       <ol class="a-pasos" id="a-pasos">
         <li data-paso="1"><b>1</b> Idea</li><li data-paso="2"><b>2</b> Formatos</li><li data-paso="3"><b>3</b> Estilo y voz</li><li data-paso="4"><b>4</b> Guion</li>
@@ -151,6 +154,13 @@
     </div>
   </section>
 
+  <!-- Pestañas de ejecución sin producción lista -->
+  <section id="sin-prod" class="tarjeta vacia" hidden>
+    <h2>Aquí aún no hay nada que hacer</h2>
+    <p>Flow, Render y Entregas se activan cuando apruebas un guion. Empieza en Crear o abre una de tus producciones.</p>
+    <a class="primario" href="#crear">Ir a Crear <svg width="16" height="16"><use href="#i-flecha"/></svg></a>
+  </section>
+
   <!-- ================================================================ EJECUCIÓN (guion aprobado) -->
   <div id="prod" class="prod" hidden>
     <section class="tarjeta entrar">
@@ -159,9 +169,11 @@
           <h1 id="p-titulo" class="titulo-prod"></h1>
           <p class="meta" id="p-meta"></p>
         </div>
-        <ol class="pasos" id="pasos">
-          <li data-p="escenas">Escenas</li><li data-p="voz">Voz</li><li data-p="flow">Flow</li><li data-p="render">Render</li><li data-p="entregas">Entregas</li>
-        </ol>
+        <nav class="pestanas" id="pasos" aria-label="Pasos de esta producción">
+          <a href="#flow" data-p="flow"><b>1</b><span>Flow<small id="est-flow"></small></span></a>
+          <a href="#render" data-p="render"><b>2</b><span>Render<small id="est-render"></small></span></a>
+          <a href="#entregas" data-p="entregas"><b>3</b><span>Entregas<small id="est-entregas"></small></span></a>
+        </nav>
       </div>
       <div id="trabajo" class="trabajo" hidden>
         <div class="trabajo-txt"><span id="t-fase"></span><span id="t-pct"></span></div>
@@ -175,8 +187,8 @@
     <!-- 1 · Flow -->
     <section id="flow-sec" class="tarjeta">
       <div class="guia">
-        <span class="num">1</span>
         <div class="guia-cuerpo">
+          <span class="paso-de">Paso 1 de 3</span>
           <h2>Genera las escenas en Flow <span class="meta" id="e-cuenta"></span></h2>
           <div class="guia-cajas">
             <div><b>Qué haces</b><p>Copia el prompt de cada escena, pégalo en Flow y pulsa Generar.</p></div>
@@ -198,8 +210,8 @@
     <!-- 2 · Render -->
     <section id="render-sec" class="tarjeta">
       <div class="guia">
-        <span class="num">2</span>
         <div class="guia-cuerpo">
+          <span class="paso-de">Paso 2 de 3</span>
           <h2>Monta el vídeo</h2>
           <div class="guia-cajas">
             <div><b>Qué haces</b><p>Escucha la voz y elige cómo se ven los subtítulos mirando la vista previa.</p></div>
@@ -245,8 +257,8 @@
     <!-- 3 · Entregas -->
     <section id="entregas-sec" class="tarjeta">
       <div class="guia">
-        <span class="num">3</span>
         <div class="guia-cuerpo">
+          <span class="paso-de">Paso 3 de 3</span>
           <h2>Entregas</h2>
           <div class="guia-cajas">
             <div><b>Qué haces</b><p>Elige el texto y la imagen de la miniatura viéndolas ya montadas.</p></div>
