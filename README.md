@@ -56,6 +56,16 @@ La generación de imagen y de vídeo **por API** (Imagen/Veo) se cobra aparte, a
 5. Cuando todas las escenas tienen clip, **Renderizar vídeo**. Copia el título, la descripción y los hashtags
    desde «Para publicar».
 
+## Primero, el guion
+
+- **Desde una idea:** Gemini investiga (búsqueda de Google si tu proyecto la tiene; si no, Wikipedia en español
+  e inglés, gratis) y arma un dossier con fuentes. **DeepSeek** escribe con esos datos el guion **corto**
+  (Shorts y Reels comparten vídeo vertical) y/o el **largo** (YouTube), con reglas contra el estilo IA y
+  3 ganchos alternativos. Sin `DEEPSEEK_API_KEY` escribe Gemini con las mismas reglas.
+- **Tengo mi guion:** se respeta tal cual.
+- Lo revisas y editas; al pulsar **Aprobar guion**, Gemini lo convierte en escenas para Flow y avisa de las
+  frases difíciles de filmar. Un largo de 5 min son ~35-40 escenas de Flow.
+
 ## Flow y STUDIO a la vez
 
 Google no deja meter Flow dentro de otra página, así que va al revés: **STUDIO entra en el panel
@@ -87,7 +97,9 @@ iniciar.bat            arranca el panel y abre el navegador
 studio4/
   config.py            claves, modelos, formatos, estilos y el código de vinculación con Flow
   gemini.py            cliente de Gemini con modelos de reserva y reintentos
-  guion.py             fase 1: guion
+  investigacion.py     fase 0: dossier con fuentes (Google o Wikipedia)
+  deepseek.py          cliente de DeepSeek
+  guion.py             fase 1: guion corto y largo (DeepSeek; Gemini de reserva)
   director.py          fase 2: escenas + biblia visual + prompt de Flow por escena
   voz.py               fase 3: Gemini TTS / ElevenLabs y tiempos de cada escena y palabra
   flow.py              fase 4: recibe los clips de la extensión y los coloca en su escena

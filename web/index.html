@@ -16,6 +16,7 @@
     <symbol id="i-render" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></symbol>
     <symbol id="i-publicar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></symbol>
     <symbol id="i-miniatura" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 18"/></symbol>
+    <symbol id="i-guion" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
     <symbol id="i-renovar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
     <symbol id="i-carga" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></symbol>
     <symbol id="i-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
@@ -26,6 +27,7 @@
   <a class="marca" href="#crear" title="STUDIO #4 — Inicio"><span class="logo">S4</span><span>STUDIO #4</span></a>
   <nav class="nav" aria-label="Navegación principal">
     <a href="#crear" class="activo"><svg><use href="#i-crear"/></svg><span>Crear</span></a>
+    <a href="#guion-sec"><svg><use href="#i-guion"/></svg><span>Guion</span></a>
     <a href="#escenas-sec"><svg><use href="#i-escenas"/></svg><span>Escenas</span></a>
     <a href="#voz-sec"><svg><use href="#i-voz"/></svg><span>Voz</span></a>
     <a href="#render-sec"><svg><use href="#i-render"/></svg><span>Render</span></a>
@@ -46,24 +48,35 @@
     <div class="hero-fondo" aria-hidden="true"><div class="hero-vivo"><div class="hero-rejilla"></div></div></div>
     <div class="hero-cuerpo">
       <div class="intro">
-        <span class="etiqueta-sec">Gemini · Google Flow · Render local</span>
+        <span class="etiqueta-sec">Investigación · Guion · Flow · Render</span>
         <h1>¿Qué quieres <em>crear</em> hoy?</h1>
-        <p>Escríbelo como se lo dirías a tu equipo. Gemini escribe el guion por escenas con el prompt listo para Flow; tú generas los clips con tu suscripción y STUDIO monta el vídeo.</p>
+        <p>Todo empieza por el guion: dale una idea para que lo investiguen y escriban, o pega el tuyo. Cuando lo apruebes, Gemini lo convierte en escenas para Flow.</p>
+      </div>
+      <div class="segmentos modos" role="tablist" aria-label="Cómo empezar">
+        <label><input type="radio" name="modo" value="idea" checked>Desde una idea</label>
+        <label><input type="radio" name="modo" value="propio">Tengo mi guion</label>
       </div>
       <form id="nuevo" class="caja-viva">
-        <textarea name="tema" rows="3" required placeholder="Ej.: El faro que siguió encendido 40 años sin farero"></textarea>
+        <textarea name="idea" rows="3" placeholder="La idea, como se la contarías a tu equipo. Ej.: el faro que siguió encendido 40 años sin farero"></textarea>
+        <textarea name="guion_propio" rows="8" hidden placeholder="Pega aquí tu guion completo (solo lo que dice la voz). Se respeta tal cual: Gemini solo lo convierte en escenas para Flow."></textarea>
         <div class="caja-pie">
-          <div class="segmentos" role="radiogroup" aria-label="Formato">
+          <div class="solo-idea versiones">
+            <label class="version"><input type="checkbox" name="v_corto" checked><span><b>Corto</b> · Shorts y Reels</span>
+              <input type="range" name="s_corto" min="20" max="90" step="5" value="50"><em id="s-corto-v">50 s</em></label>
+            <label class="version"><input type="checkbox" name="v_largo"><span><b>Largo</b> · YouTube</span>
+              <input type="range" name="s_largo" min="2" max="15" step="1" value="5"><em id="s-largo-v">5 min</em></label>
+          </div>
+          <div class="segmentos solo-propio" role="radiogroup" aria-label="Formato" hidden>
             <label title="Shorts, Reels, TikTok"><input type="radio" name="formato" value="vertical" checked>9:16</label>
             <label title="YouTube"><input type="radio" name="formato" value="horizontal">16:9</label>
             <label title="Feed"><input type="radio" name="formato" value="cuadrado">1:1</label>
           </div>
-          <label class="duracion">Duración <input type="range" name="segundos" min="15" max="180" step="5" value="45"><b id="seg-valor">45 s</b></label>
           <select name="estilo" id="op-estilo" class="campo" aria-label="Estilo visual"></select>
           <select name="voz" id="op-voz" class="campo" aria-label="Voz"></select>
-          <button class="primario" type="submit">Continuar <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+          <button class="primario" type="submit"><span id="nuevo-txt">Investigar y escribir</span> <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
         </div>
       </form>
+      <p class="meta" id="nuevo-explica">Gemini investiga el tema (Google o Wikipedia), DeepSeek escribe el guion con esos datos y tú lo revisas antes de pasar a escenas.</p>
       <p class="aviso-txt" id="aviso-panel" hidden></p>
       <p class="aviso-txt" id="aviso-gemini" hidden>Falta GEMINI_API_KEY en .env (gratis en aistudio.google.com/apikey).</p>
       <div>
@@ -91,6 +104,27 @@
       <p id="t-error" class="error" hidden></p>
     </section>
 
+    <section id="guion-sec" class="tarjeta">
+      <div class="cabeza">
+        <div style="display:grid;gap:4px">
+          <h2>Guion <span class="etiqueta" id="g-autor"></span></h2>
+          <p class="meta" id="g-meta"></p>
+        </div>
+        <div class="segmentos" id="g-versiones" hidden></div>
+      </div>
+      <div id="g-ia" class="fila" hidden style="margin:0 0 10px"></div>
+      <textarea id="g-texto" class="guion-texto" rows="10" spellcheck="true"></textarea>
+      <div id="g-ganchos" class="fila"></div>
+      <div class="fila">
+        <button class="primario" id="g-aprobar">Aprobar guion y crear escenas <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+        <button class="boton" id="g-guardar">Guardar cambios</button>
+        <button class="boton" id="g-otra" title="Otra versión con la misma investigación">Escribir otra versión</button>
+        <span class="meta" id="g-estado"></span>
+      </div>
+      <details id="g-investigacion"><summary>Investigación <span class="meta" id="g-fuentes-n"></span></summary>
+        <p class="guion" id="g-dossier"></p><ol id="g-fuentes" class="fuentes"></ol></details>
+    </section>
+
     <section id="escenas-sec" class="tarjeta">
       <div class="cabeza">
         <div style="display:grid;gap:4px">
@@ -103,6 +137,7 @@
       </div>
       <p class="meta" style="margin:-4px 0 14px">Para tenerlo todo en una ventana: en la pestaña de Flow pulsa el icono <b>S4</b> de la extensión y STUDIO se abre en el panel lateral de Chrome, junto a Flow.</p>
       <p id="ext-vieja" class="error" hidden>La extensión cargada en el navegador es una versión antigua: abre chrome://extensions y pulsa ↻ en «STUDIO #4 · Google Flow», luego recarga la pestaña de Flow.</p>
+      <div id="avisos" class="avisos" hidden></div>
       <div id="escenas" class="escenas"></div>
       <details id="ext-registro" class="registro">
         <summary>Lo que ve la extensión en Flow <span class="meta" id="ext-resumen"></span></summary>

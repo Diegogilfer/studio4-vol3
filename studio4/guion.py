@@ -1,27 +1,95 @@
-"""Fase 1 · Guion: Gemini escribe la narración completa (solo lo que dice la voz)."""
+"""Fase 1 · Guion: DeepSeek escribe a partir de la investigación. Corto (Shorts y Reels) y largo (YouTube)
+salen de la misma investigación pero son guiones distintos: otro ritmo, otra estructura, otro cierre.
+
+Sin DEEPSEEK_API_KEY escribe Gemini con las mismas reglas, para que STUDIO nunca se quede parado."""
 
 from __future__ import annotations
 
-from . import gemini
+import json
+import logging
+import re
+from typing import Any
 
-PALABRAS_POR_SEGUNDO = 2.4  # locución en español a ritmo de vídeo corto
+from . import deepseek, gemini
 
-SISTEMA = """Eres guionista de vídeos cortos de máxima retención en español neutro.
-Escribes SOLO el texto que leerá la voz en off, de corrido.
+logger = logging.getLogger("studio4.guion")
 
-1. Gancho en la primera frase (sin saludos ni "en este vídeo"): una afirmación que choque, una pregunta
-   imposible de ignorar o una imagen mental potente.
-2. Tensión creciente: cada frase abre una pregunta que la siguiente responde a medias.
-3. Frases cortas y visuales: todo lo que se dice tiene que poder MOSTRARSE en un plano de vídeo.
-4. Cierre con un giro o una idea que se quede, y una llamada a la acción breve y natural.
-5. Nada de acotaciones, corchetes, emojis, títulos, viñetas ni Markdown. Solo la narración."""
+PALABRAS_POR_SEGUNDO = 2.4  # locución en español a ritmo de vídeo
+
+PROHIBIDO = [
+    "Imagina", "¿Sabías que", "En un mundo", "sumérgete", "adentrémonos", "fascinante", "increíble", "asombroso",
+    "descubre", "el secreto", "no creerás", "en este vídeo", "hoy te cuento", "acompáñame", "pero eso no es todo",
+    "al final del día", "y aquí viene lo interesante", "y es que", "cabe destacar", "sin lugar a dudas",
+    "en conclusión", "¿y tú qué opinas?", "prepárate", "un viaje", "misterio sin resolver",
+]
+
+SISTEMA = f"""Eres guionista de documentales y de vídeos de divulgación en español neutro, con voz propia.
+Escribes SOLO lo que dirá la voz en off: sin acotaciones, corchetes, títulos, emojis ni Markdown.
+
+VERDAD Y DETALLE
+- Todo sale del dossier de investigación. Usa cifras, nombres, lugares y fechas concretas.
+- Lo que el dossier marca como dudoso no se afirma. No inventes nada.
+
+QUE NO SUENE A IA
+- Prohibido: {", ".join(f"«{p}»" for p in PROHIBIDO)}.
+- Nada de tríos de adjetivos, nada de moralejas, nada de preguntas retóricas de relleno.
+- Habla como alguien que se lo cuenta a un amigo listo: frases de largo variado, muchas cortas
+  (5-12 palabras), alguna larga; verbos concretos; una idea por frase.
+- Antes de entregar, relee y reescribe cualquier frase genérica, de folleto o que podría estar en cualquier vídeo.
+
+HECHO PARA VÍDEO
+- La primera frase (máx. 14 palabras) engancha con un hecho concreto o una escena, nunca con una pregunta genérica.
+- Cada frase tiene que poder MOSTRARSE en un plano de 8 segundos: personas, objetos, lugares, acciones.
+- Abre preguntas y ciérralas más tarde para que nadie se vaya.
+
+CORTO (Shorts y Reels): un solo hilo, tensión constante, sin introducción, cierre con giro o dato que
+reencuadre el inicio, y como mucho UNA frase final de llamada a la acción, natural.
+LARGO (YouTube): 4-6 bloques con un mini-gancho al empezar cada bloque, una historia o caso real como hilo,
+contexto, giro y cierre que conecte con el principio; termina invitando a un tema relacionado. Sin títulos.
+
+Devuelve JSON: {{"titulo_provisional": "...", "<versión>": {{"guion": "...", "ganchos": ["...", "...", "..."]}}}}
+donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste)."""
 
 
-def escribir(tema: str, segundos: int, produccion: str = "") -> str:
-    palabras = int(segundos * PALABRAS_POR_SEGUNDO)
-    prompt = (
-        f"Tema: {tema}\n\n"
-        f"Duración: {segundos} segundos, unas {palabras} palabras (no te pases: la voz debe caber en ese tiempo)."
-    )
-    texto = gemini.generar(prompt, sistema=SISTEMA, temperatura=0.8, detalle="guion", produccion=produccion)
+def _peticion(idea: str, dossier: str, versiones: dict[str, int]) -> str:
+    partes = [f"Tema: {idea}", "", "--- DOSSIER DE INVESTIGACIÓN ---", dossier or "(sin investigación: usa solo hechos muy conocidos)",
+              "--- FIN DEL DOSSIER ---", "", "Escribe estas versiones:"]
+    for v, seg in versiones.items():
+        nombre = "CORTO (Shorts y Reels, vertical)" if v == "corto" else "LARGO (YouTube, horizontal)"
+        partes.append(f"- \"{v}\": {nombre}, {seg} segundos: {int(seg * PALABRAS_POR_SEGUNDO)} palabras (±10 %; "
+                      f"si te quedas corto, la voz no llena el vídeo).")
+    return "\n".join(partes)
+
+
+def _limpiar(texto: str) -> str:
+    texto = re.sub(r"\[[^\]]*\]|\([^)]*(?:pausa|música|sonido)[^)]*\)", "", texto, flags=re.I)  # acotaciones
+    texto = texto.replace("*", "").replace("#", "")
     return " ".join(texto.split())
+
+
+def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "") -> dict[str, Any]:
+    """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
+    prompt = _peticion(idea, dossier, versiones)
+    if deepseek.disponible():
+        datos, autor = deepseek.generar_json(SISTEMA, prompt, detalle="guion", produccion=produccion), "DeepSeek"
+    else:
+        logger.warning("Sin DEEPSEEK_API_KEY: el guion lo escribe Gemini.")
+        crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.9,
+                               detalle="guion (sin DeepSeek)", produccion=produccion)
+        m = re.search(r"\{.*\}", crudo, re.DOTALL)
+        datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
+
+    salida: dict[str, Any] = {"titulo_provisional": str(datos.get("titulo_provisional", "")).strip(), "autor": autor}
+    for v in versiones:
+        bloque = datos.get(v) or {}
+        texto = _limpiar(str(bloque.get("guion", "")))
+        if len(texto.split()) < 15:
+            raise RuntimeError(f"{autor} no devolvió el guion {v}. Vuelve a intentarlo.")
+        salida[v] = {"guion": texto, "ganchos": [_limpiar(str(g)) for g in bloque.get("ganchos", [])][:3]}
+    return salida
+
+
+def frases_prohibidas(texto: str) -> list[str]:
+    """Lo que aún suena a IA en un guion (se muestra en el panel para que lo corrijas si quieres)."""
+    bajo = texto.lower()
+    return [p for p in PROHIBIDO if p.lower() in bajo]

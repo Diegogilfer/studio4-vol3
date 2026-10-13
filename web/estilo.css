@@ -212,6 +212,22 @@ select.campo option { background: var(--bg-elevated); }
 .registro .error b, .registro .rechazada b { color: var(--danger); }
 .registro .enviando b { color: var(--accent); }
 #ext-vieja { margin: 0 0 14px; }
+.modos { width: fit-content; }
+.versiones { display: flex; gap: 8px; flex-wrap: wrap; }
+.version { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 14px; background: rgb(238 241 246 / .05); font-size: 13px; color: var(--fg-muted); cursor: pointer; }
+.version b { color: var(--fg); font-weight: 600; }
+.version input[type=range] { width: 80px; accent-color: var(--accent); }
+.version em { font-style: normal; color: var(--fg); min-width: 44px; }
+.version:has(input[type=checkbox]:not(:checked)) input[type=range], .version:has(input[type=checkbox]:not(:checked)) em { opacity: .35; }
+.guion-texto { width: 100%; min-height: 200px; resize: vertical; border-radius: 16px; border: 1px solid var(--line); background: var(--bg-app); padding: 14px 16px; font: 16px/1.7 var(--sans); color: var(--fg); }
+.guion-texto:focus { outline: none; border-color: color-mix(in oklab, var(--accent) 60%, transparent); }
+.guion-texto[readonly] { color: var(--fg-muted); }
+.aviso-ia { font-size: 12px; border-radius: 999px; padding: 3px 10px; color: var(--warn); background: color-mix(in oklab, var(--warn) 12%, transparent); }
+.fuentes { margin: 10px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--fg-muted); display: grid; gap: 3px; }
+.fuentes a { color: var(--info); }
+.avisos { display: grid; gap: 8px; margin-bottom: 14px; }
+.avisos div { border-radius: 14px; padding: 10px 14px; font-size: 13px; background: color-mix(in oklab, var(--warn) 8%, transparent); border: 1px solid color-mix(in oklab, var(--warn) 30%, transparent); }
+.avisos b { color: var(--warn); font-weight: 500; }
 .entregas { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
 .entrega { display: grid; gap: 10px; padding: 12px; border-radius: 20px; background: var(--bg-sidebar); border: 2px solid color-mix(in oklab, var(--fg) 10%, transparent); }
 .entrega img { display: block; border-radius: 12px; border: 2px solid color-mix(in oklab, var(--fg) 16%, transparent); background: #000; }

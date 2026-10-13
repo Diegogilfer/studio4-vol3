@@ -298,3 +298,92 @@ def test_imagen_de_flow_para_miniatura_se_compone(aislado):
     assert produccion.cargar("p7")["miniaturas"]["texto"] == "NADIE LO APAGÓ"
     flow.marcar_activa(1)                                    # volver a una escena deja de recoger para la miniatura
     assert produccion.cargar("p7")["recoger_para"] == "escenas"
+
+
+# --- Guion: investigación + DeepSeek, tu aprobación y escenas ---------------------------------------
+import time as _time  # noqa: E402
+
+from studio4 import deepseek, guion, investigacion  # noqa: E402
+
+
+def _esperar(pid, segundos=10):
+    fin = _time.time() + segundos
+    while _time.time() < fin:
+        if not produccion.cargar(pid)["trabajo"].get("ocupado"):
+            return produccion.cargar(pid)
+        _time.sleep(0.05)
+    raise AssertionError("el trabajo no terminó")
+
+
+def test_tu_guion_se_respeta_tal_cual_y_espera_aprobacion(aislado):
+    texto = "El faro de Cabo Sur siguió encendido cuarenta años.   Nadie subía a cambiar la lámpara. Y aun así, cada noche, giraba."
+    [pid] = produccion.crear("", [], "documental", "gemini", guion_propio=texto, formato_propio="horizontal")
+    p = produccion.cargar(pid)
+    assert p["guion"] == " ".join(texto.split()) and p["autor_guion"] == "Tú"
+    assert p["estado"] == "guion_listo" and not p["guion_aprobado"] and p["formato"] == "horizontal"
+
+
+def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
+    llamadas = {"investigar": 0, "deepseek": 0}
+
+    def investigar(idea, produccion=""):
+        llamadas["investigar"] += 1
+        return {"dossier": "HECHOS CLAVE: el faro se automatizó en 1981.", "fuentes": [{"titulo": "a", "url": "https://a"}]}
+
+    def escribir_json(sistema, prompt, **_):
+        llamadas["deepseek"] += 1
+        assert "1981" in prompt and "\"corto\"" in prompt and "\"largo\"" in prompt   # escribe CON la investigación
+        largo = " ".join(["El farero se fue en 1981 y la luz siguió encendida."] * 30)
+        return {"titulo_provisional": "El faro solo",
+                "corto": {"guion": "En 1981 el último farero cerró la puerta. La lámpara siguió girando sola. Cuarenta años.",
+                          "ganchos": ["G1", "G2", "G3"]},
+                "largo": {"guion": largo, "ganchos": ["L1"]}}
+    monkeypatch.setattr(investigacion, "investigar", investigar)
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    monkeypatch.setattr(deepseek, "generar_json", escribir_json)
+    pids = produccion.crear("El faro sin farero", ["corto", "largo"], "documental", "gemini")
+    corto, largo = (_esperar(pid) for pid in pids)
+    assert llamadas == {"investigar": 1, "deepseek": 1}
+    assert corto["familia"] == largo["familia"] and (corto["formato"], largo["formato"]) == ("vertical", "horizontal")
+    assert corto["estado"] == "guion_listo" and corto["ganchos"] == ["G1", "G2", "G3"] and corto["autor_guion"] == "DeepSeek"
+    assert len(largo["guion"].split()) > len(corto["guion"].split()) and corto["investigacion"]["fuentes"]
+
+
+def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
+    [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
+    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="": {
+        "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
+        "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
+        "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
+    monkeypatch.setattr(voz, "locutar", lambda seg, destino, prov, produccion="": {
+        "proveedor": prov, "duracion": 3.0, "escenas": [{"ini": 0, "fin": 3.0}], "palabras": []})
+    produccion.aprobar_guion(pid, "Una frase que se ve. Otra frase que también se ve en un plano, editada.")
+    p = _esperar(pid)
+    assert p["guion_aprobado"] and p["estado"] == "rodando" and p["guion"].endswith("editada.")
+    assert len(p["escenas"]) == 1 and p["voz"]["duracion"] == 3.0 and p["avisos"][0]["frase"] == "Otra"
+    with pytest.raises(ValueError, match="aprobado"):
+        produccion.guardar_guion(pid, "cambio " * 20)
+
+
+def test_rehacer_escenas_con_clips_pide_confirmacion(aislado):
+    _produccion("p8", guion="uno dos tres cuatro cinco seis siete ocho nueve diez once", guion_aprobado=True)
+    produccion.modificar("p8", lambda p: p["escenas"][0]["tomas"].append({"archivo": "tomas/x.mp4", "tipo": "video"}))
+    with pytest.raises(ValueError, match="clips"):
+        produccion.aprobar_guion("p8")
+
+
+def test_limpieza_y_frases_que_suenan_a_ia():
+    assert guion._limpiar("**Hola** [música tensa] mundo (pausa dramática).") == "Hola mundo ."
+    assert guion.frases_prohibidas("Imagina un faro. ¿Sabías que nadie lo apagó?") == ["Imagina", "¿Sabías que"]
+
+
+def test_deepseek_lee_json_y_apunta_tokens(aislado, monkeypatch):
+    class R:
+        status_code = 200
+        def json(self):
+            return {"choices": [{"message": {"content": '{"corto": {"guion": "x"}}'}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}}
+    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "k")
+    monkeypatch.setattr(deepseek.requests, "post", lambda *a, **k: R())
+    assert deepseek.generar_json("s", "p", detalle="guion") == {"corto": {"guion": "x"}}
+    assert registro.consumo_del_mes()["DeepSeek"]["total"] == 15

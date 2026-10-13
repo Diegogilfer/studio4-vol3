@@ -21,7 +21,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import config, flow, miniaturas, produccion, registro, subtitulos, voz  # noqa: E402
+from studio4 import config, flow, guion, miniaturas, produccion, registro, subtitulos, voz  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -179,8 +179,12 @@ class Panel(BaseHTTPRequestHandler):
 
     def _estado(self) -> dict[str, Any]:
         pid = produccion.activa()
+        p = produccion.cargar(pid) if pid else None
+        if p:
+            p["ia_detectada"] = guion.frases_prohibidas(p.get("guion", ""))
+            p["hermanas"] = [x for x in produccion.listar() if p.get("familia") and x["familia"] == p["familia"]]
         return {
-            "produccion": produccion.cargar(pid) if pid else None,
+            "produccion": p,
             "extension": flow.estado_extension(),
             "codigo": config.token_flow(),
             "carpeta_extension": str(config.RAIZ / "extension-flow"),
@@ -192,6 +196,8 @@ class Panel(BaseHTTPRequestHandler):
                 "voces": {k: v for k, v in voz.PROVEEDORES.items() if k != "elevenlabs" or config.ELEVENLABS_API_KEY},
                 "paletas": {k: v["nombre"] for k, v in subtitulos.PALETAS.items()},
                 "gemini_ok": bool(config.GEMINI_API_KEY),
+                "deepseek_ok": bool(config.DEEPSEEK_API_KEY),
+                "versiones": config.VERSIONES,
                 "salud": config.salud(),
                 "plataformas": {k: v["nombre"] for k, v in miniaturas.PLATAFORMAS.items()},
             },
@@ -233,12 +239,15 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"ok": True, "codigo": config.renovar_token_flow()})
         if ruta == "/api/producciones":
             d = self._cuerpo_json()
-            tema = str(d.get("tema", "")).strip()
-            if len(tema) < 3:
-                raise Error(400, "Escribe el tema del vídeo")
-            pid = produccion.crear(tema, max(15, min(180, int(d.get("segundos", 45)))), d.get("formato", "vertical"),
-                                   d.get("estilo", "cinematografico"), d.get("voz", "gemini"))
-            return self._json({"ok": True, "id": pid})
+            idea = str(d.get("idea", "")).strip()
+            propio = str(d.get("guion_propio", "")).strip()
+            if len(idea) < 3 and not propio:
+                raise Error(400, "Escribe la idea del vídeo o pega tu guion")
+            segundos = {k: max(15, min(1200, int(v))) for k, v in (d.get("segundos") or {}).items() if str(v).isdigit()}
+            pids = produccion.crear(idea, list(d.get("versiones") or ["corto"]), d.get("estilo", "cinematografico"),
+                                    d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
+                                    formato_propio=d.get("formato", "vertical"))
+            return self._json({"ok": True, "ids": pids})
         if ruta == "/api/activar":
             pid = str(self._cuerpo_json().get("id", ""))
             produccion.cargar(pid)
@@ -248,6 +257,16 @@ class Panel(BaseHTTPRequestHandler):
         pid = produccion.activa()
         if not pid:
             raise Error(409, "No hay producción activa")
+        if ruta == "/api/guion":
+            produccion.guardar_guion(pid, self._cuerpo_json().get("guion", ""))
+            return self._json({"ok": True})
+        if ruta == "/api/guion/aprobar":
+            d = self._cuerpo_json()
+            produccion.aprobar_guion(pid, d.get("guion"), forzar=bool(d.get("forzar")))
+            return self._json({"ok": True})
+        if ruta == "/api/guion/reescribir":
+            produccion.reescribir_guion(pid)
+            return self._json({"ok": True})
         if ruta == "/api/escena":
             d = self._cuerpo_json()
             produccion.editar_escena(pid, int(d.pop("orden")), d)

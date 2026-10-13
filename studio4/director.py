@@ -41,12 +41,20 @@ class Escena(BaseModel):
     texto_pantalla: str = Field(default="", description="2 a 5 palabras impactantes para rotular (puede quedar vacío).")
 
 
+class Aviso(BaseModel):
+    frase: str = Field(description="Frase literal del guion que es difícil de mostrar en vídeo.")
+    problema: str = Field(description="Por qué no se puede filmar bien (abstracta, sin sujeto visible, cifra sin imagen...).")
+    sugerencia: str = Field(description="Cómo reescribirla para que se pueda ver, manteniendo el sentido.")
+
+
 class Plan(BaseModel):
     titulo: str = Field(description="Título con curiosidad, sin clickbait engañoso, máx. 70 caracteres.")
     descripcion: str = Field(description="Descripción para redes: gancho + resumen en 2-3 frases.")
     hashtags: list[str] = Field(description="Entre 4 y 8 hashtags, con #.")
     biblia: Biblia
     escenas: list[Escena]
+    avisos: list[Aviso] = Field(default_factory=list, description="Frases del guion difíciles de filmar (0 a 5). "
+                                                                  "No cambies el guion: solo avisa.")
 
 
 SISTEMA = f"""Eres director de fotografía y de montaje de vídeos cortos generados con Google Veo (Flow).
@@ -61,7 +69,9 @@ REGLAS:
    Usa los nombres de la biblia para los personajes; no repitas su aspecto (se añade solo).
 5. Alterna planos (no dos close-ups seguidos) y elige un movimiento de cámara que sume emoción.
 6. Nunca pidas texto, letras, logotipos, subtítulos ni pantallas divididas dentro de la imagen.
-7. La biblia visual define lo que NO cambia entre escenas: escenario, luz, paleta y personajes con ropa exacta."""
+7. La biblia visual define lo que NO cambia entre escenas: escenario, luz, paleta y personajes con ropa exacta.
+8. Si una frase es abstracta o difícil de ver, NO la cambies: búscale la mejor imagen posible y añádela a «avisos»
+   con una sugerencia de reescritura. El guion lo ha aprobado una persona."""
 
 
 def _prompt_flow(esc: dict[str, Any], biblia: dict[str, Any], estilo: str, aspecto: str) -> str:

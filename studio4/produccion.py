@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import config, director, guion, miniaturas, render, subtitulos, voz
+from . import config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos, voz
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -33,7 +33,13 @@ def carpeta(pid: str) -> Path:
 
 def cargar(pid: str) -> dict[str, Any]:
     with _lock:
-        return json.loads((carpeta(pid) / "proyecto.json").read_text(encoding="utf-8"))
+        p = json.loads((carpeta(pid) / "proyecto.json").read_text(encoding="utf-8"))
+    # Producciones de antes del paso «Guion»: si ya tenían escenas, su guion cuenta como aprobado.
+    p.setdefault("guion_aprobado", bool(p.get("escenas")))
+    for campo, vacio in (("version", ""), ("familia", ""), ("investigacion", None), ("ganchos", []),
+                         ("avisos", []), ("autor_guion", "")):
+        p.setdefault(campo, vacio)
+    return p
 
 
 def guardar(p: dict[str, Any]) -> None:
@@ -73,7 +79,8 @@ def listar() -> list[dict[str, Any]]:
         try:
             p = json.loads(f.read_text(encoding="utf-8"))
             salida.append({"id": p["id"], "tema": p["tema"], "titulo": p.get("titulo", ""), "estado": p["estado"],
-                           "creado": p["creado"], "formato": p["formato"]})
+                           "creado": p["creado"], "formato": p["formato"], "version": p.get("version", ""),
+                           "familia": p.get("familia", "")})
         except (OSError, ValueError, KeyError):
             continue
     return salida
@@ -89,8 +96,8 @@ def recuperar_trabajos_colgados() -> int:
             continue
         if p.get("trabajo", {}).get("ocupado"):
             p["trabajo"].update(ocupado=False, error=f"Se interrumpió «{p['trabajo'].get('fase', '')}» al cerrar STUDIO: vuelve a lanzarlo.")
-            if p.get("estado") in ("escribiendo", "renderizando"):
-                p["estado"] = "rodando" if p.get("escenas") else "error"
+            if p.get("estado") in ("investigando", "escribiendo", "escenas", "renderizando"):
+                p["estado"] = "rodando" if p.get("escenas") else ("guion_listo" if p.get("guion") else "error")
             guardar(p)
             n += 1
     return n
@@ -102,65 +109,153 @@ def _slug(texto: str) -> str:
 
 
 # --- Trabajos en segundo plano ------------------------------------------------------------------
-def _avisar(pid: str, fase: str, progreso: int) -> None:
-    def cambio(p):
-        p["trabajo"].update(fase=fase, progreso=progreso)
-    modificar(pid, cambio)
+def _avisar(pid: str | list[str], fase: str, progreso: int) -> None:
+    for uno in [pid] if isinstance(pid, str) else pid:
+        modificar(uno, lambda p: p["trabajo"].update(fase=fase, progreso=progreso))
 
 
-def _en_fondo(pid: str, nombre: str, fn: Callable[[], None]) -> None:
+def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None]) -> None:
+    """Lanza `fn` en un hilo. Con varias producciones (corto y largo de la misma idea), todas quedan ocupadas."""
+    pids = [pid] if isinstance(pid, str) else pid
+
     def correr():
         try:
             fn()
         except Exception as e:  # noqa: BLE001 - el error se muestra en el panel
             logger.exception("%s falló", nombre)
-            modificar(pid, lambda p: p["trabajo"].update(ocupado=False, error=str(e), fase=f"{nombre}: error"))
+            for uno in pids:
+                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=str(e), fase=f"{nombre}: error"))
         else:
-            modificar(pid, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100))
+            for uno in pids:
+                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100))
 
     with _lock:
-        p = cargar(pid)
-        if p["trabajo"].get("ocupado"):
-            raise RuntimeError(f"Esta producción está ocupada: {p['trabajo'].get('fase')}")
-        p["trabajo"] = {"ocupado": True, "nombre": nombre, "fase": nombre, "progreso": 0, "error": ""}
-        guardar(p)
+        for uno in pids:
+            p = cargar(uno)
+            if p["trabajo"].get("ocupado"):
+                raise RuntimeError(f"Esta producción está ocupada: {p['trabajo'].get('fase')}")
+        for uno in pids:
+            p = cargar(uno)
+            p["trabajo"] = {"ocupado": True, "nombre": nombre, "fase": nombre, "progreso": 0, "error": ""}
+            guardar(p)
     threading.Thread(target=correr, name=f"studio4-{nombre}", daemon=True).start()
 
 
 # --- Fases ------------------------------------------------------------------------------------
-def crear(tema: str, segundos: int, formato: str, estilo: str, proveedor_voz: str) -> str:
-    if formato not in config.FORMATOS:
-        raise ValueError(f"Formato desconocido: {formato}")
-    if proveedor_voz not in voz.PROVEEDORES:
-        raise ValueError(f"Voz desconocida: {proveedor_voz}")
-    pid = f"{time.strftime('%Y%m%d-%H%M%S')}-{_slug(tema)}"
+def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
     carpeta(pid).mkdir(parents=True)
-    guardar({
-        "id": pid, "creado": time.strftime("%Y-%m-%d %H:%M:%S"), "tema": tema.strip(), "segundos": int(segundos),
-        "formato": formato, "estilo": estilo, "proveedor_voz": proveedor_voz, "estado": "escribiendo",
-        "trabajo": {}, "guion": "", "titulo": "", "descripcion": "", "hashtags": [], "biblia": {},
+    p = {
+        "id": pid, "creado": time.strftime("%Y-%m-%d %H:%M:%S"), "tema": "", "segundos": 0, "formato": "vertical",
+        "version": "", "familia": "", "estilo": "cinematografico", "proveedor_voz": "gemini", "estado": "guion_listo",
+        "trabajo": {}, "investigacion": None, "guion": "", "ganchos": [], "autor_guion": "", "guion_aprobado": False,
+        "titulo": "", "descripcion": "", "hashtags": [], "biblia": {}, "avisos": [],
         "escenas": [], "escena_activa": 1, "voz": None, "subtitulos": dict(subtitulos.POR_DEFECTO), "final": None,
         "miniaturas": None, "recoger_para": "escenas",
-    })
-    activar(pid)
+    }
+    p.update(campos)
+    guardar(p)
+    return p
+
+
+def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
+          segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical") -> list[str]:
+    """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
+    Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
+    if proveedor_voz not in voz.PROVEEDORES:
+        raise ValueError(f"Voz desconocida: {proveedor_voz}")
+    sello = time.strftime("%Y%m%d-%H%M%S")
+    if guion_propio.strip():
+        if formato_propio not in config.FORMATOS:
+            raise ValueError(f"Formato desconocido: {formato_propio}")
+        texto = " ".join(guion_propio.split())
+        pid = f"{sello}-{_slug(idea or texto[:40])}"
+        _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
+               version="propio", guion=texto, autor_guion="Tú",
+               segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO))
+        activar(pid)
+        return [pid]
+
+    versiones = [v for v in config.VERSIONES if v in versiones]
+    if not versiones:
+        raise ValueError("Elige al menos una versión: corto o largo.")
+    segundos = {v: int((segundos or {}).get(v) or config.VERSIONES[v]["segundos"]) for v in versiones}
+    pids = []
+    for v in versiones:
+        pid = f"{sello}-{v}-{_slug(idea)}"
+        _nueva(pid, tema=idea.strip(), formato=config.VERSIONES[v]["formato"], version=v, familia=sello,
+               estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando")
+        pids.append(pid)
+    activar(pids[0])
+    _en_fondo(pids, "Investigación y guion", lambda: _investigar_y_escribir(pids, idea, segundos))
+    return pids
+
+
+def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int], dossier: dict | None = None) -> None:
+    if dossier is None:
+        _avisar(pids, "Gemini investiga el tema en Google", 10)
+        dossier = investigacion.investigar(idea, produccion=pids[0])
+        for pid in pids:
+            modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
+    autor = "DeepSeek" if deepseek.disponible() else "Gemini"
+    _avisar(pids, f"{autor} escribe el guion a partir de la investigación", 45)
+    versiones = {cargar(pid)["version"]: segundos[cargar(pid)["version"]] for pid in pids}
+    escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0])
+    for pid in pids:
+        v = cargar(pid)["version"]
+        modificar(pid, lambda p: p.update(
+            guion=escrito[v]["guion"], ganchos=escrito[v]["ganchos"], autor_guion=escrito["autor"],
+            titulo=p.get("titulo") or escrito["titulo_provisional"], estado="guion_listo", guion_aprobado=False))
+
+
+def reescribir_guion(pid: str) -> None:
+    """Otra versión del guion con la misma investigación (no vuelve a buscar en Google)."""
+    p = cargar(pid)
+    if p.get("version") not in config.VERSIONES:
+        raise ValueError("Este guion es tuyo: edítalo directamente.")
+    if any(e["tomas"] for e in p["escenas"]):
+        raise ValueError("Ya hay clips de Flow en esta producción: reescribir el guion los dejaría sin sentido.")
+    _en_fondo(pid, "Guion", lambda: _investigar_y_escribir([pid], p["tema"], {p["version"]: p["segundos"]},
+                                                           dossier=p.get("investigacion")))
+
+
+def guardar_guion(pid: str, texto: str) -> None:
+    texto = " ".join(str(texto).split())
+    if len(texto.split()) < 10:
+        raise ValueError("El guion es demasiado corto.")
+
+    def cambio(p):
+        if p.get("guion_aprobado"):
+            raise ValueError("El guion ya está aprobado y tiene escenas: usa «Rehacer escenas» para cambiarlo.")
+        p["guion"] = texto
+    modificar(pid, cambio)
+
+
+def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> None:
+    """Tu guion aprobado pasa a Gemini, que lo convierte en escenas para Flow; luego se graba la voz."""
+    p = cargar(pid)
+    if texto is not None:
+        p["guion"] = " ".join(str(texto).split())
+    if len(p["guion"].split()) < 10:
+        raise ValueError("Escribe o genera el guion antes de aprobarlo.")
+    if any(e["tomas"] for e in p["escenas"]) and not forzar:
+        raise ValueError("Esta producción ya tiene clips de Flow: rehacer las escenas los descarta.")
+    modificar(pid, lambda q: q.update(guion=p["guion"], guion_aprobado=True, estado="escenas", escenas=[], voz=None,
+                                      final=None, miniaturas=None, avisos=[]))
 
     def fases():
-        _avisar(pid, "Gemini escribe el guion", 10)
-        texto = guion.escribir(tema, int(segundos), produccion=pid)
-        modificar(pid, lambda p: p.update(guion=texto))
+        _avisar(pid, "Gemini convierte el guion en escenas para Flow", 20)
+        q = cargar(pid)
+        plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid)
 
-        _avisar(pid, "Gemini planifica las escenas para Flow", 35)
-        plan = director.planificar(texto, estilo, formato, produccion=pid)
-
-        def aplicar(p):
-            p.update(titulo=plan["titulo"], descripcion=plan["descripcion"], hashtags=plan["hashtags"],
-                     biblia=plan["biblia"], estilo_en=plan["estilo_en"], estado="rodando", escena_activa=1)
-            p["escenas"] = [{**e, "tomas": [], "elegida": None} for e in plan["escenas"]]
+        def aplicar(r):
+            r.update(titulo=plan["titulo"], descripcion=plan["descripcion"], hashtags=plan["hashtags"],
+                     biblia=plan["biblia"], estilo_en=plan["estilo_en"], avisos=plan.get("avisos", []),
+                     estado="rodando", escena_activa=1, recoger_para="escenas")
+            r["escenas"] = [{**e, "tomas": [], "elegida": None} for e in plan["escenas"]]
         modificar(pid, aplicar)
         _generar_voz(pid)
 
-    _en_fondo(pid, "Guion y escenas", fases)
-    return pid
+    _en_fondo(pid, "Escenas y voz", fases)
 
 
 def _generar_voz(pid: str) -> None:

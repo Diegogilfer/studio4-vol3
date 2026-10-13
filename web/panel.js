@@ -64,26 +64,52 @@ $("flow-renovar").addEventListener("click", async () => {
   } catch (e) { aviso(e); }
 });
 
-// --- Nueva producción --------------------------------------------------------------------------
+// --- Nueva producción: desde una idea (investigación + DeepSeek) o con tu guion --------------------
 const form = $("nuevo");
-form.segundos.addEventListener("input", () => { $("seg-valor").textContent = `${form.segundos.value} s`; });
+const ESTADOS = { investigando: "investigando", escribiendo: "escribiendo guion", guion_listo: "guion por revisar",
+  escenas: "creando escenas", rodando: "en Flow", renderizando: "renderizando", terminado: "terminado", error: "error" };
+const VERSION = { corto: "Corto", largo: "Largo", propio: "Tu guion" };
+
+function modo() { return document.querySelector('input[name="modo"]:checked').value; }
+function pintarModo() {
+  const propio = modo() === "propio";
+  form.idea.hidden = propio;
+  form.guion_propio.hidden = !propio;
+  document.querySelector(".solo-idea").hidden = propio;
+  document.querySelector(".solo-propio").hidden = !propio;
+  $("nuevo-txt").textContent = propio ? "Usar mi guion" : "Investigar y escribir";
+  $("nuevo-explica").textContent = propio
+    ? "Tu texto se respeta tal cual. Lo revisas y, al aprobarlo, Gemini lo convierte en escenas para Flow."
+    : `Gemini investiga el tema (Google o Wikipedia, con fuentes), ${estado?.opciones.deepseek_ok ? "DeepSeek" : "Gemini (falta la clave de DeepSeek)"} escribe el guion con esos datos y tú lo revisas antes de pasar a escenas.`;
+}
+document.querySelectorAll('input[name="modo"]').forEach((r) => r.addEventListener("change", pintarModo));
+form.s_corto.addEventListener("input", () => { $("s-corto-v").textContent = `${form.s_corto.value} s`; });
+form.s_largo.addEventListener("input", () => { $("s-largo-v").textContent = `${form.s_largo.value} min`; });
+
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const datos = Object.fromEntries(new FormData(form));
-  datos.segundos = Number(datos.segundos);
+  const propio = modo() === "propio";
+  const versiones = ["corto", "largo"].filter((v) => form[`v_${v}`].checked);
+  const datos = {
+    idea: form.idea.value, estilo: form.estilo.value, voz: form.voz.value,
+    versiones, segundos: { corto: Number(form.s_corto.value), largo: Number(form.s_largo.value) * 60 },
+    guion_propio: propio ? form.guion_propio.value : "", formato: form.formato.value,
+  };
+  if (!propio && !versiones.length) return alertaError("Marca al menos una versión: corto o largo.");
   try {
-    form.querySelector("button").disabled = true;
+    form.querySelector("button[type=submit]").disabled = true;
     await api("/api/producciones", datos);
-    form.tema.value = "";
+    form.idea.value = ""; form.guion_propio.value = "";
     await refrescar();
-  } catch (e) { aviso(e); } finally { form.querySelector("button").disabled = false; }
+    location.hash = "#guion-sec";
+  } catch (e) { aviso(e); } finally { form.querySelector("button[type=submit]").disabled = false; }
 });
 
 function pintarLista(lista) {
   const activa = estado.produccion?.id;
   $("lista").innerHTML = lista.length ? lista.map((p) => `
     <button type="button" data-id="${esc(p.id)}" class="${p.id === activa ? "activa" : ""}">
-      <b>${esc(p.titulo || p.tema)}</b><small>${esc(p.creado.slice(0, 16))} · ${esc(p.formato)} · ${esc(p.estado)}</small>
+      <b>${esc(p.titulo || p.tema)}</b><small>${p.version ? `${esc(VERSION[p.version] || p.version)} · ` : ""}${esc(p.creado.slice(0, 16))} · ${esc(ESTADOS[p.estado] || p.estado)}</small>
     </button>`).join("") : `<span class="meta faint">Todavía no hay ninguna: escribe un tema arriba.</span>`;
 }
 $("lista").addEventListener("click", async (ev) => {
@@ -101,7 +127,7 @@ function pintarConsumo(c) {
 
 // --- Producción activa -------------------------------------------------------------------------
 function pasoActual(p) {
-  if (!p.guion) return "guion";
+  if (!p.guion || !p.guion_aprobado) return "guion";
   if (!p.escenas.length) return "escenas";
   if (!p.voz) return "voz";
   if (p.escenas.some((e) => e.elegida === null)) return "flow";
@@ -280,6 +306,84 @@ document.addEventListener("click", async (ev) => {
   setTimeout(() => { ev.target.textContent = "Copiar"; }, 1500);
 });
 
+// --- Guion -----------------------------------------------------------------------------------
+function pintarGuion(d) {
+  const { p } = d;
+  const ocupado = p.trabajo.ocupado;
+  const aprobado = p.guion_aprobado;
+  $("g-autor").textContent = p.autor_guion ? `escrito por ${p.autor_guion}` : "";
+  $("g-autor").hidden = !p.autor_guion;
+  const palabras = p.guion ? p.guion.split(/\s+/).length : 0;
+  $("g-meta").textContent = p.guion
+    ? `${palabras} palabras · ~${Math.round(palabras / 2.4)} s de voz${p.version ? ` · ${VERSION[p.version] || p.version}` : ""}`
+    : ocupado ? "Investigando y escribiendo… (suele tardar menos de un minuto)" : "Aún sin guion.";
+  // Corto y largo de la misma idea: se cambia de uno a otro con estas pestañas.
+  const hermanas = p.hermanas || [];
+  $("g-versiones").hidden = hermanas.length < 2;
+  $("g-versiones").innerHTML = hermanas.map((h) =>
+    `<label><input type="radio" name="g-version" value="${esc(h.id)}" ${h.id === p.id ? "checked" : ""}>${esc(VERSION[h.version] || h.version)}</label>`).join("");
+  const area = $("g-texto");
+  if (document.activeElement !== area || area.dataset.pid !== p.id) area.value = p.guion || "";
+  area.dataset.pid = p.id;
+  area.readOnly = aprobado || ocupado;
+  $("g-ia").hidden = !(p.ia_detectada || []).length || aprobado;
+  $("g-ia").innerHTML = `<span class="meta">Suena a IA, conviene cambiarlo:</span>` +
+    (p.ia_detectada || []).map((f) => `<span class="aviso-ia">«${esc(f)}»</span>`).join("");
+  $("g-ganchos").hidden = aprobado || !(p.ganchos || []).length;
+  $("g-ganchos").innerHTML = `<span class="meta">Otros ganchos (clic para usarlo como primera frase):</span>` +
+    (p.ganchos || []).map((g) => `<button class="chip-alt" data-gancho="${esc(g)}">${esc(g)}</button>`).join("");
+  $("g-aprobar").hidden = false;
+  $("g-aprobar").disabled = ocupado || !p.guion;
+  $("g-aprobar").firstChild.textContent = aprobado ? "Rehacer escenas con este guion " : "Aprobar guion y crear escenas ";
+  $("g-guardar").hidden = aprobado;
+  $("g-guardar").disabled = ocupado;
+  $("g-otra").hidden = aprobado || !["corto", "largo"].includes(p.version);
+  $("g-otra").disabled = ocupado;
+  $("g-estado").textContent = aprobado ? "Aprobado: las escenas salen de este texto." : "";
+  const inv = p.investigacion;
+  $("g-investigacion").hidden = !inv;
+  if (inv) {
+    $("g-dossier").textContent = inv.dossier;
+    $("g-fuentes-n").textContent = `· ${inv.metodo || "Google"} · ${inv.fuentes.length} fuentes`;
+    $("g-fuentes").innerHTML = inv.fuentes.map((f) =>
+      `<li><a href="${esc(f.url)}" target="_blank" rel="noreferrer">${esc(f.titulo)}</a></li>`).join("");
+  }
+}
+
+$("g-versiones").addEventListener("change", async (ev) => {
+  try { await api("/api/activar", { id: ev.target.value }); await refrescar(); } catch (e) { aviso(e); }
+});
+$("g-ganchos").addEventListener("click", (ev) => {
+  const g = ev.target.dataset?.gancho;
+  if (!g) return;
+  const area = $("g-texto");
+  // Sustituye la primera frase del guion por el gancho elegido.
+  area.value = area.value.replace(/^[\s\S]*?[.!?…](\s|$)/, `${g.replace(/\s*$/, "")} `);
+  area.focus();
+});
+$("g-guardar").addEventListener("click", async () => {
+  try { await api("/api/guion", { guion: $("g-texto").value }); $("g-estado").textContent = "Guardado."; await refrescar(); }
+  catch (e) { aviso(e); }
+});
+$("g-otra").addEventListener("click", async () => {
+  try { await api("/api/guion/reescribir", {}); await refrescar(); } catch (e) { aviso(e); }
+});
+$("g-aprobar").addEventListener("click", async () => {
+  const p = estado.produccion;
+  const conClips = p.escenas.some((e) => e.tomas.length);
+  if (conClips && !confirm("Esta producción ya tiene clips de Flow. Rehacer las escenas los descarta. ¿Seguir?")) return;
+  try {
+    await api("/api/guion/aprobar", { guion: p.guion_aprobado ? p.guion : $("g-texto").value, forzar: conClips });
+    await refrescar();
+  } catch (e) { aviso(e); }
+});
+
+function pintarAvisos(avisos) {
+  $("avisos").hidden = !avisos.length;
+  $("avisos").innerHTML = avisos.map((a) =>
+    `<div><b>Difícil de filmar:</b> «${esc(a.frase)}» — ${esc(a.problema)}<br><span class="meta">Sugerencia: ${esc(a.sugerencia)}</span></div>`).join("");
+}
+
 // --- Miniaturas y entregas --------------------------------------------------------------------
 const PLATAFORMA_VIDEO = { youtube: "YouTube", shorts: "Shorts", reels: "Reels", feed: "Feed" };
 const nombreArchivo = (p, sufijo, ext) =>
@@ -371,6 +475,7 @@ async function refrescar() {
   const o = d.opciones;
   llenarSelect($("op-estilo"), Object.fromEntries(o.estilos.map((k) => [k, k])));
   llenarSelect($("op-voz"), o.voces);
+  if (!firmas.modo) { firmas.modo = 1; pintarModo(); }
   $("aviso-gemini").hidden = !o.salud.length;
   $("aviso-gemini").textContent = o.salud.join(" ");
   pintarFlow(d);
@@ -383,6 +488,8 @@ async function refrescar() {
   if (!p) return;
   siCambia("cabecera", { p: { ...p, trabajo: null } }, () => pintarCabecera(p));
   siCambia("trabajo", p.trabajo, pintarTrabajo);
+  siCambia("guion", { p: { ...p, escenas: p.escenas.map((e) => e.tomas.length) } }, () => pintarGuion({ p }));
+  siCambia("avisos", p.avisos || [], pintarAvisos);
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
   siCambia("subtitulos", { id: p.id, subtitulos: p.subtitulos, paletas: o.paletas }, pintarSubtitulos);

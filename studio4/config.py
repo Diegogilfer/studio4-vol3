@@ -19,7 +19,7 @@ PUERTO = int(os.getenv("STUDIO4_PUERTO", "8000"))
 # --- Google Gemini (API gratuita de AI Studio): guion, plan de escenas y voz ---------------------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 MODELO_TEXTO = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
-MODELOS_TEXTO_RESERVA = ["gemini-3.5-flash-lite", "gemini-2.5-flash"]
+MODELOS_TEXTO_RESERVA = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.5-flash"]
 MODELO_TTS = os.getenv("GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview")
 MODELOS_TTS_RESERVA = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]
 VOZ_GEMINI = os.getenv("GEMINI_TTS_VOICE", "Charon")
@@ -27,6 +27,17 @@ ESTILO_VOZ = os.getenv(
     "GEMINI_TTS_ESTILO",
     "Narra en español neutro, como un documental intrigante: ritmo ágil, pausas cortas entre frases",
 )
+
+# --- DeepSeek (de pago por uso, céntimos por guion): escribe los guiones ---------------------------
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")   # o deepseek-v4-pro, más fino y más caro
+DEEPSEEK_URL = os.getenv("DEEPSEEK_URL", "https://api.deepseek.com").rstrip("/")
+
+# Duración de cada versión: el corto sirve para Shorts y Reels; el largo, para YouTube.
+VERSIONES = {
+    "corto": {"nombre": "Corto · Shorts y Reels", "formato": "vertical", "segundos": 50},
+    "largo": {"nombre": "Largo · YouTube", "formato": "horizontal", "segundos": 300},
+}
 
 # --- ElevenLabs (opcional; el plan gratis no permite uso comercial) ------------------------------
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "").strip()
@@ -63,6 +74,8 @@ def salud() -> list[str]:
     faltas = []
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         faltas.append("Falta FFmpeg (ffmpeg y ffprobe) en el PATH: sin él no hay voz ni render.")
+    if not DEEPSEEK_API_KEY:
+        faltas.append("Sin DEEPSEEK_API_KEY en .env: los guiones los escribirá Gemini (platform.deepseek.com › API keys).")
     if not GEMINI_API_KEY:
         faltas.append("Falta GEMINI_API_KEY en .env (gratis en https://aistudio.google.com/apikey).")
     return faltas
