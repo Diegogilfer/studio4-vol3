@@ -21,15 +21,15 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import config, flow, produccion, registro, subtitulos, voz  # noqa: E402
+from studio4 import config, flow, miniaturas, produccion, registro, subtitulos, voz  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
 
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
-PAGINAS = {"/": "index.html", "/flow/emparejar": "emparejar.html"}
-MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4)$")
+PAGINAS = {"/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
+MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
 class Error(Exception):
@@ -41,8 +41,9 @@ class Error(Exception):
 class Panel(BaseHTTPRequestHandler):
     server_version = "STUDIO4"
 
-    def log_message(self, fmt, *args):  # noqa: D401 - silencia el log por petición (el panel sondea cada 2 s)
-        pass
+    def log_message(self, fmt, *args):  # noqa: D401 - el panel sondea cada 2 s: solo con STUDIO4_LOG_PETICIONES=1
+        if os.getenv("STUDIO4_LOG_PETICIONES"):
+            logger.info("%s · Origin=%s · %s", self.address_string(), self.headers.get("Origin", "-"), fmt % args)
 
     # --- respuestas -----------------------------------------------------------------------
     def _json(self, datos: Any, codigo: int = 200) -> None:
@@ -172,6 +173,8 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(self._estado())
         if ruta == "/api/producciones":
             return self._json(produccion.listar())
+        if ruta == "/api/sesion-flow":  # lo mismo que ve la extensión, para la vista lateral
+            return self._json(flow.sesion_para_extension())
         raise Error(404, "No existe")
 
     def _estado(self) -> dict[str, Any]:
@@ -190,6 +193,7 @@ class Panel(BaseHTTPRequestHandler):
                 "paletas": {k: v["nombre"] for k, v in subtitulos.PALETAS.items()},
                 "gemini_ok": bool(config.GEMINI_API_KEY),
                 "salud": config.salud(),
+                "plataformas": {k: v["nombre"] for k, v in miniaturas.PLATAFORMAS.items()},
             },
         }
 
@@ -251,8 +255,17 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/escena/activa":
             flow.marcar_activa(int(self._cuerpo_json().get("escena", 0)))
             return self._json({"ok": True})
+        if ruta == "/api/miniaturas/generar":
+            produccion.generar_miniaturas(pid)
+            return self._json({"ok": True})
+        if ruta == "/api/miniaturas":
+            produccion.ajustar_miniatura(pid, self._cuerpo_json())
+            return self._json({"ok": True})
+        if ruta == "/api/miniaturas/flow":
+            flow.marcar_miniatura()
+            return self._json({"ok": True})
         if ruta == "/api/subir":
-            escena = int((query.get("escena") or ["0"])[0])
+            escena = int((query.get("escena") or ["0"])[0])  # 0 = imagen para la miniatura
             tmp = self._cuerpo_a_temporal()
             try:
                 res = flow.recibir(tmp, self.headers.get("Content-Type", ""), pista=escena, origen="subida")

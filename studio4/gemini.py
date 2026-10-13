@@ -36,18 +36,23 @@ def generar(
     temperatura: float = 0.7,
     detalle: str = "",
     produccion: str = "",
+    imagenes: Optional[list[bytes]] = None,
 ) -> str:
-    """Devuelve el texto de la respuesta. Con `esquema` (Pydantic) la respuesta es JSON validable."""
+    """Devuelve el texto de la respuesta. Con `esquema` (Pydantic) la respuesta es JSON validable.
+    `imagenes` (JPEG) van delante del texto, numeradas en el orden dado: Gemini las ve todas."""
     cfg = types.GenerateContentConfig(temperature=temperatura, system_instruction=sistema or None)
     if esquema is not None:
         cfg.response_mime_type = "application/json"
         cfg.response_schema = esquema
+    contenido: Any = prompt
+    if imagenes:
+        contenido = [types.Part.from_bytes(data=b, mime_type="image/jpeg") for b in imagenes] + [prompt]
 
     ultimo: Exception | None = None
     for modelo in _modelos(config.MODELO_TEXTO, config.MODELOS_TEXTO_RESERVA):
         for intento in range(3):
             try:
-                r = cliente().models.generate_content(model=modelo, contents=prompt, config=cfg)
+                r = cliente().models.generate_content(model=modelo, contents=contenido, config=cfg)
                 texto = (r.text or "").strip()
                 if texto:
                     registro.apuntar("Gemini (texto)", f"{detalle} · {modelo}", produccion=produccion)

@@ -1,0 +1,41 @@
+/* Vista compacta para el panel lateral de Chrome (≈360-500 px), junto a Google Flow. */
+body.lateral { background-attachment: scroll; font-size: 13.5px; }
+.l-cab { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-bottom: 1px solid var(--line); background: color-mix(in oklab, var(--bg-app) 85%, transparent); backdrop-filter: blur(18px); }
+.l-cab .logo { width: 30px; height: 30px; border-radius: 9px; font-size: 10px; flex-shrink: 0; }
+.l-titulo { display: grid; min-width: 0; flex: 1; }
+.l-titulo b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-titulo .meta { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-cab .pildora { height: 30px; padding: 0 10px; font-size: 12px; }
+.l-main { padding: 12px; display: grid; gap: 14px; }
+.l-main .trabajo { margin-top: 0; }
+.l-main .error { margin-top: 0; }
+.l-ahora { display: grid; gap: 10px; padding: 14px; border-radius: 20px; background: var(--bg-panel);
+  border: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent), 0 10px 30px -14px color-mix(in oklab, var(--accent) 60%, transparent); }
+.l-ahora .prompt { max-height: 170px; }
+.l-ahora .primario { height: 40px; }
+.l-ref { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: start; }
+.l-ref img { width: 96px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 10px; border: 2px solid color-mix(in oklab, var(--fg) 16%, transparent); }
+.l-ref .boton { height: 32px; font-size: 12.5px; margin-bottom: 6px; }
+.l-sub { margin-bottom: 8px; }
+.l-escenas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.l-escenas li { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 14px;
+  background: var(--bg-sidebar); border: 1px solid var(--line); cursor: pointer; }
+.l-escenas li:hover { border-color: var(--line-strong); }
+.l-escenas li.activa { border-color: color-mix(in oklab, var(--accent) 70%, transparent); background: color-mix(in oklab, var(--accent) 8%, var(--bg-sidebar)); }
+.l-num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 999px; font-weight: 600; font-size: 12px; background: rgb(238 241 246 / .07); }
+.l-escenas li.ok .l-num { background: color-mix(in oklab, var(--ok) 20%, transparent); color: var(--ok); }
+.l-txt { min-width: 0; font-size: 12.5px; color: var(--fg-muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.l-tomas { display: flex; gap: 4px; }
+.l-tomas .toma { width: 46px; aspect-ratio: 9 / 16; border-radius: 6px; }
+.l-tomas .toma span { display: none; }
+.l-pie { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.l-pie .boton { justify-content: center; }
+
+/* Nada se sale del panel estrecho: el <main> del estilo general es para pantalla ancha. */
+body.lateral main.l-main { max-width: none; padding: 12px; grid-template-columns: minmax(0, 1fr); }
+.l-main > *, .l-ahora > *, .l-escenas li > *, .l-ref > * { min-width: 0; }
+.l-ahora .prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.l-cab .pildora { flex-shrink: 0; }
+.l-tomas { flex-shrink: 0; }

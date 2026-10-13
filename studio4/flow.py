@@ -23,7 +23,7 @@ LADO_MINIMO = 256
 
 _extension: dict[str, Any] = {"ultima": 0.0, "version": ""}
 _eventos: list[dict[str, Any]] = []   # lo último que vio, mandó o falló la extensión (para diagnosticar)
-VERSION_EXTENSION = "2.1.0"           # la del manifest: si la cargada es más vieja, el panel pide recargarla
+VERSION_EXTENSION = "2.2.0"           # la del manifest: si la cargada es más vieja, el panel pide recargarla
 
 _EXT_POR_MIME = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
                  "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
@@ -92,8 +92,10 @@ def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = 
         if any(t.get("sha") == sha for t in e["tomas"]):
             return {"ok": True, "repetida": True, "escena": e["orden"]}
 
-    orden = _escena_destino(p, pista, prompt)
     ext = _EXT_POR_MIME.get(mime.split(";")[0].strip(), ".mp4" if tipo == "video" else ".png")
+    if (pista is None and p.get("recoger_para") == "miniatura") or pista == 0:
+        return _recibir_miniatura(pid, temporal, tipo, sha, origen)
+    orden = _escena_destino(p, pista, prompt)
     (produccion.carpeta(pid) / "tomas").mkdir(exist_ok=True)
 
     def cambio(q):
@@ -114,6 +116,30 @@ def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = 
     return {"ok": True, "escena": orden, "tipo": tipo}
 
 
+def _recibir_miniatura(pid: str, temporal: Path, tipo: str, sha: str, origen: str) -> dict[str, Any]:
+    carpeta = produccion.carpeta(pid) / "miniaturas" / "fuentes"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    destino = carpeta / f"f_{sha[:10]}.jpg"
+    if tipo == "video":  # de un vídeo, su fotograma central
+        medios.ffmpeg("-ss", f"{medios.duracion(temporal) / 2:.2f}", "-i", str(temporal), "-frames:v", "1", "-q:v", "2", str(destino))
+    else:
+        from PIL import Image
+        Image.open(temporal).convert("RGB").save(destino, "JPEG", quality=95)
+    produccion.anadir_fuente_miniatura(pid, destino.relative_to(produccion.carpeta(pid)).as_posix(),
+                                       "flow" if origen == "flow" else "subida")
+    registro.apuntar("Google Flow", "imagen para la miniatura", unidad="tomas", produccion=pid)
+    return {"ok": True, "escena": 0, "tipo": "miniatura"}
+
+
+def marcar_miniatura() -> None:
+    """Lo próximo que generes en Flow va a la miniatura (hasta que vuelvas a elegir una escena)."""
+    pid = produccion.activa()
+    if not pid:
+        raise ValueError("No hay producción activa")
+    produccion.modificar(pid, lambda p: p.update(recoger_para="miniatura"))
+    _extension["armado"] = time.time()
+
+
 def marcar_activa(orden: int) -> None:
     pid = produccion.activa()
     if not pid:
@@ -123,6 +149,7 @@ def marcar_activa(orden: int) -> None:
         if not 1 <= orden <= len(p["escenas"]):
             raise ValueError(f"No existe la escena {orden}")
         p["escena_activa"] = orden
+        p["recoger_para"] = "escenas"
     produccion.modificar(pid, cambio)
     # Al elegir/copiar una escena (desde Flow o desde el panel), la extensión empieza a recoger lo nuevo.
     _extension["armado"] = time.time()
@@ -157,6 +184,14 @@ def sesion_para_extension() -> dict[str, Any]:
         return {"viva": False, "titulo": p["tema"], "preparando": p["trabajo"].get("fase", "")}
     activa = p["escenas"][p["escena_activa"] - 1]
     previa = p["escenas"][activa["orden"] - 2] if activa["orden"] > 1 else None
+    siguiente = None
+    if p.get("recoger_para") == "miniatura":
+        m = p.get("miniaturas") or {}
+        prompt = m.get("prompt_flow") or (
+            f"Expressive close-up for a video thumbnail about: {p.get('titulo') or p['tema']}. High contrast, clean background, "
+            f"subject large and centered, no text. Style: {p.get('estilo_en', '')}")
+        siguiente = {"escena": 0, "estado": "miniatura", "prompt": prompt,
+                     "voz": "Imagen para la miniatura: genera una IMAGEN (no un vídeo)", "referencia": None, "referencia_de": ""}
     return {
         "viva": True,
         "titulo": p["titulo"] or p["tema"],
@@ -166,7 +201,7 @@ def sesion_para_extension() -> dict[str, Any]:
                      "tomas": len(e["tomas"]), "video": any(t["tipo"] == "video" for t in e["tomas"])}
                     for e in p["escenas"]],
         "armado": _extension.get("armado", 0),
-        "siguiente": {
+        "siguiente": siguiente or {
             "escena": activa["orden"], "estado": "esperando", "prompt": activa["prompt_flow"],
             "voz": activa["texto_voz"],
             "referencia": _referencia(pid, previa) if previa else None,

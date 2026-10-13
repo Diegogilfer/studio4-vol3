@@ -235,3 +235,66 @@ def test_copiar_escena_arma_la_extension_y_queda_registro(servidor):
     pedir("POST", "/api/flow/recibir", {"X-Studio4-Token": "codigo-de-prueba", "Content-Type": "video/mp4"}, b"no es un video")
     eventos = flow.estado_extension()["eventos"]
     assert eventos[0]["tipo"] == "rechazada" and eventos[1]["detalle"] == "prueba"
+
+
+# --- Miniaturas -----------------------------------------------------------------------------------
+from studio4 import miniaturas  # noqa: E402
+
+
+def _foto(ruta: Path, ancho=1920, alto=1080) -> Path:
+    from PIL import Image
+    Image.radial_gradient("L").resize((ancho, alto)).convert("RGB").save(ruta)
+    return ruta
+
+
+@pytest.mark.parametrize("pl", list(miniaturas.PLATAFORMAS))
+def test_miniatura_tamano_peso_y_texto_dentro_de_su_zona(tmp_path, pl, monkeypatch):
+    cajas = []
+    original = miniaturas._texto
+
+    def espiar(lienzo, texto, resalte, zona, alinear):
+        antes = lienzo.copy()
+        original(lienzo, texto, resalte, zona, alinear)
+        from PIL import ImageChops
+        cajas.append(ImageChops.difference(antes.convert("RGB"), lienzo.convert("RGB")).getbbox())
+    monkeypatch.setattr(miniaturas, "_texto", espiar)
+    salida = miniaturas.componer(_foto(tmp_path / "f.jpg"), tmp_path / f"{pl}.jpg", pl, "EL TERCER CORAZÓN SE PARA", "CORAZÓN")
+    from PIL import Image
+    p = miniaturas.PLATAFORMAS[pl]
+    assert Image.open(salida).size == (p["ancho"], p["alto"])
+    assert salida.stat().st_size < 2 * 1024 * 1024          # límite de YouTube
+    x0, y0, x1, y1 = cajas[0]
+    margen = 0.03                                            # contorno y sombra
+    assert y0 >= (p["zona"][1] - margen) * p["alto"] and y1 <= (p["zona"][3] + margen) * p["alto"]
+    if pl == "reels":                                        # dentro del recorte 3:4 del perfil (y 240..1680)
+        assert y0 >= 240 and y1 <= 1680
+
+
+def test_encuadre_sigue_al_sujeto():
+    from PIL import Image
+    im = Image.new("RGB", (1920, 1080), "black")
+    im.paste((255, 0, 0), (1700, 400, 1800, 600))           # sujeto rojo pegado a la derecha
+    recorte = miniaturas._encuadrar(im, 1080, 1920, fx=1750 / 1920, fy=0.5)
+    assert recorte.size == (1080, 1920)
+    assert recorte.getpixel((recorte.width - 200, 960))[0] > 200 or any(
+        recorte.getpixel((x, 960))[0] > 200 for x in range(0, 1080, 20))
+
+
+def test_plataformas_por_formato():
+    assert miniaturas.plataformas("vertical") == ["shorts", "reels"]
+    assert miniaturas.plataformas("horizontal") == ["youtube"]
+
+
+@hay_ffmpeg
+def test_imagen_de_flow_para_miniatura_se_compone(aislado):
+    _produccion("p7", recoger_para="miniatura", titulo="El faro sin farero")
+    foto = _foto(aislado / "flow.png", 1024, 1024)
+    res = flow.recibir(foto, "image/png")
+    assert res["tipo"] == "miniatura"
+    p = produccion.cargar("p7")
+    assert p["miniaturas"]["salidas"] == {"shorts": "miniaturas/shorts.jpg", "reels": "miniaturas/reels.jpg"}
+    assert (aislado / "p7" / "miniaturas" / "reels.jpg").exists()
+    produccion.ajustar_miniatura("p7", {"texto": "NADIE LO APAGÓ", "resalte": "NADIE"})
+    assert produccion.cargar("p7")["miniaturas"]["texto"] == "NADIE LO APAGÓ"
+    flow.marcar_activa(1)                                    # volver a una escena deja de recoger para la miniatura
+    assert produccion.cargar("p7")["recoger_para"] == "escenas"

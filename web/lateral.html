@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STUDIO #4 · junto a Flow</title>
+<link rel="stylesheet" href="/web/estilo.css">
+<link rel="stylesheet" href="/web/lateral.css">
+</head>
+<body class="lateral">
+<header class="l-cab">
+  <span class="logo">S4</span>
+  <div class="l-titulo"><b id="l-titulo">STUDIO #4</b><span id="l-meta" class="meta"></span></div>
+  <span id="l-flow" class="pildora aviso"><span class="piloto"></span><span>Flow</span></span>
+</header>
+
+<main class="l-main">
+  <p id="l-vacio" class="meta" hidden>No hay ninguna producción abierta. Crea una en <a href="/" target="_blank">STUDIO</a>.</p>
+  <div id="l-trabajo" class="trabajo" hidden>
+    <div class="trabajo-txt"><span id="l-fase"></span><span id="l-pct"></span></div>
+    <div class="progreso"><div id="l-barra"></div></div>
+  </div>
+  <p id="l-error" class="error" hidden></p>
+  <p id="l-vieja" class="error" hidden>Extensión antigua: en chrome://extensions pulsa ↻ y recarga la pestaña de Flow.</p>
+
+  <section id="l-ahora" class="l-ahora" hidden>
+    <div class="escena-cab"><b id="l-ahora-tit"></b><span id="l-ahora-est" class="etiqueta ahora"></span></div>
+    <p id="l-voz" class="voz-txt"></p>
+    <pre id="l-prompt" class="prompt"></pre>
+    <div class="fila" style="margin-top:0">
+      <button id="l-copiar" class="primario">Copiar prompt</button>
+      <span class="meta" id="l-aspecto"></span>
+    </div>
+    <div id="l-ref" class="l-ref" hidden>
+      <img id="l-ref-img" alt="">
+      <div><button id="l-copiar-ref" class="boton">Copiar imagen inicial</button>
+        <p class="meta">Pégala en Flow (Ctrl+V) en «Fotogramas a vídeo» para que la escena encaje con la anterior.</p></div>
+    </div>
+    <p class="meta" id="l-nota">Copia, pega en Flow y genera: el clip llegará solo aquí.</p>
+  </section>
+
+  <section>
+    <p class="meta l-sub">Escenas <span id="l-cuenta"></span></p>
+    <ol id="l-escenas" class="l-escenas"></ol>
+  </section>
+
+  <section class="l-pie">
+    <button id="l-render" class="primario">Renderizar vídeo</button>
+    <a class="boton" href="/" target="_blank">Abrir STUDIO completo ↗</a>
+  </section>
+
+  <details id="l-registro" class="registro">
+    <summary>Lo que ve la extensión</summary>
+    <ol id="l-eventos"></ol>
+  </details>
+</main>
+<script src="/web/lateral.js"></script>
+</body>
+</html>

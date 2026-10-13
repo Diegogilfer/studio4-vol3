@@ -199,6 +199,13 @@ $("escenas").addEventListener("change", async (ev) => {
   } catch (e) { aviso(e); }
 });
 
+// Flow en una ventana a la derecha (Google no deja meter Flow dentro de otra página).
+$("abrir-flow").addEventListener("click", () => {
+  const ancho = Math.round(screen.availWidth / 2);
+  window.open("https://labs.google/fx/tools/flow", "studio4-flow",
+    `popup,left=${screen.availLeft + ancho},top=${screen.availTop},width=${ancho},height=${screen.availHeight}`);
+});
+
 // Previsualización: pasar el ratón por una toma la reproduce.
 $("escenas").addEventListener("mouseover", (ev) => ev.target.closest(".toma")?.querySelector("video")?.play().catch(() => {}));
 $("escenas").addEventListener("mouseout", (ev) => ev.target.closest(".toma")?.querySelector("video")?.pause());
@@ -273,6 +280,90 @@ document.addEventListener("click", async (ev) => {
   setTimeout(() => { ev.target.textContent = "Copiar"; }, 1500);
 });
 
+// --- Miniaturas y entregas --------------------------------------------------------------------
+const PLATAFORMA_VIDEO = { youtube: "YouTube", shorts: "Shorts", reels: "Reels", feed: "Feed" };
+const nombreArchivo = (p, sufijo, ext) =>
+  `${(p.titulo || "studio4").replace(/[^\p{L}\p{N}\- ]+/gu, "").trim() || "studio4"} - ${sufijo}.${ext}`;
+
+function pintarMiniaturas(d) {
+  const { p, plataformas } = d;
+  const m = p.miniaturas;
+  const sinClips = !p.escenas.some((e) => e.elegida !== null);
+  $("m-generar").disabled = sinClips || p.trabajo.ocupado;
+  $("m-generar").firstChild.textContent = m ? "Volver a generar " : "Generar miniaturas ";
+  $("m-info").textContent = sinClips
+    ? "Las miniaturas salen de tus clips: elige al menos una toma en Escenas (o sube una imagen tras generar)."
+    : "Gemini elige el fotograma con más gancho de tus clips y escribe el texto. Todo se compone en tu PC.";
+  $("m-cuerpo").hidden = !m;
+  if (!m) return;
+
+  const v = encodeURIComponent(m.version || "");
+  $("m-entregas").innerHTML = Object.entries(m.salidas || {}).map(([pl, archivo]) => {
+    const clase = pl === "youtube" ? "h" : pl === "feed" ? "c" : "v";
+    const video = p.final ? `<a class="boton" href="${urlMedio(p.final.archivo)}" download="${esc(nombreArchivo(p, PLATAFORMA_VIDEO[pl], "mp4"))}">Vídeo MP4</a>` : "";
+    return `<div class="entrega ${clase}">
+      <b>${esc(plataformas[pl] || pl)}</b>
+      <img src="${urlMedio(archivo)}?v=${v}" alt="${esc(plataformas[pl] || pl)}">
+      <div class="fila">
+        <a class="boton" href="${urlMedio(archivo)}?v=${v}" download="${esc(nombreArchivo(p, `miniatura ${PLATAFORMA_VIDEO[pl]}`, "jpg"))}">Miniatura JPG</a>
+        ${video}
+      </div>
+    </div>`;
+  }).join("") + (p.final ? "" : `<p class="meta">El vídeo aparecerá aquí para descargar cuando lo renderices.</p>`);
+
+  const enfocado = document.activeElement;
+  if (enfocado !== $("m-texto")) $("m-texto").value = m.texto || "";
+  if (enfocado !== $("m-resalte")) $("m-resalte").value = m.resalte || "";
+  $("m-alternativas").innerHTML = (m.alternativas || []).map((t) =>
+    `<button class="chip-alt" data-alt="${esc(t)}">${esc(t)}</button>`).join("");
+  $("m-candidatos").innerHTML = m.candidatos.map((c, i) => `
+    <div class="toma ${i === m.elegido ? "elegida" : ""}" data-cand="${i}" title="${c.escena ? `Escena ${c.escena}` : c.origen === "flow" ? "Generada en Flow" : "Subida"}">
+      <img src="${urlMedio(c.archivo)}" alt="" loading="lazy"><span>${c.escena ? `esc. ${c.escena}` : c.origen === "flow" ? "Flow" : "subida"}</span>
+    </div>`).join("");
+}
+
+$("m-generar").addEventListener("click", async () => {
+  try { await api("/api/miniaturas/generar", {}); await refrescar(); } catch (e) { aviso(e); }
+});
+async function aplicarTexto() {
+  try { await api("/api/miniaturas", { texto: $("m-texto").value, resalte: $("m-resalte").value }); await refrescar(); }
+  catch (e) { aviso(e); }
+}
+$("m-aplicar").addEventListener("click", aplicarTexto);
+["m-texto", "m-resalte"].forEach((id) => $(id).addEventListener("keydown", (ev) => { if (ev.key === "Enter") aplicarTexto(); }));
+$("m-alternativas").addEventListener("click", async (ev) => {
+  const t = ev.target.dataset?.alt;
+  if (!t) return;
+  $("m-texto").value = t;
+  const palabras = t.split(/\s+/);
+  $("m-resalte").value = palabras.reduce((a, b) => (b.length > a.length ? b : a), "");
+  await aplicarTexto();
+});
+$("m-candidatos").addEventListener("click", async (ev) => {
+  const c = ev.target.closest("[data-cand]");
+  if (!c) return;
+  try { await api("/api/miniaturas", { elegido: Number(c.dataset.cand) }); await refrescar(); } catch (e) { aviso(e); }
+});
+$("m-flow").addEventListener("click", async () => {
+  try {
+    await api("/api/miniaturas/flow", {});
+    const prompt = estado.produccion.miniaturas?.prompt_flow;
+    if (prompt) await navigator.clipboard.writeText(prompt);
+    $("m-flow").textContent = prompt ? "Prompt copiado: genera una imagen en Flow" : "Listo: genera una imagen en Flow";
+    setTimeout(() => { $("m-flow").textContent = "Generar la imagen en Flow"; }, 4000);
+  } catch (e) { aviso(e); }
+});
+$("m-subir").addEventListener("change", async (ev) => {
+  const archivo = ev.target.files[0];
+  if (!archivo) return;
+  try {
+    await api("/api/subir?escena=0", undefined, {
+      method: "POST", headers: { "Content-Type": archivo.type || "image/jpeg" }, body: archivo,
+    });
+    await refrescar();
+  } catch (e) { aviso(e); } finally { ev.target.value = ""; }
+});
+
 // --- Ciclo -------------------------------------------------------------------------------------
 async function refrescar() {
   const [d, lista] = await Promise.all([api("/api/estado"), api("/api/producciones")]);
@@ -296,6 +387,7 @@ async function refrescar() {
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
   siCambia("subtitulos", { id: p.id, subtitulos: p.subtitulos, paletas: o.paletas }, pintarSubtitulos);
   siCambia("render", { p }, pintarRender);
+  siCambia("miniaturas", { p, plataformas: o.plataformas }, pintarMiniaturas);
   siCambia("publicar", { id: p.id, t: p.titulo, d: p.descripcion, g: p.guion, b: p.biblia }, () => pintarPublicar(p));
 }
 

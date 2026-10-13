@@ -56,6 +56,29 @@ La generación de imagen y de vídeo **por API** (Imagen/Veo) se cobra aparte, a
 5. Cuando todas las escenas tienen clip, **Renderizar vídeo**. Copia el título, la descripción y los hashtags
    desde «Para publicar».
 
+## Flow y STUDIO a la vez
+
+Google no deja meter Flow dentro de otra página, así que va al revés: **STUDIO entra en el panel
+lateral de Chrome, junto a Flow**. En la pestaña de Flow pulsa el icono **S4** de la extensión y se
+abre la vista compacta: la escena que toca con «Copiar prompt», la imagen inicial para la continuidad,
+y la lista de escenas con sus tomas. También puedes usar «Abrir Flow al lado» en el panel principal
+(abre Flow en una ventana a la derecha).
+
+## Miniaturas y entregas
+
+Con los clips elegidos, **Generar miniaturas**: Gemini (gratis) mira los fotogramas, elige el que más
+engancha, dónde está el sujeto, y escribe 2-4 palabras (con 3 alternativas). Se componen en tu PC:
+
+| Formato del vídeo | Entregas |
+|---|---|
+| Vertical 9:16 | Portada **Shorts** y portada **Reels** 1080×1920 (texto dentro del recorte 3:4 del perfil) |
+| Horizontal 16:9 | Miniatura **YouTube** 1280×720 (< 2 MB) |
+| Cuadrado 1:1 | Portada feed 1080×1080 |
+
+Puedes cambiar el texto, la palabra en amarillo y la imagen de fondo, subir la tuya o pulsar
+«Generar la imagen en Flow»: copia un prompt de miniatura y la próxima imagen que generes en Flow
+llega como fondo.
+
 ## Estructura
 
 ```
@@ -70,6 +93,7 @@ studio4/
   flow.py              fase 4: recibe los clips de la extensión y los coloca en su escena
   render.py            fase 5: FFmpeg
   subtitulos.py        subtítulos ASS palabra a palabra
+  miniaturas.py        miniaturas de YouTube, Shorts, Reels y feed (Gemini elige, Pillow compone)
   produccion.py        guarda cada producción en producciones/<id>/proyecto.json y lanza las fases
   medios.py            utilidades de FFmpeg/FFprobe
   registro.py          consumo del mes (llamadas a Gemini, tomas de Flow, créditos de ElevenLabs)

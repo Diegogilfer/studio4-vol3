@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import config, director, guion, render, subtitulos, voz
+from . import config, director, guion, miniaturas, render, subtitulos, voz
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -140,6 +140,7 @@ def crear(tema: str, segundos: int, formato: str, estilo: str, proveedor_voz: st
         "formato": formato, "estilo": estilo, "proveedor_voz": proveedor_voz, "estado": "escribiendo",
         "trabajo": {}, "guion": "", "titulo": "", "descripcion": "", "hashtags": [], "biblia": {},
         "escenas": [], "escena_activa": 1, "voz": None, "subtitulos": dict(subtitulos.POR_DEFECTO), "final": None,
+        "miniaturas": None, "recoger_para": "escenas",
     })
     activar(pid)
 
@@ -198,6 +199,63 @@ def renderizar(pid: str) -> None:
         modificar(pid, lambda q: q.update(estado="terminado", final={
             "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
     _en_fondo(pid, "Render", fase)
+
+
+# --- Miniaturas --------------------------------------------------------------------------------
+def generar_miniaturas(pid: str) -> None:
+    def fase():
+        p = cargar(pid)
+        base = carpeta(pid)
+        _avisar(pid, "Sacando fotogramas de tus clips", 15)
+        candidatos = miniaturas.extraer_candidatos(p, base)
+        # Las imágenes que subiste o generaste en Flow para la miniatura siguen siendo candidatas.
+        previas = [c for c in (p.get("miniaturas") or {}).get("candidatos", []) if c.get("origen")]
+        candidatos += [c for c in previas if (base / c["archivo"]).exists()]
+        _avisar(pid, "Gemini elige el fotograma y escribe el texto", 45)
+        e = miniaturas.analizar(p, base, candidatos)
+        _avisar(pid, "Componiendo las miniaturas", 85)
+
+        def aplicar(q):
+            q["miniaturas"] = {"candidatos": candidatos, "elegido": e["mejor"], "texto": e["texto"],
+                               "resalte": e["resalte"], "alternativas": e["alternativas"],
+                               "prompt_flow": e["prompt_flow_en"], "foco_x": e["foco_x"], "foco_y": e["foco_y"]}
+            miniaturas.componer_todas(q, base)
+        modificar(pid, aplicar)
+    _en_fondo(pid, "Miniaturas", fase)
+
+
+def ajustar_miniatura(pid: str, datos: dict[str, Any]) -> dict[str, Any]:
+    def cambio(p):
+        m = p.get("miniaturas")
+        if not m:
+            raise ValueError("Primero genera las miniaturas")
+        if "elegido" in datos:
+            i = int(datos["elegido"])
+            if not 0 <= i < len(m["candidatos"]):
+                raise ValueError("Esa imagen no existe")
+            if i != m["elegido"]:
+                m.update(elegido=i, foco_x=0.5, foco_y=0.5)
+        if "texto" in datos:
+            m["texto"] = " ".join(str(datos["texto"]).split())[:60]
+        if "resalte" in datos:
+            m["resalte"] = str(datos["resalte"]).strip()[:30]
+        for k in ("foco_x", "foco_y"):
+            if k in datos:
+                m[k] = min(max(float(datos[k]), 0.0), 1.0)
+        miniaturas.componer_todas(p, carpeta(pid))
+    return modificar(pid, cambio)
+
+
+def anadir_fuente_miniatura(pid: str, archivo: str, origen: str) -> None:
+    """Una imagen subida o generada en Flow para la miniatura: pasa a ser la elegida."""
+    def cambio(p):
+        m = p.get("miniaturas") or {"candidatos": [], "texto": " ".join((p.get("titulo") or p["tema"]).split()[:3]),
+                                    "resalte": "", "alternativas": [], "prompt_flow": ""}
+        m["candidatos"].append({"archivo": archivo, "escena": 0, "origen": origen})
+        m.update(elegido=len(m["candidatos"]) - 1, foco_x=0.5, foco_y=0.5)
+        p["miniaturas"] = m
+        miniaturas.componer_todas(p, carpeta(pid))
+    modificar(pid, cambio)
 
 
 # --- Ediciones desde el panel -------------------------------------------------------------------

@@ -150,6 +150,7 @@
         <div class="fila"><button class="btn" id="copiar">Copiar prompt</button><span class="nota" id="aspecto"></span></div>
         <div class="fila ref" id="ref" hidden><img id="ref-img" alt=""><button class="btn sec" id="copiar-ref">Copiar imagen inicial</button></div>
         <div class="nota" id="nota"></div>
+        <button class="btn sec" id="lateral">Abrir STUDIO al lado ⇥</button>
       </div>
     </div>`;
   const $ = (id) => sombra.getElementById(id);
@@ -163,8 +164,9 @@
     if (!viva) { $("tit").textContent = sesion?.preparando ? `STUDIO #4 · ${sesion.preparando}` : "STUDIO #4"; return; }
     const s = sesion.siguiente;
     const e = sesion.escenas[s.escena - 1];
-    $("tit").textContent = `Escena ${s.escena} de ${sesion.total}${e?.video ? " · ✓ ya tiene vídeo" : ""}`;
-    $("voz").textContent = `«${s.voz}»`;
+    $("tit").textContent = s.escena === 0 ? "Imagen para la miniatura"
+      : `Escena ${s.escena} de ${sesion.total}${e?.video ? " · ✓ ya tiene vídeo" : ""}`;
+    $("voz").textContent = s.escena === 0 ? s.voz : `«${s.voz}»`;
     $("prompt").textContent = s.prompt;
     $("aspecto").textContent = `Pon Flow en ${sesion.aspecto}`;
     $("puntos").innerHTML = sesion.escenas.map((x) =>
@@ -199,14 +201,19 @@
   }
 
   $("cab").addEventListener("click", (ev) => { if (!ev.target.closest("button")) $("caja").classList.toggle("min"); });
-  $("ant").addEventListener("click", () => sesion?.viva && sesion.siguiente.escena > 1 && irA(sesion.siguiente.escena - 1));
-  $("sig").addEventListener("click", () => sesion?.viva && sesion.siguiente.escena < sesion.total && irA(sesion.siguiente.escena + 1));
+  $("ant").addEventListener("click", () => sesion?.viva && irA(Math.max(1, sesion.siguiente.escena - 1)));
+  $("sig").addEventListener("click", () => sesion?.viva && irA(Math.min(sesion.total, sesion.siguiente.escena + 1)));
   $("copiar").addEventListener("click", async () => {
     await navigator.clipboard.writeText($("prompt").textContent);
     $("copiar").textContent = "Copiado ✓ · pégalo en Flow";
     setTimeout(() => { $("copiar").textContent = "Copiar prompt"; }, 2000);
-    irA(sesion.siguiente.escena);   // confirma que lo que llegue ahora es de esta escena
+    // Confirma a qué va lo que llegue ahora (una escena o, con escena 0, la miniatura) y empieza a recoger.
+    if (sesion.siguiente.escena > 0) irA(sesion.siguiente.escena);
     armar(sesion.siguiente.escena);
+  });
+  $("lateral").addEventListener("click", async () => {
+    const r = await chrome.runtime.sendMessage({ tipo: "abrir-lateral" }).catch(() => null);
+    if (!r?.ok) $("lateral").textContent = "Pulsa el icono S4 de la barra de Chrome";
   });
   $("copiar-ref").addEventListener("click", async () => {
     try {

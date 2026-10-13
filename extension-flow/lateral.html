@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>STUDIO #4</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #07080d; color: #eef1f6; font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+    iframe { display: block; border: 0; width: 100%; height: calc(100% - 34px); }
+    .barra { height: 34px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 12px;
+             border-top: 1px solid #232736; font-size: 12px; }
+    .barra a { color: #9aa3b2; text-decoration: none; }
+    .barra a:hover { color: #eef1f6; }
+    .aviso { padding: 24px 18px; display: grid; gap: 10px; }
+    .aviso b { font-size: 16px; }
+    .aviso p { margin: 0; color: #9aa3b2; }
+    code { background: #12141d; border: 1px solid #232736; border-radius: 8px; padding: 2px 6px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div id="sin-studio" class="aviso" hidden>
+    <b>STUDIO #4 no está abierto</b>
+    <p>Arráncalo con <code>iniciar.bat</code> (o <code>python servidor.py</code>). Este panel se conecta solo en cuanto responda.</p>
+    <p id="direccion"></p>
+  </div>
+  <iframe id="studio" title="STUDIO #4" allow="clipboard-read; clipboard-write" hidden></iframe>
+  <div class="barra"><a href="ventana.html">Ajustes de la extensión</a></div>
+  <script src="lateral.js"></script>
+</body>
+</html>

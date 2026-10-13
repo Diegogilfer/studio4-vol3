@@ -212,6 +212,16 @@ select.campo option { background: var(--bg-elevated); }
 .registro .error b, .registro .rechazada b { color: var(--danger); }
 .registro .enviando b { color: var(--accent); }
 #ext-vieja { margin: 0 0 14px; }
+.entregas { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.entrega { display: grid; gap: 10px; padding: 12px; border-radius: 20px; background: var(--bg-sidebar); border: 2px solid color-mix(in oklab, var(--fg) 10%, transparent); }
+.entrega img { display: block; border-radius: 12px; border: 2px solid color-mix(in oklab, var(--fg) 16%, transparent); background: #000; }
+.entrega.h img { width: 400px; max-width: 100%; aspect-ratio: 16 / 9; }
+.entrega.v img { height: 360px; aspect-ratio: 9 / 16; }
+.entrega.c img { width: 300px; aspect-ratio: 1; }
+.entrega b { font-size: 13.5px; }
+.entrega .fila { margin-top: 0; }
+.chip-alt { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed var(--line-strong); background: none; font-size: 12.5px; color: var(--fg-muted); cursor: pointer; }
+.chip-alt:hover { color: var(--fg); border-color: var(--accent); }
 audio { width: 100%; height: 40px; }
 .final { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; align-items: start; }
 @media (max-width: 900px) { .final { grid-template-columns: 1fr; } }

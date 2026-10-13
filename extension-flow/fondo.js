@@ -7,6 +7,9 @@
 const POR_DEFECTO = { servidor: "http://127.0.0.1:8000", codigo: "", activo: true };
 const VERSION = chrome.runtime.getManifest().version;
 
+// El icono S4 abre STUDIO en el panel lateral de Chrome, al lado de Flow (los ajustes están abajo del panel).
+chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
 async function ajustes() {
   return { ...POR_DEFECTO, ...(await chrome.storage.local.get(["servidor", "codigo", "activo"])) };
 }
@@ -138,6 +141,13 @@ async function imagenPng(url) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _quien, responder) => {
+  if (msg?.tipo === "abrir-lateral") {
+    // Solo funciona como respuesta a un clic; si Chrome no lo permite, se indica el icono.
+    chrome.sidePanel.open({ tabId: _quien.tab.id })
+      .then(() => responder({ ok: true }))
+      .catch(() => responder({ ok: false }));
+    return true;
+  }
   if (msg?.tipo === "diagnostico") {
     diagnostico(msg.evento, msg.detalle).then(() => responder({ ok: true }));
     return true;
