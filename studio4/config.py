@@ -49,6 +49,13 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
 ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_multilingual_v2")
 ELEVENLABS_CREDITOS_MES = int(os.getenv("ELEVENLABS_CREDITOS_MES", "10000"))
 
+# --- Modo sin coste: STUDIO4_SIN_PAGO=1 apaga todo lo que se cobra (DeepSeek, ElevenLabs).
+# El guion lo escribe Gemini y la voz es Gemini TTS: sirve para probar la secuencia entera gratis.
+SIN_PAGO = os.getenv("STUDIO4_SIN_PAGO", "").strip().lower() in ("1", "true", "si", "sí")
+if SIN_PAGO:
+    DEEPSEEK_API_KEY = ""
+    ELEVENLABS_API_KEY = ""
+
 # --- Render -----------------------------------------------------------------------------------
 FORMATOS = {
     "vertical": {"ancho": 1080, "alto": 1920, "aspecto": "9:16", "nombre": "Vertical 9:16 (Shorts, Reels, TikTok)"},
@@ -78,7 +85,9 @@ def salud() -> list[str]:
     faltas = []
     if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
         faltas.append("Falta FFmpeg (ffmpeg y ffprobe) en el PATH: sin él no hay voz ni render.")
-    if not DEEPSEEK_API_KEY:
+    if SIN_PAGO:
+        faltas.append("Modo sin coste (STUDIO4_SIN_PAGO=1): el guion lo escribe Gemini y no se usa nada de pago.")
+    elif not DEEPSEEK_API_KEY:
         faltas.append("Sin DEEPSEEK_API_KEY en .env: los guiones los escribirá Gemini (platform.deepseek.com › API keys).")
     if not GEMINI_API_KEY:
         faltas.append("Falta GEMINI_API_KEY en .env (gratis en https://aistudio.google.com/apikey).")

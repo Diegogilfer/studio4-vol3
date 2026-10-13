@@ -117,6 +117,10 @@ document.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click"
 
 function pintarAsistente() {
   const p = estado?.produccion;
+  // Con un guion aprobado, la caja se pliega a una línea: lo importante pasa a ser la ejecución.
+  const plegada = !!(p && p.guion_aprobado && !empezarOtro);
+  $("crear").classList.toggle("plegada", plegada);
+  if (plegada) $("a-compacta-txt").textContent = `Trabajando en «${p.titulo || p.tema}». Su guion ya está aprobado.`;
   const enGuion = p && !p.guion_aprobado && !empezarOtro;
   const visible = enGuion ? 4 : paso;
   document.querySelectorAll(".paso").forEach((el) => { el.hidden = Number(el.dataset.paso) !== visible; });
@@ -190,6 +194,16 @@ $("a-crear").addEventListener("click", async () => {
   } catch (e) { aviso(e); } finally { $("a-crear").disabled = false; }
 });
 $("a-otro").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); });
+$("a-nuevo").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); $("a-idea").focus(); });
+
+// La barra superior marca la sección que tienes delante.
+const secciones = ["crear", "flow-sec", "render-sec", "entregas-sec"];
+const navObservador = new IntersectionObserver((entradas) => {
+  const visible = entradas.filter((e) => e.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+  if (!visible) return;
+  document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("activo", a.getAttribute("href") === `#${visible.target.id}`));
+}, { rootMargin: "-80px 0px -45% 0px", threshold: [0, 0.25, 0.5] });
+secciones.forEach((id) => navObservador.observe($(id)));
 
 // Paso 4: progreso de la investigación y editor del guion
 function pintarProgresoGuion(p) {

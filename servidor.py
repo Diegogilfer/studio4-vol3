@@ -62,6 +62,8 @@ class Panel(BaseHTTPRequestHandler):
             raise Error(404, "No existe")
         tam = ruta.stat().st_size
         tipo = mimetypes.guess_type(ruta.name)[0] or "application/octet-stream"
+        if tipo.startswith("text/") or tipo in ("application/javascript", "application/json"):
+            tipo += "; charset=utf-8"   # las tildes nunca dependen de lo que adivine el navegador
         ini, fin, codigo = 0, tam - 1, 200
         rango = re.match(r"bytes=(\d*)-(\d*)", self.headers.get("Range", ""))
         if rango and tam:  # los <video> del navegador piden trozos para poder adelantar
@@ -221,6 +223,7 @@ class Panel(BaseHTTPRequestHandler):
                 "paletas": {k: v["nombre"] for k, v in subtitulos.PALETAS.items()},
                 "gemini_ok": bool(config.GEMINI_API_KEY),
                 "deepseek_ok": bool(config.DEEPSEEK_API_KEY),
+                "sin_pago": config.SIN_PAGO,
                 "versiones": config.VERSIONES,
                 "salud": config.salud(),
                 "plataformas": {k: v["nombre"] for k, v in miniaturas.PLATAFORMAS.items()},

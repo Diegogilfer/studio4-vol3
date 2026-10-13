@@ -344,6 +344,7 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
     monkeypatch.setattr(investigacion, "investigar", investigar)
     monkeypatch.setattr(deepseek, "disponible", lambda: True)
     monkeypatch.setattr(deepseek, "generar_json", escribir_json)
+    monkeypatch.setattr(guion, "_ajustar_largo", lambda texto, objetivo, produccion: texto)  # se prueba aparte
     pids = produccion.crear("El faro sin farero", ["corto", "largo"], "documental", "gemini")
     corto, largo = (_esperar(pid) for pid in pids)
     assert llamadas == {"investigar": 1, "deepseek": 1}
@@ -403,3 +404,13 @@ def test_peticion_de_guion_lleva_tono_publico_y_youtube():
 def test_youtube_desconectado_no_bloquea_el_guion(aislado, monkeypatch):
     from studio4 import youtube
     assert youtube.disponible() is False and youtube.contexto_para_guion("pulpos") == {}
+
+
+def test_guion_fuera_de_largo_se_ajusta_y_solo_si_mejora(monkeypatch):
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    corto = "palabra " * 50
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"guion": "palabra " * 98})
+    assert len(guion._ajustar_largo(corto, 100, "").split()) == 98          # 50 → 98: se acerca, se acepta
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"guion": "palabra " * 20})
+    assert len(guion._ajustar_largo(corto, 100, "").split()) == 50          # 50 → 20: empeora, se queda el original
+    assert guion._ajustar_largo("palabra " * 95, 100, "") == "palabra " * 95  # dentro del 15 %: ni se toca

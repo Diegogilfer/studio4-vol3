@@ -14,7 +14,8 @@ from . import deepseek, gemini
 
 logger = logging.getLogger("studio4.guion")
 
-PALABRAS_POR_SEGUNDO = 2.4  # locución en español a ritmo de vídeo
+PALABRAS_POR_SEGUNDO = 2.3  # medido con Gemini TTS en español (84 palabras → 36,5 s)
+DESVIO_MAXIMO = 0.15         # si el guion se aparta más que esto de lo pedido, se ajusta con otra pasada
 
 PROHIBIDO = [
     "Imagina", "¿Sabías que", "En un mundo", "sumérgete", "adentrémonos", "fascinante", "increíble", "asombroso",
@@ -94,13 +95,39 @@ def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str
         datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
 
     salida: dict[str, Any] = {"titulo_provisional": str(datos.get("titulo_provisional", "")).strip(), "autor": autor}
-    for v in versiones:
+    for v, seg in versiones.items():
         bloque = datos.get(v) or {}
         texto = _limpiar(str(bloque.get("guion", "")))
         if len(texto.split()) < 15:
             raise RuntimeError(f"{autor} no devolvió el guion {v}. Vuelve a intentarlo.")
+        texto = _ajustar_largo(texto, int(seg * PALABRAS_POR_SEGUNDO), produccion)
         salida[v] = {"guion": texto, "ganchos": [_limpiar(str(g)) for g in bloque.get("ganchos", [])][:3]}
     return salida
+
+
+def _ajustar_largo(texto: str, objetivo: int, produccion: str) -> str:
+    """Si el guion se pasa o se queda corto (más de un 15 %), una pasada lo lleva a la longitud pedida
+    sin perder datos ni estilo. Así la voz dura lo que elegiste en el asistente."""
+    n = len(texto.split())
+    if abs(n - objetivo) <= objetivo * DESVIO_MAXIMO:
+        return texto
+    accion = "Acórtalo" if n > objetivo else "Alárgalo con datos del mismo tema (sin inventar)"
+    sistema = "Eres editor de guiones de vídeo. Devuelve JSON: {\"guion\": \"...\"}. Mismo estilo, mismas reglas, sin acotaciones."
+    prompt = (f"{accion} a {objetivo} palabras (ahora tiene {n}). Conserva el gancho, los datos concretos y el cierre.\n\n{texto}")
+    try:
+        if deepseek.disponible():
+            nuevo = deepseek.generar_json(sistema, prompt, temperatura=0.4, detalle="ajuste de largo", produccion=produccion)
+        else:
+            crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=sistema, temperatura=0.4,
+                                   detalle="ajuste de largo", produccion=produccion)
+            m = re.search(r"\{.*\}", crudo, re.DOTALL)
+            nuevo = json.loads(m.group(0) if m else crudo)
+        ajustado = _limpiar(str(nuevo.get("guion", "")))
+    except Exception as e:  # noqa: BLE001 - si el ajuste falla, el guion original sigue valiendo
+        logger.warning("No se pudo ajustar el largo del guion: %s", e)
+        return texto
+    # Solo se acepta si de verdad se acerca a lo pedido.
+    return ajustado if abs(len(ajustado.split()) - objetivo) < abs(n - objetivo) else texto
 
 
 def frases_prohibidas(texto: str) -> list[str]:
