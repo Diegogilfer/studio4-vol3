@@ -26,6 +26,9 @@ def aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(produccion, "_ACTIVA", tmp_path / "activa.txt")
     monkeypatch.setattr(registro, "_MOVIMIENTOS", tmp_path / "movimientos.jsonl")
     monkeypatch.setattr(registro, "_CONSUMO", tmp_path / "consumo.json")
+    from studio4 import youtube   # las pruebas nunca consultan YouTube de verdad
+    monkeypatch.setattr(config, "YOUTUBE_API_KEY", "")
+    monkeypatch.setattr(youtube, "TOKEN", tmp_path / "youtube_token.json")
     return tmp_path
 
 
@@ -399,5 +402,4 @@ def test_peticion_de_guion_lleva_tono_publico_y_youtube():
 
 def test_youtube_desconectado_no_bloquea_el_guion(aislado, monkeypatch):
     from studio4 import youtube
-    monkeypatch.setattr(youtube, "TOKEN", aislado / "no_existe.json")
-    assert youtube.conectado() is False and youtube.contexto_para_guion("pulpos") == {}
+    assert youtube.disponible() is False and youtube.contexto_para_guion("pulpos") == {}

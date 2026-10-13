@@ -196,11 +196,11 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     if dossier is None:
         _avisar(pids, "Gemini investiga el tema", 10)
         dossier = investigacion.investigar(idea, produccion=pids[0])
-        if youtube.conectado():
-            _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
-            dossier["youtube"] = youtube.contexto_para_guion(idea)
-        for pid in pids:
-            modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
+    if youtube.disponible() and not dossier.get("youtube"):   # también al reescribir con una investigación vieja
+        _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
+        dossier["youtube"] = youtube.contexto_para_guion(idea)
+    for pid in pids:
+        modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
     autor = "DeepSeek" if deepseek.disponible() else "Gemini"
     _avisar(pids, f"{autor} escribe el guion a partir de la investigación", 45)
     versiones = {cargar(pid)["version"]: segundos[cargar(pid)["version"]] for pid in pids}

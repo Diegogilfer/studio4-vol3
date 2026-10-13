@@ -33,6 +33,10 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")   # o deepseek-v4-pro, más fino y más caro
 DEEPSEEK_URL = os.getenv("DEEPSEEK_URL", "https://api.deepseek.com").rstrip("/")
 
+# --- YouTube (solo lectura). Con la clave basta para datos públicos: búsquedas y estadísticas de tu canal.
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
+YOUTUBE_CANAL = os.getenv("YOUTUBE_CANAL", "").strip()   # @usuario o id UC… de tu canal
+
 # Duración de cada versión: el corto sirve para Shorts y Reels; el largo, para YouTube.
 VERSIONES = {
     "corto": {"nombre": "Corto · Shorts y Reels", "formato": "vertical", "segundos": 50},

@@ -1,5 +1,8 @@
-"""YouTube en solo lectura (tu misma cuenta de Google): datos de tu canal y lo que ya existe sobre un tema.
-STUDIO no publica nada: pide únicamente los permisos youtube.readonly y yt-analytics.readonly.
+"""YouTube en solo lectura: datos de tu canal y lo que ya existe sobre un tema. STUDIO no publica nada.
+
+Dos formas de entrar (vale cualquiera):
+- YOUTUBE_API_KEY + YOUTUBE_CANAL (@usuario o id): datos públicos, sin autorizar nada.
+- «Conectar YouTube» (OAuth con youtube.readonly y yt-analytics.readonly): además, estadísticas privadas.
 
 Sirve a la investigación del guion: qué títulos funcionan en tu canal (tono) y qué vídeos hay ya sobre la
 idea (para buscar un ángulo distinto en vez de repetir lo mismo).
@@ -42,10 +45,31 @@ def _cliente() -> dict[str, str]:
 
 
 def conectado() -> bool:
+    """¿Hay autorización OAuth guardada?"""
     try:
         return bool(json.loads(TOKEN.read_text(encoding="utf-8")).get("refresh_token"))
     except (OSError, ValueError):
         return False
+
+
+def disponible() -> bool:
+    """¿Se puede consultar YouTube (con autorización o con la clave de API)?"""
+    return conectado() or bool(config.YOUTUBE_API_KEY)
+
+
+def guardar_canal(canal: str) -> str:
+    """Guarda tu canal (@usuario, id UC… o enlace) en .env para leer sus datos públicos con la clave."""
+    import re
+    from dotenv import set_key
+    canal = canal.strip()
+    m = re.search(r"(UC[\w-]{22})|(@[\w.-]+)", canal)
+    if not m:
+        raise ValueError("Escribe tu canal como @usuario o pega su enlace (youtube.com/@usuario).")
+    valor = m.group(0)
+    set_key(str(config.ENV_FILE), "YOUTUBE_CANAL", valor, quote_mode="never")
+    config.YOUTUBE_CANAL = valor
+    _cache.clear()
+    return valor
 
 
 # --- Autorización (una vez; solo lectura) --------------------------------------------------------
@@ -108,7 +132,13 @@ def _acceso() -> str:
 
 
 def _get(ruta: str, **params: Any) -> dict[str, Any]:
-    r = requests.get(f"{API}/{ruta}", params=params, timeout=20, headers={"Authorization": f"Bearer {_acceso()}"})
+    if conectado():
+        cabeceras = {"Authorization": f"Bearer {_acceso()}"}
+    elif config.YOUTUBE_API_KEY:
+        cabeceras, params = {}, {**params, "key": config.YOUTUBE_API_KEY}
+    else:
+        raise RuntimeError("YouTube no está configurado: pon YOUTUBE_API_KEY en .env o pulsa «Conectar YouTube».")
+    r = requests.get(f"{API}/{ruta}", params=params, timeout=20, headers=cabeceras)
     if not r.ok:
         raise RuntimeError(f"YouTube {ruta}: {r.status_code} {r.text[:200]}")
     return r.json()
@@ -137,15 +167,29 @@ def _estadisticas(ids: list[str]) -> list[dict[str, Any]]:
 def canal() -> dict[str, Any]:
     """Tu canal y tus vídeos más vistos (se guarda 15 min para no gastar cupo)."""
     def leer():
-        d = _get("channels", part="snippet,statistics,contentDetails", mine="true")
+        if conectado():
+            filtro = {"mine": "true"}
+        elif config.YOUTUBE_CANAL.startswith("UC"):
+            filtro = {"id": config.YOUTUBE_CANAL}
+        elif config.YOUTUBE_CANAL:
+            filtro = {"forHandle": config.YOUTUBE_CANAL}
+        else:
+            raise RuntimeError("Falta tu canal: dime tu @usuario de YouTube.")
+        d = _get("channels", part="snippet,statistics,contentDetails", **filtro)
         if not d.get("items"):
-            raise RuntimeError("Esta cuenta de Google no tiene canal de YouTube.")
+            raise RuntimeError(f"No encuentro el canal «{config.YOUTUBE_CANAL}» en YouTube." if not conectado()
+                               else "Esta cuenta de Google no tiene canal de YouTube.")
         ch = d["items"][0]
         subidas = ch["contentDetails"]["relatedPlaylists"]["uploads"]
-        lista = _get("playlistItems", part="contentDetails", playlistId=subidas, maxResults=50)
+        try:
+            lista = _get("playlistItems", part="contentDetails", playlistId=subidas, maxResults=50)
+        except RuntimeError as e:
+            if " 404 " not in str(e):
+                raise
+            lista = {}   # canal sin vídeos públicos: YouTube responde 404 en vez de una lista vacía
         videos = _estadisticas([i["contentDetails"]["videoId"] for i in lista.get("items", [])])
         registro.apuntar("YouTube (lectura)", "datos del canal", unidad="consultas")
-        return {"nombre": ch["snippet"]["title"], "suscriptores": int(ch["statistics"].get("subscriberCount", 0)),
+        return {"id": ch["id"], "nombre": ch["snippet"]["title"], "suscriptores": int(ch["statistics"].get("subscriberCount", 0)),
                 "vistas": int(ch["statistics"].get("viewCount", 0)), "videos": int(ch["statistics"].get("videoCount", 0)),
                 "foto": ch["snippet"]["thumbnails"].get("default", {}).get("url", ""),
                 "mas_vistos": sorted(videos, key=lambda v: -v["vistas"])[:10], "recientes": videos[:10]}
@@ -164,7 +208,7 @@ def sobre_el_tema(tema: str, n: int = 8) -> list[dict[str, Any]]:
 
 def contexto_para_guion(tema: str) -> dict[str, Any]:
     """Lo que la investigación pasa a DeepSeek. Si YouTube no está conectado o falla, vacío (no bloquea)."""
-    if not conectado():
+    if not disponible():
         return {}
     salida: dict[str, Any] = {}
     try:

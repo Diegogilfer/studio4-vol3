@@ -72,7 +72,11 @@ async function cargarYoutube() {
   if (canal.conectado && canal.nombre) {
     p.className = "pildora ok"; p.removeAttribute("href");
     $("yt-txt").textContent = `${canal.nombre} · ${miles(canal.suscriptores)} subs`;
-    p.title = `Conectado en solo lectura. Tus más vistos: ${canal.mas_vistos.slice(0, 3).map((v) => v.titulo).join(" · ")}`;
+    p.title = `Solo lectura. Tus más vistos: ${canal.mas_vistos.slice(0, 3).map((v) => v.titulo).join(" · ")}`;
+  } else if (canal.conectado && canal.sin_canal) {
+    p.className = "pildora aviso"; p.href = "#";
+    $("yt-txt").textContent = "YouTube: ¿cuál es tu canal?";
+    p.title = `${canal.error} La búsqueda de temas ya funciona.`;
   } else {
     p.className = "pildora"; p.href = "/youtube/conectar";
     $("yt-txt").textContent = canal.error ? "Reconectar YouTube" : "Conectar YouTube";
@@ -82,6 +86,13 @@ async function cargarYoutube() {
     ? "Con tu canal conectado, el guion tendrá en cuenta el tono de tus vídeos más vistos y buscará un ángulo que no esté ya en YouTube."
     : "";
 }
+$("yt-pildora").addEventListener("click", async (ev) => {
+  if (!canal?.sin_canal) return;   // sin clave ni autorización, el enlace lleva a «Conectar YouTube»
+  ev.preventDefault();
+  const valor = prompt("Tu canal de YouTube (@usuario o enlace):");
+  if (!valor) return;
+  try { await api("/api/youtube/canal", { canal: valor }); await cargarYoutube(); } catch (e) { aviso(e); }
+});
 const params = new URLSearchParams(location.search);
 if (params.get("youtube")) {
   history.replaceState(null, "", location.pathname);

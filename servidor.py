@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+
+import requests
 import os
 import re
 import sys
@@ -171,12 +173,14 @@ class Panel(BaseHTTPRequestHandler):
             youtube.completar((q.get("code") or [""])[0], (q.get("state") or [""])[0])
             return self._redirigir("/?youtube=ok")
         if ruta == "/api/youtube":
-            if not youtube.conectado():
+            if not youtube.disponible():
                 return self._json({"conectado": False})
+            modo = "autorizado" if youtube.conectado() else "clave"
             try:
-                return self._json({"conectado": True, **youtube.canal()})
-            except RuntimeError as e:
-                return self._json({"conectado": youtube.conectado(), "error": str(e)})
+                return self._json({"conectado": True, "modo": modo, **youtube.canal()})
+            except (RuntimeError, requests.RequestException) as e:
+                # Con la clave sin canal, la búsqueda de temas funciona igual: solo falta saber tu canal.
+                return self._json({"conectado": True, "modo": modo, "sin_canal": True, "error": str(e)})
         if ruta in PAGINAS:
             return self._archivo(config.WEB / PAGINAS[ruta])
         if ruta.startswith("/web/"):
@@ -257,6 +261,8 @@ class Panel(BaseHTTPRequestHandler):
         self._solo_panel()
         if ruta == "/api/flow/renovar":
             return self._json({"ok": True, "codigo": config.renovar_token_flow()})
+        if ruta == "/api/youtube/canal":
+            return self._json({"ok": True, "canal": youtube.guardar_canal(str(self._cuerpo_json().get("canal", "")))})
         if ruta == "/api/youtube/desconectar":
             youtube.desconectar()
             return self._json({"ok": True})
