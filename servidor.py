@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import config, flow, guion, miniaturas, produccion, registro, subtitulos, voz, youtube  # noqa: E402
+from studio4 import config, flow, guion, miniaturas, produccion, registro, render, subtitulos, voz, youtube  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -199,6 +199,11 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(self._estado())
         if ruta == "/api/producciones":
             return self._json(produccion.listar())
+        if ruta == "/api/subtitulos/vista":   # fotograma de muestra con los subtítulos actuales
+            pid = produccion.activa()
+            if not pid:
+                raise Error(404, "No hay producción activa")
+            return self._archivo(render.vista_subtitulos(produccion.cargar(pid), produccion.carpeta(pid)))
         if ruta == "/api/sesion-flow":  # lo mismo que ve la extensión, para la vista lateral
             return self._json(flow.sesion_para_extension())
         raise Error(404, "No existe")

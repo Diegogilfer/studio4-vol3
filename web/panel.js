@@ -433,17 +433,39 @@ function pintarVoz({ voz, proveedor, opciones }) {
 $("v-rehacer").addEventListener("click", async () => {
   try { await api("/api/voz", { proveedor: $("v-proveedor").value }); await refrescar(); } catch (e) { aviso(e); }
 });
+// Colores de resalte de cada paleta (los mismos que usa el render, en CSS).
+const COLOR_PALETA = { amarillo: "#ffe500", cian: "#00e1ff", rosa: "#ff20b0", verde: "#7fff00", blanco: "#ffffff" };
 function pintarSubtitulos({ subtitulos: s, paletas }) {
-  llenarSelect($("s-paleta"), paletas, s.paleta);
   $("s-activos").checked = s.activos; $("s-gancho").checked = s.gancho;
-  $("s-posicion").value = s.posicion; $("s-tamano").value = s.tamano;
+  $("s-paletas").innerHTML = Object.entries(paletas).map(([k, nombre]) => `
+    <button type="button" data-paleta="${k}" class="${k === s.paleta ? "si" : ""}" title="${esc(nombre)}">
+      <span><span style="color:#fff">ASÍ SE </span><span style="color:${COLOR_PALETA[k] || "#fff"}">VEN</span></span><small>${esc(nombre)}</small></button>`).join("");
+  document.querySelector(`input[name="s-pos"][value="${s.posicion}"]`).checked = true;
+  document.querySelector(`input[name="s-tam"][value="${s.tamano}"]`).checked = true;
+  verVista();
 }
-["s-activos", "s-gancho", "s-paleta", "s-posicion", "s-tamano"].forEach((id) => $(id).addEventListener("change", async () => {
-  try {
-    await api("/api/subtitulos", { activos: $("s-activos").checked, gancho: $("s-gancho").checked,
-      paleta: $("s-paleta").value, posicion: $("s-posicion").value, tamano: $("s-tamano").value });
-  } catch (e) { aviso(e); }
-}));
+let vistaPendiente;
+function verVista() {   // pide un fotograma nuevo con los ajustes guardados (agrupa cambios rápidos)
+  clearTimeout(vistaPendiente);
+  vistaPendiente = setTimeout(() => {
+    const img = $("s-vista");
+    img.classList.add("cargando");
+    img.onload = img.onerror = () => img.classList.remove("cargando");
+    img.src = `/api/subtitulos/vista?v=${Date.now()}`;
+  }, 150);
+}
+async function guardarSubtitulos(cambio) {
+  const s = { ...estado.produccion.subtitulos, ...cambio };
+  try { await api("/api/subtitulos", s); await refrescar(); } catch (e) { aviso(e); }
+}
+$("s-paletas").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-paleta]");
+  if (b) guardarSubtitulos({ paleta: b.dataset.paleta });
+});
+$("s-activos").addEventListener("change", () => guardarSubtitulos({ activos: $("s-activos").checked }));
+$("s-gancho").addEventListener("change", () => guardarSubtitulos({ gancho: $("s-gancho").checked }));
+$("s-posicion").addEventListener("change", (ev) => guardarSubtitulos({ posicion: ev.target.value }));
+$("s-tamano").addEventListener("change", (ev) => guardarSubtitulos({ tamano: ev.target.value }));
 function pintarRender({ p }) {
   const faltan = p.escenas.filter((e) => e.elegida === null).map((e) => e.orden);
   const motivos = [];
@@ -487,7 +509,10 @@ function pintarMiniaturas({ p, plataformas }) {
   }).join("") + (p.final ? "" : `<p class="meta">El vídeo aparecerá aquí para descargar cuando lo renderices.</p>`);
   if (document.activeElement !== $("m-texto")) $("m-texto").value = m.texto || "";
   if (document.activeElement !== $("m-resalte")) $("m-resalte").value = m.resalte || "";
-  $("m-alternativas").innerHTML = (m.alternativas || []).map((t) => `<button class="chip-alt" data-alt="${esc(t)}">${esc(t)}</button>`).join("");
+  $("m-alternativas").innerHTML = (m.vistas_alt || []).map((a) => `
+    <button type="button" class="alt-vista" data-alt="${esc(a.texto)}" data-resalte="${esc(a.resalte)}" title="Usar este texto">
+      <img src="${urlMedio(a.archivo)}?v=${v}" alt="${esc(a.texto)}"><span>${esc(a.texto)}</span></button>`).join("")
+    || (m.alternativas || []).map((t) => `<button class="chip-alt" data-alt="${esc(t)}">${esc(t)}</button>`).join("");
   $("m-candidatos").innerHTML = m.candidatos.map((c, i) => `
     <div class="toma ${i === m.elegido ? "elegida" : ""}" data-cand="${i}" title="${c.escena ? `Escena ${c.escena}` : c.origen === "flow" ? "Generada en Flow" : "Subida"}">
       <img src="${urlMedio(c.archivo)}" alt="" loading="lazy"><span>${c.escena ? `esc. ${c.escena}` : c.origen === "flow" ? "Flow" : "subida"}</span></div>`).join("");
@@ -502,10 +527,11 @@ async function aplicarTexto() {
 $("m-aplicar").addEventListener("click", aplicarTexto);
 ["m-texto", "m-resalte"].forEach((id) => $(id).addEventListener("keydown", (ev) => { if (ev.key === "Enter") aplicarTexto(); }));
 $("m-alternativas").addEventListener("click", async (ev) => {
-  const t = ev.target.dataset?.alt;
-  if (!t) return;
+  const b = ev.target.closest("[data-alt]");
+  if (!b) return;
+  const t = b.dataset.alt;
   $("m-texto").value = t;
-  $("m-resalte").value = t.split(/\s+/).reduce((a, b) => (b.length > a.length ? b : a), "");
+  $("m-resalte").value = b.dataset.resalte || t.split(/\s+/).reduce((a, x) => (x.length > a.length ? x : a), "");
   await aplicarTexto();
 });
 $("m-candidatos").addEventListener("click", async (ev) => {
@@ -575,7 +601,8 @@ async function refrescar() {
   siCambia("avisos", p.avisos || [], pintarAvisos);
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
-  siCambia("subtitulos", { id: p.id, subtitulos: p.subtitulos, paletas: o.paletas }, pintarSubtitulos);
+  siCambia("subtitulos", { id: p.id, subtitulos: p.subtitulos, paletas: o.paletas,
+    fondo: p.escenas[0] ? [p.escenas[0].elegida, p.escenas[0].tomas.length] : null, voz: p.voz?.generada }, pintarSubtitulos);
   siCambia("render", { p }, pintarRender);
   siCambia("miniaturas", { p, plataformas: o.plataformas }, pintarMiniaturas);
   siCambia("textos", { id: p.id, t: p.titulo, d: p.descripcion, b: p.biblia }, () => pintarTextos(p));

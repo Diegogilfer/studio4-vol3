@@ -52,6 +52,41 @@ def _segmento_imagen(origen: Path, destino: Path, d: float, ancho: int, alto: in
     )
 
 
+def vista_subtitulos(p: dict[str, Any], carpeta: Path, ajustes: dict[str, Any] | None = None) -> Path:
+    """Un fotograma real del vídeo con el rótulo inicial y la primera línea de subtítulos, con los ajustes
+    actuales (o los que se pasen para comparar). Tarda menos de un segundo: sirve para decidir antes de renderizar."""
+    fmt = config.FORMATOS[p["formato"]]
+    ancho, alto = fmt["ancho"], fmt["alto"]
+    trabajo = carpeta / "render"
+    trabajo.mkdir(exist_ok=True)
+    fondo = trabajo / "vista_fondo.jpg"
+
+    # Fondo: el plano de la escena 1 (la toma elegida) o, si aún no hay clips, un degradado oscuro.
+    esc = p["escenas"][0] if p.get("escenas") else None
+    toma = esc["tomas"][esc["elegida"]] if esc and esc.get("elegida") is not None else None
+    if toma and (carpeta / toma["archivo"]).exists():
+        if toma["tipo"] == "video":
+            medios.ffmpeg("-ss", "1.0", "-i", str(carpeta / toma["archivo"]), "-frames:v", "1",
+                          "-vf", _encuadre(ancho, alto), "-q:v", "3", str(fondo))
+        else:
+            medios.ffmpeg("-i", str(carpeta / toma["archivo"]), "-frames:v", "1", "-vf", _encuadre(ancho, alto), "-q:v", "3", str(fondo))
+    else:
+        medios.ffmpeg("-f", "lavfi", "-i", f"gradients=s={ancho}x{alto}:c0=0x1b1e2a:c1=0x07080d:duration=1",
+                      "-frames:v", "1", "-q:v", "3", str(fondo))
+
+    # Primera línea de la voz, con su segunda palabra resaltada (así se ve el color de resalte).
+    palabras = (p.get("voz") or {}).get("palabras") or [
+        {"palabra": w, "ini": 0.0, "fin": 0.0} for w in (esc["texto_voz"].split() if esc else ["Así", "se", "verán", "tus", "subtítulos"])]
+    muestra = palabras[:6]
+    ritmo = [{"palabra": w["palabra"], "ini": 0.6 * (i - 1) - 0.3, "fin": 0.6 * (i - 1) + 0.3} for i, w in enumerate(muestra)]
+    ass = subtitulos.construir(ritmo, trabajo / "vista.ass", ancho, alto, {**(p.get("subtitulos") or {}), **(ajustes or {})},
+                               gancho=esc.get("texto_pantalla", "") if esc else "", segundos_gancho=5)
+    salida = trabajo / "vista_subtitulos.jpg"
+    medios.ffmpeg("-loop", "1", "-i", fondo.name, "-vf", f"ass={ass.name}", "-frames:v", "1", "-q:v", "3", salida.name,
+                  cwd=trabajo)
+    return salida
+
+
 def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], None] = lambda *_: None) -> Path:
     voz = p.get("voz") or {}
     if not voz.get("archivo"):

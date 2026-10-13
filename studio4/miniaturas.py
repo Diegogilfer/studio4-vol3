@@ -235,5 +235,17 @@ def componer_todas(p: dict[str, Any], base: Path) -> dict[str, str]:
                  m.get("foco_x", 0.5), m.get("foco_y", 0.5))
         salidas[pl] = f"miniaturas/{pl}.jpg"
     m["salidas"] = salidas
-    m["version"] = time.strftime("%H%M%S")
+    # Las alternativas, ya montadas en pequeño sobre la misma imagen: se elige viéndolas, no leyéndolas.
+    principal = plataformas(p["formato"])[0]
+    vistas = []
+    for i, alt in enumerate((m.get("alternativas") or [])[:4]):
+        archivo = base / "miniaturas" / f"alt_{i}.jpg"
+        resalte = max(alt.split(), key=len) if alt.split() else ""
+        componer(fuente, archivo, principal, alt, resalte, m.get("foco_x", 0.5), m.get("foco_y", 0.5))
+        with Image.open(archivo) as im:
+            im.thumbnail((640, 640))
+            im.save(archivo, "JPEG", quality=85)
+        vistas.append({"texto": alt, "resalte": resalte, "archivo": f"miniaturas/alt_{i}.jpg"})
+    m["vistas_alt"] = vistas
+    m["version"] = time.strftime("%H%M%S") + f"{time.time() % 1:.3f}"[2:]
     return salidas

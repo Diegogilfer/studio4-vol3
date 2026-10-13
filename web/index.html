@@ -203,14 +203,18 @@
           <p class="meta">Subtítulos</p>
           <div class="fila" style="margin-top:6px">
             <label class="check"><input type="checkbox" id="s-activos"> Palabra a palabra</label>
-            <label class="check"><input type="checkbox" id="s-gancho"> Gancho al empezar</label>
+            <label class="check"><input type="checkbox" id="s-gancho"> Rótulo al empezar</label>
           </div>
+          <div class="muestras" id="s-paletas"></div>
           <div class="fila">
-            <select id="s-paleta" class="campo"></select>
-            <select id="s-posicion" class="campo"><option value="abajo">Abajo</option><option value="centro">Centro</option><option value="arriba">Arriba</option></select>
-            <select id="s-tamano" class="campo"><option value="pequeno">Pequeños</option><option value="normal">Normales</option><option value="grande">Grandes</option></select>
+            <div class="segmentos" id="s-posicion"><label><input type="radio" name="s-pos" value="arriba">Arriba</label><label><input type="radio" name="s-pos" value="centro">Centro</label><label><input type="radio" name="s-pos" value="abajo">Abajo</label></div>
+            <div class="segmentos" id="s-tamano"><label><input type="radio" name="s-tam" value="pequeno">Pequeños</label><label><input type="radio" name="s-tam" value="normal">Normales</label><label><input type="radio" name="s-tam" value="grande">Grandes</label></div>
           </div>
         </div>
+      </div>
+      <div class="vista-subs">
+        <p class="meta">Así se verán (fotograma real de tu vídeo, con los ajustes de arriba)</p>
+        <img id="s-vista" alt="Vista previa de los subtítulos">
       </div>
       <div id="r-final" class="final" hidden>
         <video id="r-video" controls preload="metadata"></video>
@@ -240,7 +244,8 @@
               <input id="m-resalte" class="campo" style="width:150px" maxlength="30" placeholder="Palabra en amarillo">
               <button class="boton" id="m-aplicar">Aplicar</button>
             </div>
-            <div class="fila" id="m-alternativas"></div>
+            <p class="meta" style="margin-top:14px">Otros textos, ya montados (clic para usarlo)</p>
+            <div class="alternativas" id="m-alternativas"></div>
           </div>
           <div>
             <p class="meta">Imagen de fondo <span class="faint">· clic para usar otra</span></p>
