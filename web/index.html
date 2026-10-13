@@ -55,6 +55,7 @@
 
       <!-- Paso 1 · ¿De qué trata? -->
       <div class="paso" data-paso="1">
+        <div class="pista">Cuanto más concreta la idea, mejor sale el guion: un nombre, un lugar o un hecho. Si ya tienes el texto, elige «Tengo mi guion».</div>
         <div class="pregunta"><b>¿De qué trata el vídeo?</b>
           <div class="segmentos" role="tablist" aria-label="Cómo empezar">
             <label><input type="radio" name="modo" value="idea" checked>Tengo una idea</label>
@@ -79,6 +80,7 @@
 
       <!-- Paso 2 · ¿Dónde se publica? -->
       <div class="paso" data-paso="2" hidden>
+        <div class="pista">El corto sirve para Shorts y Reels a la vez. El largo es para YouTube y lleva su propio guion.</div>
         <div class="pregunta"><b>¿Dónde se va a publicar?</b><span class="meta solo-idea">Puedes marcar los dos: se investiga una vez y se escriben dos guiones.</span></div>
         <div class="formatos solo-idea">
           <label class="formato"><input type="checkbox" id="a-corto" checked>
@@ -101,6 +103,7 @@
 
       <!-- Paso 3 · ¿Cómo se ve y suena? -->
       <div class="paso" data-paso="3" hidden>
+        <div class="pista">El estilo se aplica igual a todas las escenas, para que el vídeo no cambie de aspecto. La voz se interpreta escena a escena.</div>
         <div class="pregunta"><b>¿Cómo se ve y cómo suena?</b></div>
         <div class="estilos" id="a-estilos"></div>
         <div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select></div>
@@ -171,12 +174,17 @@
 
     <!-- 1 · Flow -->
     <section id="flow-sec" class="tarjeta">
-      <div class="cabeza">
-        <div style="display:grid;gap:4px">
-          <h2>1 · Genera las escenas en Flow <span class="meta" id="e-cuenta"></span></h2>
-          <p class="meta">Copia el prompt, genera el vídeo en Flow y la extensión lo trae aquí solo. Con el icono <b>S4</b> en la pestaña de Flow tienes esto mismo al lado.</p>
+      <div class="guia">
+        <span class="num">1</span>
+        <div class="guia-cuerpo">
+          <h2>Genera las escenas en Flow <span class="meta" id="e-cuenta"></span></h2>
+          <div class="guia-cajas">
+            <div><b>Qué haces</b><p>Copia el prompt de cada escena, pégalo en Flow y pulsa Generar.</p></div>
+            <div><b>Qué pasa</b><p>La extensión trae cada clip a su escena. Si salen varias variantes, eliges la mejor con un clic.</p></div>
+            <div><b>Consejo</b><p>Pulsa el icono S4 en la pestaña de Flow y tendrás esta lista al lado, sin cambiar de ventana.</p></div>
+          </div>
         </div>
-        <button class="boton" id="abrir-flow" title="Abre Google Flow en una ventana a la derecha de la pantalla">Abrir Flow al lado ↗</button>
+        <div class="guia-acciones"><button class="boton" id="abrir-flow" title="Abre Google Flow en una ventana a la derecha de la pantalla">Abrir Flow al lado ↗</button></div>
       </div>
       <p id="ext-vieja" class="error" hidden>La extensión cargada en el navegador es una versión antigua: abre chrome://extensions, pulsa ↻ en «STUDIO #4 · Google Flow» y recarga la pestaña de Flow.</p>
       <div id="avisos" class="avisos" hidden></div>
@@ -189,10 +197,19 @@
 
     <!-- 2 · Render -->
     <section id="render-sec" class="tarjeta">
-      <div class="cabeza">
-        <div style="display:grid;gap:4px"><h2>2 · Monta el vídeo</h2><p class="meta" id="r-falta"></p></div>
-        <button class="primario" id="r-boton">Renderizar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+      <div class="guia">
+        <span class="num">2</span>
+        <div class="guia-cuerpo">
+          <h2>Monta el vídeo</h2>
+          <div class="guia-cajas">
+            <div><b>Qué haces</b><p>Escucha la voz y elige cómo se ven los subtítulos mirando la vista previa.</p></div>
+            <div><b>Qué pasa</b><p>STUDIO une los clips con la voz, el sonido de Flow y los subtítulos, en tu PC y gratis.</p></div>
+            <div><b>Consejo</b><p>Si cambias una toma o los subtítulos, vuelve a pulsar Renderizar: tarda un par de minutos.</p></div>
+          </div>
+        </div>
+        <div class="guia-acciones"><button class="primario" id="r-boton">Renderizar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
+      <p class="estado-sec" id="r-falta"></p>
       <div class="ajustes-render">
         <div>
           <p class="meta">Voz <span id="v-info"></span></p>
@@ -227,13 +244,19 @@
 
     <!-- 3 · Entregas -->
     <section id="entregas-sec" class="tarjeta">
-      <div class="cabeza">
-        <div style="display:grid;gap:4px">
-          <h2>3 · Entregas</h2>
-          <p class="meta" id="m-info">Miniaturas, vídeo y textos listos para cada plataforma.</p>
+      <div class="guia">
+        <span class="num">3</span>
+        <div class="guia-cuerpo">
+          <h2>Entregas</h2>
+          <div class="guia-cajas">
+            <div><b>Qué haces</b><p>Elige el texto y la imagen de la miniatura viéndolas ya montadas.</p></div>
+            <div><b>Qué pasa</b><p>Descargas el vídeo y la miniatura de cada plataforma, y copias el título y la descripción.</p></div>
+            <div><b>Consejo</b><p>Una miniatura funciona con un sujeto grande y 2-4 palabras que den curiosidad.</p></div>
+          </div>
         </div>
-        <button class="primario" id="m-generar">Generar miniaturas <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+        <div class="guia-acciones"><button class="primario" id="m-generar">Generar miniaturas <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
+      <p class="estado-sec" id="m-info"></p>
       <div id="m-cuerpo" hidden>
         <div class="entregas" id="m-entregas"></div>
         <div class="dos" style="margin-top:18px">
