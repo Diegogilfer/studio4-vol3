@@ -39,6 +39,10 @@ class Escena(BaseModel):
     accion_en: str = Field(description="Qué se VE en inglés: sujeto (nombres de la biblia) + acción visible y concreta + lugar + composición.")
     personajes: list[str] = Field(default_factory=list, description="Nombres de la biblia que salen en esta escena.")
     texto_pantalla: str = Field(default="", description="2 a 5 palabras impactantes para rotular (puede quedar vacío).")
+    tono_voz: str = Field(default="narrativo", description="Cómo se DICE esta escena, según la historia y lo que se ve: "
+                                                          "narrativo, intrigante, tenso, emocionante, cinematografico, intimo, "
+                                                          "solemne, asombro o triunfal.")
+    ritmo_voz: str = Field(default="normal", description="lento, normal o rapido.")
 
 
 class Aviso(BaseModel):
@@ -70,7 +74,11 @@ REGLAS:
 5. Alterna planos (no dos close-ups seguidos) y elige un movimiento de cámara que sume emoción.
 6. Nunca pidas texto, letras, logotipos, subtítulos ni pantallas divididas dentro de la imagen.
 7. La biblia visual define lo que NO cambia entre escenas: escenario, luz, paleta y personajes con ropa exacta.
-8. Si una frase es abstracta o difícil de ver, NO la cambies: búscale la mejor imagen posible y añádela a «avisos»
+8. DIRECCIÓN DE VOZ: eres también director de locución. Para cada escena elige tono_voz y ritmo_voz según el
+   arco (presentación → tensión → giro → clímax → cierre) y lo que se ve en el plano: misterio = intrigante o
+   tenso y lento; revelación o acción = emocionante y rápido; plano épico o clímax = cinematografico; dato
+   humano = intimo; cierre = solemne o triunfal. Varía: no repitas el mismo tono más de dos escenas seguidas.
+9. Si una frase es abstracta o difícil de ver, NO la cambies: búscale la mejor imagen posible y añádela a «avisos»
    con una sugerencia de reescritura. El guion lo ha aprobado una persona."""
 
 

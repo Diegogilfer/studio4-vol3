@@ -22,8 +22,8 @@ from . import config, medios, registro
 logger = logging.getLogger("studio4.voz")
 
 PROVEEDORES = {
-    "gemini": "Gemini TTS (Google, gratis)",
-    "elevenlabs": "ElevenLabs (plan gratis: sin uso comercial)",
+    "gemini": "Voz de Google (gratis)",
+    "elevenlabs": "Voz ElevenLabs",
 }
 VOZ_ELEVENLABS_POR_DEFECTO = "JBFqnCBsd6RMkjVDRZzb"  # «George», voz prediseñada disponible en el plan gratis
 
@@ -39,6 +39,63 @@ def _spans_escenas(segmentos: list[str]) -> tuple[str, list[tuple[int, int]]]:
         spans.append((pos, pos + len(s)))
         pos += len(s) + 1
     return " ".join(segmentos), spans
+
+
+# --- Dirección de voz por escena (etiquetas en línea de Gemini 3.1 Flash TTS) ---------------------
+TONOS = {
+    "narrativo": "calm, measured documentary narration",
+    "intrigante": "intriguing, low voice, building curiosity",
+    "tenso": "tense, suspenseful",
+    "emocionante": "excited, energetic",
+    "cinematografico": "epic, cinematic trailer voice",
+    "intimo": "soft, intimate, close to the microphone",
+    "solemne": "solemn, grave",
+    "asombro": "amazed, full of wonder",
+    "triunfal": "triumphant, uplifting",
+}
+RITMOS = {"lento": "slowly", "rapido": "fast", "normal": ""}
+
+
+def etiqueta(tono: str, ritmo: str = "normal") -> str:
+    partes = [TONOS.get(tono, TONOS["narrativo"]), RITMOS.get(ritmo, "")]
+    return "[" + ", ".join(p for p in partes if p) + "]"
+
+
+def _texto_dirigido(segmentos: list[str], direcciones: list[dict[str, str]] | None) -> str:
+    """El guion con su dirección delante de cada escena; solo se pone etiqueta cuando el tono cambia."""
+    if not direcciones:
+        return " ".join(segmentos)
+    trozos, previa = [], None
+    for seg, d in zip(segmentos, direcciones):
+        tag = etiqueta(d.get("tono", "narrativo"), d.get("ritmo", "normal"))
+        trozos.append(seg if tag == previa else f"{tag} {seg}")
+        previa = tag
+    return " ".join(trozos)
+
+
+def _leyo_etiquetas(wav: Path, texto: str, produccion: str) -> bool:
+    """Gemini escucha la locución: ¿ha leído en voz alta alguna etiqueta en inglés? (gratis, no bloquea si falla)."""
+    import re
+    from google.genai import types
+    from . import gemini
+    try:
+        if wav.stat().st_size > 19 * 1024 * 1024:
+            return False
+        r = gemini.cliente().models.generate_content(
+            model=config.MODELO_TEXTO,
+            contents=[types.Part.from_bytes(data=wav.read_bytes(), mime_type="audio/wav"),
+                      "Transcribe exactamente lo que se oye, palabra por palabra, sin corregir nada."])
+        oido = (r.text or "").lower()
+        registro.apuntar("Gemini (escucha de la voz)", "comprobación de etiquetas", produccion=produccion)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("No se pudo comprobar la locución: %s", e)
+        return False
+    guion = set(re.findall(r"[a-záéíóúñü]+", texto.lower()))
+    sospechosas = {w for d in TONOS.values() for w in re.findall(r"[a-z]+", d)} | {"slowly", "fast"}
+    leidas = [w for w in re.findall(r"[a-z]+", oido) if w in sospechosas and w not in guion]
+    if leidas:
+        logger.warning("La voz leyó etiquetas en voz alta: %s", sorted(set(leidas)))
+    return len(leidas) >= 2
 
 
 # --- Gemini TTS -------------------------------------------------------------------------------
@@ -57,7 +114,9 @@ def _gemini(texto: str, destino: Path, produccion: str) -> None:
     ultimo: Exception | None = None
     for modelo in dict.fromkeys([config.MODELO_TTS, *config.MODELOS_TTS_RESERVA]):
         try:
-            r = cliente().models.generate_content(model=modelo, contents=f"{config.ESTILO_VOZ}:\n\n{texto}", config=cfg)
+            estilo = (config.ESTILO_VOZ + ". Las indicaciones entre corchetes son dirección de actor: interprétalas, "
+                      "nunca las leas en voz alta") if "[" in texto else config.ESTILO_VOZ
+            r = cliente().models.generate_content(model=modelo, contents=f"{estilo}:\n\n{texto}", config=cfg)
             pcm = next(p.inline_data.data for p in r.candidates[0].content.parts if p.inline_data and p.inline_data.data)
             with wave.open(str(destino), "wb") as w:
                 w.setnchannels(1)
@@ -177,16 +236,26 @@ def reserva(proveedor: str) -> str | None:
 
 
 # --- Entrada única ----------------------------------------------------------------------------
-def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "") -> dict[str, Any]:
-    """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}."""
-    texto, spans = _spans_escenas([" ".join(s.split()) for s in segmentos])
+def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
+            direcciones: list[dict[str, str]] | None = None) -> dict[str, Any]:
+    """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
+    Con `direcciones` (tono y ritmo por escena), Gemini TTS interpreta cada escena como toca."""
+    limpios = [" ".join(s.split()) for s in segmentos]
+    texto, spans = _spans_escenas(limpios)   # los tiempos se calculan siempre sobre el texto sin etiquetas
     destino.parent.mkdir(parents=True, exist_ok=True)
 
     alineacion = None
+    dirigida = False
     if proveedor == "elevenlabs":
         alineacion = _elevenlabs(texto, destino, produccion)
     else:
-        _gemini(texto, destino, produccion)
+        dirigido = _texto_dirigido(limpios, direcciones)
+        _gemini(dirigido, destino, produccion)
+        dirigida = dirigido != texto
+        if dirigida and _leyo_etiquetas(destino, texto, produccion):
+            # Si la voz pronunció alguna etiqueta, se repite la toma sin dirección por escena.
+            _gemini(texto, destino, produccion)
+            dirigida = False
     total = medios.duracion(destino)
 
     try:
@@ -199,4 +268,5 @@ def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", prod
 
     escenas = [{"ini": round(c, 3), "fin": round(cortes[i + 1] if i + 1 < len(cortes) else total, 3)}
                for i, c in enumerate(cortes)]
-    return {"proveedor": proveedor, "duracion": round(total, 3), "escenas": escenas, "palabras": palabras}
+    return {"proveedor": proveedor, "duracion": round(total, 3), "escenas": escenas, "palabras": palabras,
+            "dirigida": dirigida}

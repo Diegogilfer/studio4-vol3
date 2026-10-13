@@ -165,7 +165,7 @@
     const s = sesion.siguiente;
     const e = sesion.escenas[s.escena - 1];
     $("tit").textContent = s.escena === 0 ? "Imagen para la miniatura"
-      : `Escena ${s.escena} de ${sesion.total}${e?.video ? " · ✓ ya tiene vídeo" : ""}`;
+      : `Escena ${s.escena} de ${sesion.total}${e?.video ? " · ya tiene vídeo" : ""}`;
     $("voz").textContent = s.escena === 0 ? s.voz : `«${s.voz}»`;
     $("prompt").textContent = s.prompt;
     $("aspecto").textContent = `Pon Flow en ${sesion.aspecto}`;
@@ -205,7 +205,7 @@
   $("sig").addEventListener("click", () => sesion?.viva && irA(Math.min(sesion.total, sesion.siguiente.escena + 1)));
   $("copiar").addEventListener("click", async () => {
     await navigator.clipboard.writeText($("prompt").textContent);
-    $("copiar").textContent = "Copiado ✓ · pégalo en Flow";
+    $("copiar").textContent = "Copiado: pégalo en Flow";
     setTimeout(() => { $("copiar").textContent = "Copiar prompt"; }, 2000);
     // Confirma a qué va lo que llegue ahora (una escena o, con escena 0, la miniatura) y empieza a recoger.
     if (sesion.siguiente.escena > 0) irA(sesion.siguiente.escena);

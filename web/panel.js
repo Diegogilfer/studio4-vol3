@@ -36,6 +36,8 @@ const miles = (n) => Number(n || 0).toLocaleString("es-ES");
 const ESTADOS = { investigando: "investigando", escribiendo: "escribiendo guion", guion_listo: "guion por revisar",
   escenas: "creando escenas", rodando: "en Flow", renderizando: "renderizando", terminado: "terminado", error: "error" };
 const VERSION = { corto: "Corto", largo: "Largo", propio: "Tu guion" };
+const TONO = { narrativo: "narrativo", intrigante: "intrigante", tenso: "tenso", emocionante: "emocionante",
+  cinematografico: "cinematográfico", intimo: "íntimo", solemne: "solemne", asombro: "asombro", triunfal: "triunfal" };
 const ESTILOS = {
   cinematografico: ["Cinematográfico", "Película realista, óptica anamórfica"],
   documental: ["Documental", "Real, cámara en mano, luz natural"],
@@ -59,11 +61,6 @@ $("flow-renovar").addEventListener("click", async () => {
     window.open("/flow/emparejar#c=" + encodeURIComponent(d.codigo), "_blank");
   } catch (e) { aviso(e); }
 });
-function pintarConsumo(c) {
-  const flow = c.consumo["Google Flow"]?.total || 0;
-  $("consumo-txt").textContent = `${flow} tomas Flow`;
-  $("consumo").title = ["Este mes:", ...Object.entries(c.consumo).map(([k, v]) => `${k}: ${miles(v.total)} ${v.unidad}`)].join("\n");
-}
 
 let canal = null;
 async function cargarYoutube() {
@@ -144,8 +141,8 @@ document.querySelectorAll(".chips").forEach((g) => g.addEventListener("click", (
 $("a-corto-s").addEventListener("input", () => { $("a-corto-v").textContent = `${$("a-corto-s").value} s`; });
 $("a-largo-m").addEventListener("input", () => {
   const m = Number($("a-largo-m").value);
-  $("a-largo-v").textContent = `${m} min`;
-  $("a-largo-nota").textContent = `≈ ${Math.round((m * 60 * 2.4) / 14)} escenas para generar en Flow`;
+  $("a-largo-v").textContent = `${String(m).replace(".", ",")} min`;
+  $("a-largo-nota").textContent = `≈ ${Math.round((m * 60 * 2.3) / 14)} escenas para generar en Flow`;
 });
 $("a-largo-m").dispatchEvent(new Event("input"));
 
@@ -164,7 +161,6 @@ pintarEstilos();
 
 function pintarResumen() {
   const propio = modo() === "propio";
-  const quien = estado?.opciones.deepseek_ok ? "DeepSeek" : "Gemini";
   const formatos = propio
     ? { vertical: "vertical 9:16", horizontal: "horizontal 16:9", cuadrado: "cuadrado 1:1" }[document.querySelector('input[name="formato"]:checked').value]
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s (Shorts y Reels)`,
@@ -172,7 +168,7 @@ function pintarResumen() {
   const voz = $("a-voz").selectedOptions[0]?.textContent || "";
   $("a-resumen").innerHTML = propio
     ? `Tu guion se usa <b>tal cual</b> para un vídeo <b>${esc(formatos)}</b>, estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, voz <b>${esc(voz)}</b>. Lo revisas y lo apruebas en el paso 4.`
-    : `Gemini <b>investiga</b> el tema${canal?.conectado ? " y mira <b>YouTube</b>" : ""}, <b>${quien}</b> escribe un guion <b>${esc(formatos)}</b> en tono <b>${esc(elegido("tono").split(",")[0])}</b> para <b>${esc(elegido("publico"))}</b>. Estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, voz <b>${esc(voz)}</b>. Lo revisas antes de crear escenas.`;
+    : `Se <b>investiga</b> el tema${canal?.conectado ? " y lo que ya hay en <b>YouTube</b>" : ""} y se escribe un guion <b>${esc(formatos)}</b> en tono <b>${esc(elegido("tono").split(",")[0])}</b> para <b>${esc(elegido("publico"))}</b>. Estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, voz <b>${esc(voz)}</b>. Lo revisas antes de crear escenas.`;
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 
@@ -181,7 +177,7 @@ $("a-crear").addEventListener("click", async () => {
   const datos = {
     idea: $("a-idea").value, guion_propio: propio ? $("a-guion").value : "", estilo: estiloElegido, voz: $("a-voz").value,
     versiones: ["corto", "largo"].filter((v) => $(`a-${v}`).checked),
-    segundos: { corto: Number($("a-corto-s").value), largo: Number($("a-largo-m").value) * 60 },
+    segundos: { corto: Number($("a-corto-s").value), largo: Math.round(Number($("a-largo-m").value) * 60) },
     formato: document.querySelector('input[name="formato"]:checked').value,
     tono: elegido("tono"), publico: elegido("publico"),
   };
@@ -212,9 +208,8 @@ function pintarProgresoGuion(p) {
   $("a-trabajo").hidden = !trabajando;
   $("a-editor").hidden = trabajando && !p.guion;
   if (!trabajando) return;
-  const quien = estado.opciones.deepseek_ok ? "DeepSeek" : "Gemini";
-  const fases = [["investigando", "Investigar el tema (Google o Wikipedia, con fuentes)"],
-    ["youtube", "Mirar qué hay en YouTube y qué funciona en tu canal"], ["escribiendo", `${quien} escribe el guion con esos datos`]];
+  const fases = [["investigando", "Investigar el tema y reunir fuentes"],
+    ["youtube", "Ver qué hay ya en YouTube sobre el tema"], ["escribiendo", "Escribir el guion con esos datos"]];
   const actual = p.estado === "escribiendo" ? 2 : /YouTube/.test(t.fase) ? 1 : 0;
   $("a-fases").innerHTML = fases.filter(([k]) => k !== "youtube" || canal?.conectado).map(([k, txt]) => {
     const i = fases.findIndex(([x]) => x === k);
@@ -225,8 +220,6 @@ function pintarProgresoGuion(p) {
 
 function pintarGuion({ p }) {
   const ocupado = p.trabajo.ocupado;
-  $("g-autor").textContent = p.autor_guion ? `escrito por ${p.autor_guion}` : "";
-  $("g-autor").hidden = !p.autor_guion;
   const palabras = p.guion ? p.guion.split(/\s+/).length : 0;
   $("g-meta").textContent = p.guion
     ? `${palabras} palabras · ~${Math.round(palabras / 2.4)} s de voz${p.version ? ` · ${VERSION[p.version] || p.version}` : ""}${p.tono ? ` · ${p.tono.split(",")[0]}` : ""}`
@@ -237,13 +230,13 @@ function pintarGuion({ p }) {
     `<label><input type="radio" name="g-version" value="${esc(h.id)}" ${h.id === p.id ? "checked" : ""}>${esc(VERSION[h.version] || h.version)}</label>`).join("");
   const area = $("g-texto");
   if (document.activeElement !== area || area.dataset.pid !== p.id) area.value = p.guion || "";
+  requestAnimationFrame(() => crecer(area));
   area.dataset.pid = p.id;
   area.readOnly = ocupado;
   $("g-ia").hidden = !(p.ia_detectada || []).length;
-  $("g-ia").innerHTML = `<span class="meta">Suena a IA, conviene cambiarlo:</span>` +
-    (p.ia_detectada || []).map((f) => `<span class="aviso-ia">«${esc(f)}»</span>`).join("");
+  $("g-ia").innerHTML = `<span class="ia-nota">Conviene cambiar: ${(p.ia_detectada || []).map((f) => `«${esc(f)}»`).join(", ")}</span>`;
   $("g-ganchos").hidden = !(p.ganchos || []).length;
-  $("g-ganchos").innerHTML = `<span class="meta">Otros ganchos (clic para usarlo como primera frase):</span>` +
+  $("g-ganchos").innerHTML = `<span class="meta" style="width:100%">Otras primeras frases (clic para usarla):</span>` +
     (p.ganchos || []).map((g) => `<button class="chip-alt" data-gancho="${esc(g)}">${esc(g)}</button>`).join("");
   $("g-aprobar").disabled = ocupado || !p.guion;
   $("g-guardar").disabled = ocupado;
@@ -358,21 +351,25 @@ function pintarAvisos(avisos) {
     `<div><b>Difícil de filmar:</b> «${esc(a.frase)}» — ${esc(a.problema)}<br><span class="meta">Sugerencia: ${esc(a.sugerencia)}</span></div>`).join("");
 }
 function pintarEscenas({ escenas, activa }) {
+  const vertical = estado.produccion.formato === "vertical";
+  $("escenas").style.setProperty("--toma-proporcion", vertical ? "9 / 16" : estado.produccion.formato === "cuadrado" ? "1" : "16 / 9");
+  $("escenas").style.setProperty("--toma-ancho", vertical ? "140px" : "220px");
   const listas = escenas.filter((e) => e.elegida !== null).length;
   $("e-cuenta").textContent = escenas.length ? `· ${listas}/${escenas.length} con clip` : "";
   $("escenas").innerHTML = escenas.map((e) => {
     const tomas = e.tomas.map((t, i) => `
       <div class="toma ${i === e.elegida ? "elegida" : ""}" data-orden="${e.orden}" data-toma="${i}" title="Usar esta toma">
         ${t.tipo === "video" ? `<video src="${urlMedio(t.archivo)}#t=0.5" muted preload="metadata"></video>` : `<img src="${urlMedio(t.archivo)}" alt="">`}
-        <span>${t.tipo === "video" ? `▶ ${t.duracion}s` : "img"}</span>
+        <span>${t.tipo === "video" ? `${String(t.duracion).replace(".", ",")} s` : "imagen"}</span>
         <button class="borrar" data-borrar="${i}" data-orden="${e.orden}" title="Borrar toma">✕</button>
       </div>`).join("");
-    const etiqueta = e.elegida !== null ? `<span class="etiqueta ok">✓ clip listo</span>`
-      : e.orden === activa ? `<span class="etiqueta ahora">genera esta en Flow</span>` : `<span class="etiqueta">pendiente</span>`;
+    const estadoTxt = e.elegida !== null ? "Clip listo" : e.orden === activa ? "Genera esta en Flow" : "Pendiente";
+    const tono = e.tono_voz ? `Voz ${TONO[e.tono_voz] || e.tono_voz}${e.ritmo_voz && e.ritmo_voz !== "normal" ? `, ${e.ritmo_voz === "rapido" ? "rápida" : "lenta"}` : ""}` : "";
     return `
       <article class="escena ${e.orden === activa ? "activa" : ""} ${e.elegida !== null ? "lista-ok" : ""}">
-        <div class="escena-cab"><span class="escena-num">Escena ${e.orden}</span>${etiqueta}</div>
+        <div class="escena-cab"><span class="escena-num">Escena ${e.orden}</span><span class="escena-estado">${estadoTxt}</span></div>
         <p class="voz-txt">«${esc(e.texto_voz)}»</p>
+        ${tono ? `<span class="tono-voz">${esc(tono)}</span>` : ""}
         <pre class="prompt">${esc(e.prompt_flow)}</pre>
         ${tomas ? `<div class="tomas">${tomas}</div>` : ""}
         <div class="acciones">
@@ -389,7 +386,7 @@ $("escenas").addEventListener("click", async (ev) => {
     if (t.dataset.copiarPrompt) {
       const n = Number(t.dataset.copiarPrompt);
       await navigator.clipboard.writeText(p.escenas[n - 1].prompt_flow);
-      t.textContent = "Copiado ✓";
+      t.textContent = "Copiado";
       setTimeout(() => { t.textContent = "Copiar prompt"; }, 1500);
       await api("/api/escena/activa", { escena: n });   // la extensión empieza a recoger para esta escena
     } else if (t.dataset.borrar !== undefined) {
@@ -427,7 +424,7 @@ function pintarVoz({ voz, proveedor, opciones }) {
   if (voz) {
     const src = `${urlMedio(voz.archivo)}?v=${encodeURIComponent(voz.generada || "")}`;
     if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
-    $("v-info").textContent = `· ${voz.duracion.toFixed(1)} s · ${opciones[voz.proveedor] || voz.proveedor}`;
+    $("v-info").textContent = `· ${voz.duracion.toFixed(1)} s · ${opciones[voz.proveedor] || voz.proveedor}${voz.dirigida ? " · interpretada escena a escena" : ""}`;
   } else {
     audio.removeAttribute("src"); audio.dataset.src = "";
     $("v-info").textContent = "· se graba sola al crear las escenas";
@@ -545,9 +542,13 @@ document.addEventListener("click", async (ev) => {
   const id = ev.target.dataset?.copiar;
   if (!id) return;
   await navigator.clipboard.writeText($(id).textContent);
-  ev.target.textContent = "Copiado ✓";
+  ev.target.textContent = "Copiado";
   setTimeout(() => { ev.target.textContent = "Copiar"; }, 1500);
 });
+
+// Campos de texto que crecen con lo escrito (nunca con barra de desplazamiento).
+function crecer(area) { area.style.height = "auto"; area.style.height = `${area.scrollHeight + 2}px`; }
+["a-idea", "a-guion", "g-texto"].forEach((id) => $(id).addEventListener("input", () => crecer($(id))));
 
 // ============================================================== Ciclo
 async function refrescar() {
@@ -558,7 +559,6 @@ async function refrescar() {
   $("aviso-salud").hidden = !o.salud.length;
   $("aviso-salud").textContent = o.salud.join(" ");
   pintarFlow(d);
-  siCambia("consumo", { consumo: d.consumo }, pintarConsumo);
   siCambia("lista", { lista, activa: d.produccion?.id }, () => pintarLista(lista));
 
   const p = d.produccion;

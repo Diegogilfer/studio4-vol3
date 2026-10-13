@@ -279,8 +279,10 @@ def _generar_voz(pid: str) -> None:
     p = cargar(pid)
     _avisar(pid, f"Locución con {voz.PROVEEDORES[p['proveedor_voz']]}", 70)
     segmentos = [e["texto_voz"] for e in p["escenas"]]
+    direcciones = [{"tono": e.get("tono_voz", "narrativo"), "ritmo": e.get("ritmo_voz", "normal")} for e in p["escenas"]]
     try:
-        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid)
+        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
+                              direcciones=direcciones)
     except RuntimeError as e:
         # Cupo diario de Gemini TTS agotado (o ElevenLabs sin créditos): se prueba con la otra voz si existe.
         otra = voz.reserva(p["proveedor_voz"])
@@ -288,7 +290,7 @@ def _generar_voz(pid: str) -> None:
             raise
         logger.warning("Voz %s falló (%s); probando %s", p["proveedor_voz"], e, otra)
         _avisar(pid, f"{voz.PROVEEDORES[p['proveedor_voz']]} falló; uso {voz.PROVEEDORES[otra]}", 75)
-        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid)
+        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones)
     modificar(pid, lambda q: q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")}))
 
 

@@ -359,12 +359,17 @@ def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
         "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
-    monkeypatch.setattr(voz, "locutar", lambda seg, destino, prov, produccion="": {
-        "proveedor": prov, "duracion": 3.0, "escenas": [{"ini": 0, "fin": 3.0}], "palabras": []})
+    recibido = {}
+
+    def locutar(seg, destino, prov, produccion="", direcciones=None):
+        recibido["direcciones"] = direcciones
+        return {"proveedor": prov, "duracion": 3.0, "escenas": [{"ini": 0, "fin": 3.0}], "palabras": []}
+    monkeypatch.setattr(voz, "locutar", locutar)
     produccion.aprobar_guion(pid, "Una frase que se ve. Otra frase que también se ve en un plano, editada.")
     p = _esperar(pid)
     assert p["guion_aprobado"] and p["estado"] == "rodando" and p["guion"].endswith("editada.")
     assert len(p["escenas"]) == 1 and p["voz"]["duracion"] == 3.0 and p["avisos"][0]["frase"] == "Otra"
+    assert recibido["direcciones"] == [{"tono": "narrativo", "ritmo": "normal"}]   # la dirección viaja hasta la voz
     with pytest.raises(ValueError, match="aprobado"):
         produccion.guardar_guion(pid, "cambio " * 20)
 
@@ -414,3 +419,10 @@ def test_guion_fuera_de_largo_se_ajusta_y_solo_si_mejora(monkeypatch):
     monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"guion": "palabra " * 20})
     assert len(guion._ajustar_largo(corto, 100, "").split()) == 50          # 50 → 20: empeora, se queda el original
     assert guion._ajustar_largo("palabra " * 95, 100, "") == "palabra " * 95  # dentro del 15 %: ni se toca
+
+
+def test_texto_dirigido_solo_etiqueta_cuando_cambia_el_tono():
+    t = voz._texto_dirigido(["Uno.", "Dos.", "Tres."], [{"tono": "tenso", "ritmo": "lento"},
+                            {"tono": "tenso", "ritmo": "lento"}, {"tono": "emocionante", "ritmo": "rapido"}])
+    assert t == "[tense, suspenseful, slowly] Uno. Dos. [excited, energetic, fast] Tres."
+    assert voz._texto_dirigido(["Uno."], None) == "Uno."

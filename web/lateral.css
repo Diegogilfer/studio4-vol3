@@ -13,7 +13,7 @@ body.lateral { background-attachment: scroll; font-size: 13.5px; }
 .l-ahora { display: grid; gap: 10px; padding: 14px; border-radius: 20px; background: var(--bg-panel);
   border: 2px solid color-mix(in oklab, var(--accent) 70%, transparent);
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 45%, transparent), 0 10px 30px -14px color-mix(in oklab, var(--accent) 60%, transparent); }
-.l-ahora .prompt { max-height: 170px; }
+.l-ahora .prompt { white-space: pre-wrap; }
 .l-ahora .primario { height: 40px; }
 .l-ref { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: start; }
 .l-ref img { width: 96px; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 10px; border: 2px solid color-mix(in oklab, var(--fg) 16%, transparent); }

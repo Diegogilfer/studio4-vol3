@@ -41,7 +41,7 @@ function pintarAhora(s) {
   const miniatura = sig.escena === 0;
   const e = s.escenas[sig.escena - 1];
   $("l-ahora-tit").textContent = miniatura ? "Imagen para la miniatura" : `Escena ${sig.escena} de ${s.total}`;
-  $("l-ahora-est").textContent = miniatura ? "genera una imagen" : e?.video ? "✓ ya tiene vídeo" : "genera esta en Flow";
+  $("l-ahora-est").textContent = miniatura ? "genera una imagen" : e?.video ? "ya tiene vídeo" : "genera esta en Flow";
   $("l-voz").textContent = miniatura ? sig.voz : `«${sig.voz}»`;
   $("l-prompt").textContent = sig.prompt;
   $("l-aspecto").textContent = `Flow en ${s.aspecto}`;
@@ -63,7 +63,7 @@ function pintarEscenas(d) {
         ${t.tipo === "video" ? `<video src="${urlMedio(t.archivo)}#t=0.5" muted preload="metadata"></video>` : `<img src="${urlMedio(t.archivo)}" alt="">`}</div>`;
     }).join("");
     return `<li data-escena="${e.orden}" class="${activa ? "activa" : ""} ${e.elegida !== null ? "ok" : ""}">
-      <span class="l-num">${e.elegida !== null ? "✓" : e.orden}</span>
+      <span class="l-num">${e.orden}</span>
       <span class="l-txt">${esc(e.texto_voz)}</span>
       <span class="l-tomas">${tomas}</span></li>`;
   }).join("");
@@ -100,7 +100,7 @@ $("l-copiar").addEventListener("click", async () => {
     if (sig.escena === 0) await api("/api/miniaturas/flow", {});
     else await api("/api/escena/activa", { escena: sig.escena });
     const ok = await copiarTexto(sig.prompt);
-    $("l-copiar").textContent = ok ? "Copiado ✓ · pégalo en Flow" : "Selecciona y copia el prompt";
+    $("l-copiar").textContent = ok ? "Copiado: pégalo en Flow" : "Selecciona y copia el prompt";
     setTimeout(() => { $("l-copiar").textContent = "Copiar prompt"; }, 2500);
   } catch (e) { mostrarError(e.message); }
 });

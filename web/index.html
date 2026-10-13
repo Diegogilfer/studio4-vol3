@@ -10,7 +10,7 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <symbol id="i-crear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/><path d="M19 3v4M21 5h-4"/></symbol>
+    <symbol id="i-crear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
     <symbol id="i-escenas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M7 4v16M17 4v16M2 9h5M17 9h5M2 15h5M17 15h5"/></symbol>
     <symbol id="i-render" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></symbol>
     <symbol id="i-entregas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
@@ -32,7 +32,6 @@
   <div class="barra-der">
     <span id="en-marcha" class="pildora marcha" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
     <a id="yt-pildora" class="pildora" href="/youtube/conectar" title="Solo lectura: tu canal y lo que ya hay en YouTube sobre cada tema"><svg><use href="#i-yt"/></svg><span id="yt-txt">Conectar YouTube</span></a>
-    <span id="consumo" class="pildora" title=""><b id="consumo-txt">—</b></span>
     <a id="flow-boton" class="pildora aviso" target="_blank" href="/flow/emparejar"><span class="piloto"></span><span>Flow: conectar</span></a>
     <button id="flow-renovar" class="redondo" title="Nueva vinculación: genera otro código y vuelve a emparejar la extensión"><svg><use href="#i-renovar"/></svg></button>
   </div>
@@ -44,7 +43,6 @@
     <div class="hero-fondo" aria-hidden="true"><div class="hero-vivo"><div class="hero-rejilla"></div></div></div>
     <div class="hero-cuerpo">
       <div class="intro">
-        <span class="etiqueta-sec">Asistente de guion</span>
         <h1>¿Qué quieres <em>crear</em> hoy?</h1>
       </div>
       <div class="compacta" id="a-compacta">
@@ -88,7 +86,7 @@
             <span class="formato-dur"><input type="range" id="a-corto-s" min="20" max="90" step="5" value="50"><em id="a-corto-v">50 s</em></span></label>
           <label class="formato"><input type="checkbox" id="a-largo">
             <span class="formato-cab"><i class="marco-169"></i><b>Largo</b><span class="meta">YouTube · guion propio, más desarrollo</span></span>
-            <span class="formato-dur"><input type="range" id="a-largo-m" min="2" max="15" step="1" value="5"><em id="a-largo-v">5 min</em></span>
+            <span class="formato-dur"><input type="range" id="a-largo-m" min="2" max="15" step="0.5" value="5"><em id="a-largo-v">5 min</em></span>
             <span class="meta" id="a-largo-nota"></span></label>
         </div>
         <div class="solo-propio" hidden>
@@ -120,7 +118,7 @@
         <div id="a-editor">
           <div class="cabeza">
             <div style="display:grid;gap:4px">
-              <b class="pregunta-txt">Revisa el guion <span class="etiqueta" id="g-autor"></span></b>
+              <b class="pregunta-txt">Revisa el guion</b>
               <p class="meta" id="g-meta"></p>
             </div>
             <div class="segmentos" id="g-versiones" hidden></div>
