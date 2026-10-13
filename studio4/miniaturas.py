@@ -94,7 +94,9 @@ class Eleccion(BaseModel):
     mejor: int = Field(description="Número (empezando en 1) de la imagen con más gancho para miniatura.")
     foco_x: float = Field(description="Posición horizontal del sujeto principal en esa imagen, de 0 (izq.) a 1 (der.).")
     foco_y: float = Field(description="Posición vertical del sujeto principal, de 0 (arriba) a 1 (abajo).")
-    texto: str = Field(description="2 a 4 palabras en español, en MAYÚSCULAS, que provoquen curiosidad. No repitas el título.")
+    texto: str = Field(description="2 a 4 palabras en español, en MAYÚSCULAS, que provoquen curiosidad. Tiene que ser una "
+                                   "frase natural y gramatical que se entienda sola (nada de palabras sueltas pegadas). "
+                                   "No repitas el título.")
     resalte: str = Field(description="UNA palabra del texto que irá en amarillo (la más potente).")
     alternativas: list[str] = Field(description="3 textos alternativos con el mismo estilo.")
     prompt_flow_en: str = Field(description="Prompt en inglés para generar en Google Flow una imagen de miniatura: "

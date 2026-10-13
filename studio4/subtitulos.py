@@ -48,9 +48,9 @@ def construir(palabras: list[dict[str, Any]], destino: Path, ancho: int, alto: i
     a = {**POR_DEFECTO, **(ajustes or {})}
     pal = PALETAS.get(a["paleta"], PALETAS["amarillo"])
     vertical = alto > ancho
-    tam = int((74 if vertical else 58) * {"pequeno": 0.8, "normal": 1.0, "grande": 1.25}.get(a["tamano"], 1.0))
+    tam = int((74 if vertical else 68) * {"pequeno": 0.8, "normal": 1.0, "grande": 1.25}.get(a["tamano"], 1.0))
     margen = {"arriba": int(alto * 0.72), "centro": int(alto * 0.42)}.get(a["posicion"], int(alto * (0.2 if vertical else 0.1)))
-    tam_gancho = max(36, int(tam * 0.72))
+    tam_gancho = max(44, int(tam * (0.72 if vertical else 0.95)))
 
     cab = f"""[Script Info]
 ScriptType: v4.00+

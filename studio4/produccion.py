@@ -262,7 +262,9 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
     def fases():
         _avisar(pid, "Gemini convierte el guion en escenas para Flow", 20)
         q = cargar(pid)
-        plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid)
+        competencia = ((q.get("investigacion") or {}).get("youtube") or {}).get("competencia") or []
+        plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid,
+                                   titulos_existentes=[v["titulo"] for v in competencia])
 
         def aplicar(r):
             r.update(titulo=plan["titulo"], descripcion=plan["descripcion"], hashtags=plan["hashtags"],

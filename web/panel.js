@@ -164,11 +164,11 @@ function pintarResumen() {
   const formatos = propio
     ? { vertical: "vertical 9:16", horizontal: "horizontal 16:9", cuadrado: "cuadrado 1:1" }[document.querySelector('input[name="formato"]:checked').value]
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s (Shorts y Reels)`,
-       $("a-largo").checked && `largo de ${$("a-largo-m").value} min (YouTube)`].filter(Boolean).join(" y ");
+       $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
   const voz = $("a-voz").selectedOptions[0]?.textContent || "";
   $("a-resumen").innerHTML = propio
-    ? `Tu guion se usa <b>tal cual</b> para un vídeo <b>${esc(formatos)}</b>, estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, voz <b>${esc(voz)}</b>. Lo revisas y lo apruebas en el paso 4.`
-    : `Se <b>investiga</b> el tema${canal?.conectado ? " y lo que ya hay en <b>YouTube</b>" : ""} y se escribe un guion <b>${esc(formatos)}</b> en tono <b>${esc(elegido("tono").split(",")[0])}</b> para <b>${esc(elegido("publico"))}</b>. Estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, voz <b>${esc(voz)}</b>. Lo revisas antes de crear escenas.`;
+    ? `Tu guion se usa <b>tal cual</b> para un vídeo <b>${esc(formatos)}</b>, estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, <b>${esc(voz)}</b>. Lo revisas y lo apruebas en el paso 4.`
+    : `Se <b>investiga</b> el tema${canal?.conectado ? " y lo que ya hay en <b>YouTube</b>" : ""} y se escribe un guion <b>${esc(formatos)}</b> en tono <b>${esc(elegido("tono").split(",")[0])}</b> para <b>${esc(elegido("publico"))}</b>. Estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, <b>${esc(voz)}</b>. Lo revisas antes de crear escenas.`;
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 

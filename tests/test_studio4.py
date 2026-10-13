@@ -355,7 +355,7 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
 
 def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
     [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
-    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="": {
+    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None: {
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
         "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})

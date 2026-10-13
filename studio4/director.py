@@ -100,7 +100,8 @@ def _palabras(texto: str) -> list[str]:
     return re.findall(r"\w+", texto.lower())
 
 
-def planificar(guion: str, estilo: str, formato: str, produccion: str = "") -> dict[str, Any]:
+def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
+               titulos_existentes: list[str] | None = None) -> dict[str, Any]:
     estilo_en = config.ESTILOS.get(estilo, estilo)
     aspecto = config.FORMATOS[formato]["aspecto"]
     prompt = (
@@ -108,6 +109,9 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "") -> d
         f"({'sujeto centrado y alto' if aspecto == '9:16' else 'deja aire a los lados'})\n\n"
         f"--- GUION ---\n{guion}\n--- FIN ---"
     )
+    if titulos_existentes:
+        prompt += ("\n\nTÍTULOS QUE YA EXISTEN EN YOUTUBE SOBRE ESTO (el tuyo tiene que ser claramente distinto, "
+                   "con otro ángulo o un detalle concreto del guion):\n" + "\n".join(f"- {t}" for t in titulos_existentes[:8]))
     crudo = gemini.generar(prompt, sistema=SISTEMA, esquema=Plan, temperatura=0.4, detalle="plan de escenas",
                            produccion=produccion)
     match = re.search(r"\{.*\}", crudo, re.DOTALL)

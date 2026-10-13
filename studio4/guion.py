@@ -14,14 +14,14 @@ from . import deepseek, gemini
 
 logger = logging.getLogger("studio4.guion")
 
-PALABRAS_POR_SEGUNDO = 2.3  # medido con Gemini TTS en español (84 palabras → 36,5 s)
+PALABRAS_POR_SEGUNDO = 2.25  # medido con Gemini TTS dirigida (372 palabras → 166 s; sin dirección, 2,3)
 DESVIO_MAXIMO = 0.15         # si el guion se aparta más que esto de lo pedido, se ajusta con otra pasada
 
 PROHIBIDO = [
     "Imagina", "¿Sabías que", "En un mundo", "sumérgete", "adentrémonos", "fascinante", "increíble", "asombroso",
     "descubre", "el secreto", "no creerás", "en este vídeo", "hoy te cuento", "acompáñame", "pero eso no es todo",
     "al final del día", "y aquí viene lo interesante", "y es que", "cabe destacar", "sin lugar a dudas",
-    "en conclusión", "¿y tú qué opinas?", "prepárate", "un viaje", "misterio sin resolver",
+    "en conclusión", "¿y tú qué opinas?", "prepárate", "este viaje", "un viaje a través", "misterio sin resolver",
 ]
 
 SISTEMA = f"""Eres guionista de documentales y de vídeos de divulgación en español neutro, con voz propia.
