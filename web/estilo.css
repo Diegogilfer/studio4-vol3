@@ -478,3 +478,58 @@ body::before {
 
 .vacia { display: grid; gap: 14px; justify-items: start; padding: 40px; }
 .vacia p { color: rgb(232 234 245 / .85); max-width: 640px; }
+
+/* ======================================================================= ESCENAS COMPACTAS CON PORTADA */
+.escenas { grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr)); gap: 16px; }
+.escena { padding: 0; gap: 0; overflow: hidden; border-radius: 22px; }
+.portada { position: relative; aspect-ratio: var(--portada, 16 / 9); overflow: hidden; background: rgb(0 0 0 / .45); }
+.portada img, .portada video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.portada::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgb(0 0 0 / .55) 0%, transparent 28%, transparent 70%, rgb(0 0 0 / .55) 100%); }
+.portada-num, .portada-estado { position: absolute; top: 10px; z-index: 1; font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px #000; }
+.portada-num { left: 12px; } .portada-estado { right: 12px; font-weight: 500; color: rgb(255 255 255 / .85); }
+.escena.lista-ok .portada-estado { color: var(--ok); } .escena.activa .portada-estado { color: #c4b5fd; }
+.credito { position: absolute; left: 12px; bottom: 9px; z-index: 1; font-size: 11.5px; color: rgb(255 255 255 / .78); text-shadow: 0 1px 3px #000; }
+.sin-portada { position: absolute; inset: 0; display: grid; place-content: center; gap: 6px; padding: 24px; text-align: center;
+  background: radial-gradient(90% 80% at 30% 20%, rgb(99 102 241 / .16), transparent 70%), linear-gradient(160deg, #13151f, #0a0b10); }
+.sin-portada span { font-size: 14px; font-weight: 500; color: rgb(226 228 236 / .9); text-transform: capitalize; }
+.sin-portada small { font-size: 12px; color: var(--fg-faint); }
+.escena-cuerpo { display: grid; gap: 10px; padding: 14px 16px 16px; }
+.escena .voz-txt { font-size: 15px; line-height: 1.5; }
+.prompt-plegado summary { cursor: pointer; font-size: 13px; color: var(--fg-muted); }
+.prompt-plegado .prompt { margin-top: 8px; font-size: 12px; }
+.escena .tomas { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.escena .toma { aspect-ratio: var(--portada, 16 / 9); border-radius: 10px; }
+.escena .acciones .boton { height: 32px; font-size: 12.5px; }
+
+/* ======================================================================= FONDO PREMIUM
+ * Casi negro grafito con dos luces muy sutiles (índigo y verde azulado profundo) y una retícula finísima:
+ * sobrio, de estudio de edición. El cristal se aprecia por el relieve de las luces, sin colores chillones. */
+body { background: radial-gradient(120% 90% at 50% -10%, #12131c 0%, #08090d 55%, #050608 100%) fixed; }
+body::before {
+  inset: -10%;
+  background:
+    radial-gradient(42% 38% at 14% 12%, rgb(79 70 229 / .30), transparent 72%),
+    radial-gradient(38% 36% at 88% 78%, rgb(13 148 136 / .22), transparent 72%),
+    radial-gradient(30% 26% at 70% 8%, rgb(139 92 246 / .14), transparent 72%);
+  filter: blur(60px);
+  animation-duration: 40s;
+}
+main::before {   /* retícula finísima, solo se intuye */
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+  background-image: linear-gradient(rgb(255 255 255 / .025) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask: radial-gradient(80% 70% at 50% 30%, #000, transparent); mask: radial-gradient(80% 70% at 50% 30%, #000, transparent);
+}
+:root {
+  --cristal: rgb(22 24 34 / .55);
+  --cristal-fuerte: rgb(6 7 11 / .7);
+  --cristal-borde: rgb(255 255 255 / .09);
+  --cristal-brillo: inset 0 1px 0 rgb(255 255 255 / .06);
+  --cristal-sombra: 0 30px 80px -40px rgb(0 0 0 / .95);
+}
+.barra { background: rgb(8 9 13 / .65); }
+.escena, .formato, .estilos button, .entrega, .alt-vista, .a-trabajo, .avisos > div, .producciones button,
+.guia-cajas > div, .pista, .vista-subs, .resumen, .ajustes-render > div, .estado-sec { background: rgb(255 255 255 / .035); }
+.meta, .pista, .guia-cajas p { color: rgb(226 228 236 / .78); }
+.pestanas a.abierta { background: rgb(99 102 241 / .18); border-color: rgb(129 140 248 / .55); box-shadow: 0 10px 30px -18px rgb(99 102 241 / .8); }

@@ -17,7 +17,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos, visuales_api, voz, youtube
+from . import (config, deepseek, director, guion, investigacion, miniaturas, referencias, render, subtitulos,
+               visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -273,8 +274,51 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
             r["escenas"] = [{**e, "tomas": [], "elegida": None} for e in plan["escenas"]]
         modificar(pid, aplicar)
         _generar_voz(pid)
+        try:   # las referencias ayudan pero nunca bloquean
+            _buscar_referencias(pid)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Referencias: %s", e)
 
     _en_fondo(pid, "Escenas y voz", fases)
+
+
+def _buscar_referencias(pid: str) -> None:
+    p = cargar(pid)
+    refs = referencias.generar(p["escenas"][:referencias.MAXIMO], p.get("titulo") or p["tema"], carpeta(pid),
+                               produccion=pid, avisar=lambda f, n: _avisar(pid, f, n))
+
+    def aplicar(q):
+        for e in q["escenas"]:
+            if e["orden"] in refs:
+                e["referencia"] = refs[e["orden"]]
+    modificar(pid, aplicar)
+
+
+def buscar_referencias(pid: str) -> None:
+    if not cargar(pid)["escenas"]:
+        raise ValueError("Primero aprueba el guion: hacen falta las escenas.")
+    _en_fondo(pid, "Referencias", lambda: _buscar_referencias(pid))
+
+
+def otra_referencia(pid: str, orden: int) -> None:
+    """Cambia la referencia de una escena por la siguiente imagen que encaje, sin repetir ninguna ya usada."""
+    p = cargar(pid)
+    if not 1 <= orden <= min(len(p["escenas"]), referencias.MAXIMO):
+        raise ValueError(f"Las referencias son solo para las {referencias.MAXIMO} primeras escenas.")
+    esc = p["escenas"][orden - 1]
+    usadas = {e["referencia"]["id"] for e in p["escenas"] if e.get("referencia", {}).get("id")}
+    usadas |= set(esc.get("referencias_vistas", []))
+    previa = esc.get("referencia") or {}
+    consulta = [previa["busqueda"]] if previa.get("busqueda") else None
+    refs = referencias.generar([esc], p.get("titulo") or p["tema"], carpeta(pid), produccion=pid, excluir=usadas, consultas=consulta)
+    if orden not in refs:
+        raise ValueError("No hay más imágenes para esta escena con esa búsqueda.")
+
+    def aplicar(q):
+        e = q["escenas"][orden - 1]
+        e["referencias_vistas"] = list({*e.get("referencias_vistas", []), *( [previa["id"]] if previa.get("id") else [] )})
+        e["referencia"] = refs[orden]
+    modificar(pid, aplicar)
 
 
 def _generar_voz(pid: str) -> None:
