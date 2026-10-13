@@ -236,6 +236,21 @@ def reserva(proveedor: str) -> str | None:
 
 
 # --- Entrada única ----------------------------------------------------------------------------
+FRASE_MUESTRA = ("Así sonaría la narración de tu vídeo: tranquila cuando la historia respira, "
+                 "y con fuerza cuando llega el momento que nadie esperaba.")
+
+
+def muestra_generica(voz_nombre: str) -> Path:
+    """La frase de presentación de una voz, grabada una sola vez y guardada para escucharla al instante."""
+    if voz_nombre not in config.VOCES_GEMINI:
+        raise ValueError(f"Voz desconocida: {voz_nombre}")
+    destino = config.PRODUCCIONES / "_voces" / f"{voz_nombre}.wav"
+    if not destino.exists() or destino.stat().st_size < 2000:
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        _gemini(FRASE_MUESTRA, destino, "", voz_nombre)
+    return destino
+
+
 def muestra(texto: str, voz_nombre: str, destino: Path, produccion: str = "") -> Path:
     """Unos segundos de tu guion con una voz concreta, para compararlas antes de elegir."""
     if voz_nombre not in config.VOCES_GEMINI:

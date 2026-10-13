@@ -100,7 +100,8 @@ def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = 
 
     def cambio(q):
         esc = q["escenas"][orden - 1]
-        archivo = f"tomas/escena_{orden:02d}_{len(esc['tomas']) + 1:02d}_{sha[:6]}{ext}"
+        nombre_video = re.sub(r"[^a-z0-9]+", "-", q.get("titulo", "").lower()).strip("-")[:40] or "video"
+        archivo = f"tomas/{nombre_video}_escena_{orden:02d}_toma_{len(esc['tomas']) + 1:02d}_{sha[:6]}{ext}"
         shutil.move(str(temporal), produccion.carpeta(pid) / archivo)
         esc["tomas"].append({"archivo": archivo, "tipo": tipo, "duracion": round(inf["duracion"], 2),
                              "ancho": inf["ancho"], "alto": inf["alto"], "origen": origen,

@@ -47,6 +47,80 @@ const ESTILOS = {
   scifi: ["Ciencia ficción", "Épico, luz volumétrica, futuro"],
 };
 
+// ============================================================== Ajustes: tema de color (se guarda en este navegador)
+const TEMAS = [
+  ["cristal", "Cristal", "Claro · lavanda y aguamarina", ["#ece6fb", "#a78bfa", "#5eead4", "#f9a8d4"]],
+  ["oceano", "Océano", "Claro · cielo y turquesa", ["#e3f2fb", "#7dd3fc", "#5eead4", "#a5b4fc"]],
+  ["atardecer", "Atardecer", "Claro · melocotón y rosa", ["#fbe9ee", "#fdba74", "#f9a8d4", "#c4b5fd"]],
+  ["arena", "Arena", "Claro · cálido y sereno", ["#efe8dc", "#d6c4a5", "#c9d6c2", "#e7d3b0"]],
+  ["rosa", "Orquídea", "Claro · rosa y lila", ["#f5e9fb", "#f9a8d4", "#d8b4fe", "#c7d2fe"]],
+  ["grafito", "Grafito", "Oscuro · sobrio y premium", ["#0a0b10", "#4f46e5", "#0d9488", "#8b5cf6"]],
+  ["medianoche", "Medianoche", "Oscuro · azul profundo", ["#0a1026", "#3b82f6", "#6366f1", "#06b6d4"]],
+  ["aurora", "Aurora", "Oscuro · violeta vivo", ["#2c1470", "#a855f7", "#2dd4bf", "#f472b6"]],
+  ["bosque", "Bosque", "Oscuro · verdes", ["#0a1712", "#10b981", "#65a30d", "#0d9488"]],
+  ["oro", "Carbón y oro", "Oscuro · ámbar", ["#0f0d09", "#f59e0b", "#b45309", "#fde68a"]],
+];
+function aplicarTema(t) {
+  document.documentElement.dataset.tema = t;
+  try { localStorage.setItem("studio4-tema", t); } catch (_) { /* sin almacenamiento: vale solo para esta visita */ }
+  document.querySelectorAll("#temas button").forEach((b) => b.classList.toggle("si", b.dataset.tema === t));
+}
+(() => {
+  let t = "cristal";
+  try { t = localStorage.getItem("studio4-tema") || t; } catch (_) { /* sin almacenamiento */ }
+  $("temas").innerHTML = TEMAS.map(([id, nombre, desc, c]) => `
+    <button type="button" data-tema="${id}">
+      <span class="muestra-tema" style="background:${c[0]}">
+        <i style="inset:-20% auto auto -10%;width:70%;height:90%;background:radial-gradient(closest-side,${c[1]},transparent);filter:blur(8px)"></i>
+        <i style="inset:auto -10% -25% auto;width:65%;height:90%;background:radial-gradient(closest-side,${c[2]},transparent);filter:blur(8px)"></i>
+        <i style="inset:22% 14% 22% 14%;background:${["grafito", "medianoche", "aurora", "bosque", "oro"].includes(id) ? "rgb(20 22 32 / .55)" : "rgb(255 255 255 / .5)"};border:1px solid rgb(255 255 255 / .5);backdrop-filter:blur(6px)"></i>
+        <i style="left:22%;top:34%;width:30%;height:9px;border-radius:5px;background:${c[3]}"></i>
+      </span><b>${nombre}</b><small>${desc}</small></button>`).join("");
+  aplicarTema(t);
+})();
+$("temas").addEventListener("click", (ev) => { const b = ev.target.closest("[data-tema]"); if (b) aplicarTema(b.dataset.tema); });
+$("abrir-ajustes").addEventListener("click", () => { $("ajustes").hidden = false; });
+$("cerrar-ajustes").addEventListener("click", () => { $("ajustes").hidden = true; });
+$("ajustes").addEventListener("click", (ev) => { if (ev.target === $("ajustes")) $("ajustes").hidden = true; });
+
+// Escuchar una voz antes de elegirla: frase de presentación (la primera vez se graba; después, al instante).
+let botonSonando = null;
+function oirVoz(boton, voz) {
+  const audio = $("oir-voz");
+  if (botonSonando === boton && !audio.paused) { audio.pause(); return; }
+  if (botonSonando) botonSonando.classList.remove("sonando", "cargando");
+  botonSonando = boton;
+  boton.classList.add("cargando");
+  audio.src = `/api/voz/oir?voz=${encodeURIComponent(voz)}`;
+  audio.play().then(() => { boton.classList.remove("cargando"); boton.classList.add("sonando"); })
+    .catch(() => { boton.classList.remove("cargando"); alertaError("No se pudo reproducir la voz."); });
+}
+$("oir-voz").addEventListener("ended", () => botonSonando?.classList.remove("sonando"));
+$("oir-voz").addEventListener("pause", () => botonSonando?.classList.remove("sonando"));
+const botonOir = (voz) => `<button type="button" class="oir" data-oir="${esc(voz)}" title="Escuchar ${esc(voz)}"><svg><use href="#i-play"/></svg></button>`;
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-oir]");
+  if (!b) return;
+  ev.preventDefault(); ev.stopPropagation();
+  oirVoz(b, b.dataset.oir);
+}, true);
+
+// Asistente, paso 3: elegir la voz escuchándola
+let vozElegida = "";
+function pintarVocesAsistente(voces, porDefecto) {
+  vozElegida = vozElegida || porDefecto;
+  $("a-voces").innerHTML = Object.entries(voces).map(([v, d]) => `
+    <label class="voz-op ${v === vozElegida ? "si" : ""}" data-voz="${esc(v)}">
+      <b>${esc(v)}</b><span>${esc(d)}</span>${botonOir(v)}</label>`).join("");
+}
+$("a-voces").addEventListener("click", (ev) => {
+  const l = ev.target.closest("[data-voz]");
+  if (!l || ev.target.closest("[data-oir]")) return;
+  vozElegida = l.dataset.voz;
+  pintarVocesAsistente(estado.opciones.voces_gemini, estado.opciones.voz_por_defecto);
+  pintarResumen();
+});
+
 // ============================================================== Barra superior: Flow, YouTube, consumo
 function pintarFlow(d) {
   const b = $("flow-boton");
@@ -115,9 +189,11 @@ document.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click"
 function pintarAsistente() {
   const p = estado?.produccion;
   // Con un guion aprobado, la caja se pliega a una línea: lo importante pasa a ser la ejecución.
-  const plegada = !!(p && p.guion_aprobado && !empezarOtro);
-  $("crear").classList.toggle("plegada", plegada);
-  if (plegada) $("a-compacta-txt").textContent = `Trabajando en «${p.titulo || p.tema}». Su guion ya está aprobado.`;
+  // El asistente se ve siempre completo; una línea discreta permite volver a la producción en curso.
+  const enCurso = !!(p && p.guion_aprobado);
+  $("crear").classList.remove("plegada");
+  $("a-compacta").classList.toggle("en-curso", enCurso);
+  if (enCurso) $("a-compacta-txt").textContent = `En curso: «${p.titulo || p.tema}»`;
   const enGuion = p && !p.guion_aprobado && !empezarOtro;
   const visible = enGuion ? 4 : paso;
   document.querySelectorAll(".paso").forEach((el) => { el.hidden = Number(el.dataset.paso) !== visible; });
@@ -165,7 +241,7 @@ function pintarResumen() {
     ? { vertical: "vertical 9:16", horizontal: "horizontal 16:9", cuadrado: "cuadrado 1:1" }[document.querySelector('input[name="formato"]:checked').value]
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s (Shorts y Reels)`,
        $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
-  const voz = $("a-voz").selectedOptions[0]?.textContent || "";
+  const voz = $("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "";
   $("a-resumen").innerHTML = propio
     ? `Tu guion se usa <b>tal cual</b> para un vídeo <b>${esc(formatos)}</b>, estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, <b>${esc(voz)}</b>. Lo revisas y lo apruebas en el paso 4.`
     : `Se <b>investiga</b> el tema${canal?.conectado ? " y lo que ya hay en <b>YouTube</b>" : ""} y se escribe un guion <b>${esc(formatos)}</b> en tono <b>${esc(elegido("tono").split(",")[0])}</b> para <b>${esc(elegido("publico"))}</b>. Estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, <b>${esc(voz)}</b>. Lo revisas antes de crear escenas.`;
@@ -179,7 +255,7 @@ $("a-crear").addEventListener("click", async () => {
     versiones: ["corto", "largo"].filter((v) => $(`a-${v}`).checked),
     segundos: { corto: Number($("a-corto-s").value), largo: Math.round(Number($("a-largo-m").value) * 60) },
     formato: document.querySelector('input[name="formato"]:checked').value,
-    tono: elegido("tono"), publico: elegido("publico"),
+    tono: elegido("tono"), publico: elegido("publico"), voz_nombre: vozElegida,
   };
   try {
     $("a-crear").disabled = true;
@@ -466,7 +542,7 @@ function pintarVoces({ voces, actual, muestras }) {
   $("v-lista").innerHTML = Object.entries(voces).map(([v, d]) => `
     <label class="voz-op ${vocesMarcadas.has(v) ? "si" : ""} ${v === actual ? "actual" : ""}">
       <input type="checkbox" value="${esc(v)}" ${vocesMarcadas.has(v) ? "checked" : ""}>
-      <b>${esc(v)}${v === actual ? " · en uso" : ""}</b><span>${esc(d)}</span></label>`).join("");
+      <b>${esc(v)}${v === actual ? " · en uso" : ""}</b><span>${esc(d)}</span>${botonOir(v)}</label>`).join("");
   $("v-probar").disabled = !vocesMarcadas.size;
   $("v-cuenta").textContent = vocesMarcadas.size ? `${vocesMarcadas.size} de 3 marcadas` : "";
   $("v-muestras").innerHTML = (muestras || []).map((m) => `
@@ -587,7 +663,8 @@ function pintarPaquete({ p }) {
   const pq = p.entregas;
   $("pq-preparar").disabled = !p.final || p.trabajo.ocupado;
   $("pq-preparar").firstChild.textContent = pq ? "Volver a preparar " : "Preparar los 3 formatos ";
-  $("pq-info").textContent = !p.final ? "Primero renderiza el vídeo completo en la pestaña Render."
+  $("pq-info").textContent = !p.final ? "Al renderizar el vídeo completo, los 3 formatos se preparan solos."
+    : p.entregas_error ? `No se pudieron preparar los recortes: ${p.entregas_error}. Pulsa «Volver a preparar».`
     : pq ? `Listo: ${pq.piezas.length} piezas en tu carpeta «3 Entregas».` : "Vídeo completo, Reels (el mejor momento) y Shorts (los mejores recortes), subtitulados y con sus textos.";
   $("pq-carpeta").hidden = !pq;
   $("pq-piezas").innerHTML = (pq?.piezas || []).map((z) => `
@@ -688,6 +765,7 @@ async function refrescar() {
   estado = d;
   const o = d.opciones;
   llenarSelect($("a-voz"), o.voces);
+  siCambia("voces-asistente", o.voces_gemini, () => pintarVocesAsistente(o.voces_gemini, o.voz_por_defecto));
   $("aviso-salud").hidden = !o.salud.length;
   $("aviso-salud").textContent = o.salud.join(" ");
   pintarFlow(d);
@@ -702,7 +780,6 @@ async function refrescar() {
   }
   if (!firmas.vistaInicial) {   // al abrir el panel con una producción en marcha, se va directo a su paso
     firmas.vistaInicial = 1;
-    if (!location.hash && p?.guion_aprobado) history.replaceState(null, "", `#${pasoActual(p)}`);
   }
   mostrarVista();
   if (!p || !p.guion_aprobado) return;
@@ -717,8 +794,10 @@ async function refrescar() {
     fondo: p.escenas[0] ? [p.escenas[0].elegida, p.escenas[0].tomas.length] : null, voz: p.voz?.generada }, pintarSubtitulos);
   siCambia("render", { p }, pintarRender);
   siCambia("miniaturas", { p, plataformas: o.plataformas }, pintarMiniaturas);
-  siCambia("paquete", { id: p.id, e: p.entregas, f: p.final, o: p.trabajo.ocupado }, () => pintarPaquete({ p }));
+  siCambia("paquete", { id: p.id, e: p.entregas, f: p.final, o: p.trabajo.ocupado, err: p.entregas_error }, () => pintarPaquete({ p }));
   $("carpeta-ruta").textContent = p.carpeta || "se crea al aprobar el guion";
+  const corto = (p.titulo || p.tema || "").replace(/[<>:"/\\|?*]/g, "").slice(0, 60).trim();
+  $("carpeta-como").textContent = `Descarga cada clip de Flow y déjalo en «1 Clips de Flow · ${corto}» como «${corto} - escena 01.mp4». Entra solo.`;
   siCambia("textos", { id: p.id, t: p.titulo, d: p.descripcion, b: p.biblia }, () => pintarTextos(p));
 }
 

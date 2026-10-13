@@ -114,18 +114,20 @@ def preparar(p: dict[str, Any], base: Path, avisar: Callable[[str, int], None] =
     piezas: list[dict[str, Any]] = []
     # 1 · Vídeo completo
     plataforma_completo = "shorts" if vertical else "youtube"
-    portada = _portada(fondo, salida / "portada_completo.jpg", plataforma_completo, m.get("texto") or plan["reels"]["gancho"], foco)
+    pref = re.sub(r"[^a-z0-9]+", "-", (p.get("titulo") or p["tema"]).lower()).strip("-")[:40] or "video"   # nombre del vídeo
+    _portada(fondo, salida / f"{pref}_portada_completo.jpg", plataforma_completo, m.get("texto") or plan["reels"]["gancho"], foco)
     piezas.append({"clave": "completo", "plataforma": "Vídeo completo · YouTube" if not vertical else "Vídeo completo",
-                   "video": p["final"]["archivo"], "portada": "entregas/portada_completo.jpg", **plan["youtube"],
+                   "video": p["final"]["archivo"], "portada": f"entregas/{pref}_portada_completo.jpg", **plan["youtube"],
                    "duracion": round(p["voz"]["duracion"], 1)})
     # 2 · Reels y 3 · Shorts (recortes verticales)
     recortes = [("reels", "Reels", plan["reels"])] + [(f"short_{i}", f"Short {i}", s) for i, s in enumerate(plan["shorts"], 1)]
     for k, (clave, nombre, mom) in enumerate(recortes):
         avisar(f"Montando {nombre} (escenas {mom['desde']}-{mom['hasta']})", 15 + int(75 * k / len(recortes)))
-        destino = salida / f"{clave}.mp4"
+        destino = salida / f"{pref}_{clave}.mp4"
         render.recorte(p, base, mom["desde"], mom["hasta"], destino, 1080, 1920, gancho=mom["gancho"])
-        _portada(fondo, salida / f"portada_{clave}.jpg", "reels" if clave == "reels" else "shorts", mom["gancho"], foco)
-        piezas.append({"clave": clave, "plataforma": nombre, "video": f"entregas/{clave}.mp4", "portada": f"entregas/portada_{clave}.jpg",
+        _portada(fondo, salida / f"{pref}_portada_{clave}.jpg", "reels" if clave == "reels" else "shorts", mom["gancho"], foco)
+        piezas.append({"clave": clave, "plataforma": nombre, "video": f"entregas/{pref}_{clave}.mp4",
+                       "portada": f"entregas/{pref}_portada_{clave}.jpg",
                        "titulo": mom["titulo"], "descripcion": mom["descripcion"], "hashtags": mom["hashtags"],
                        "desde": mom["desde"], "hasta": mom["hasta"], "duracion": mom["duracion"]})
 

@@ -480,8 +480,13 @@ def test_clip_dejado_en_la_carpeta_entra_en_su_escena(aislado, monkeypatch):
     p["escenas"][2].update(tomas=[], elegida=None)
     produccion.guardar(p)
     base = produccion.preparar_carpeta("p10")
-    assert (base / carpetas.CLIPS / "LEEME.txt").exists() and (base / carpetas.GUION / "Escenas para Flow.txt").exists()
-    medios.ffmpeg("-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=1", "-pix_fmt", "yuv420p", str(base / carpetas.CLIPS / "Escena 03 - buena.mp4"))
+    p = produccion.cargar("p10")
+    c = carpetas.corto(p)
+    clips = base / carpetas.subcarpeta(p, carpetas.CLIPS)
+    assert clips.name == f"1 Clips de Flow · {c}"                                    # el nombre del vídeo va en todo
+    assert (clips / f"{c} - LEEME.txt").exists()
+    assert (base / carpetas.subcarpeta(p, carpetas.GUION) / f"{c} - Escenas para Flow.txt").exists()
+    medios.ffmpeg("-f", "lavfi", "-i", "testsrc2=s=720x1280:r=24:d=1", "-pix_fmt", "yuv420p", str(clips / f"{c} - escena 03.mp4"))
     assert produccion.importar_carpeta("p10") == 1
     assert produccion.cargar("p10")["escenas"][2]["elegida"] == 0
     assert produccion.importar_carpeta("p10") == 0          # el mismo archivo no se importa dos veces
@@ -511,10 +516,32 @@ def test_paquete_de_entregas_completo_reels_y_shorts(aislado, monkeypatch):
     assert claves == ["completo", "reels", "short_1"]
     for z in res["piezas"]:
         assert (base / z["video"]).exists() and (base / z["portada"]).exists()
-    assert (pathlib.Path(res["carpeta"]) / "Descripciones para publicar.txt").exists()
+    c = carpetas.corto(p)
+    entregadas = sorted(f.name for f in pathlib.Path(res["carpeta"]).iterdir())
+    assert f"{c} - Descripciones para publicar.txt" in entregadas
+    assert all(nombre.startswith(f"{c} - ") for nombre in entregadas)                 # todo con el nombre del vídeo
 
 
 def test_ajustar_momento_respeta_duraciones(aislado):
     p = {"escenas": [{}] * 10, "voz": {"escenas": [{"ini": 10.0 * i, "fin": 10.0 * (i + 1)} for i in range(10)]}}
     assert entregas._ajustar(p, {"desde": 1, "hasta": 9}, 15, 45)["hasta"] == 4      # 90 s → recorta a 40 s
     assert entregas._ajustar(p, {"desde": 5, "hasta": 5}, 20, 58)["hasta"] == 6      # 10 s → amplía a 20 s
+
+
+def test_al_renderizar_se_preparan_solos_los_3_formatos(aislado, monkeypatch):
+    _produccion("p13", guion_aprobado=True)
+    llamadas = []
+    monkeypatch.setattr(render, "renderizar", lambda p, base, avisar=None: base / "final.mp4")
+    monkeypatch.setattr(entregas, "preparar", lambda p, base, avisar=None: llamadas.append(p["id"]) or
+                        {"piezas": [{"clave": "completo"}, {"clave": "reels"}, {"clave": "short_1"}], "carpeta": "x"})
+    produccion.renderizar("p13")
+    p = _esperar("p13")
+    assert p["final"]["archivo"] == "final.mp4" and llamadas == ["p13"]
+    assert [z["clave"] for z in p["entregas"]["piezas"]] == ["completo", "reels", "short_1"]
+
+
+def test_numero_de_escena_aunque_el_titulo_tenga_numeros():
+    p = {"titulo": "Las 2 bombas de 1945"}
+    assert carpetas.numero_de_escena(p, "Las 2 bombas de 1945 - escena 07.mp4") == 7
+    assert carpetas.numero_de_escena(p, "Las 2 bombas de 1945 - 12.png") == 12
+    assert carpetas.numero_de_escena(p, "Escena3.mp4") == 3

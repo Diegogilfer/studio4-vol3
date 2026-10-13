@@ -160,18 +160,20 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
 
 def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
           segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical",
-          tono: str = "", publico: str = "") -> list[str]:
+          tono: str = "", publico: str = "", voz_nombre: str = "") -> list[str]:
     """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
     Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
     if proveedor_voz not in voz.PROVEEDORES:
         raise ValueError(f"Voz desconocida: {proveedor_voz}")
     sello = time.strftime("%Y%m%d-%H%M%S")
+    voz_nombre = voz_nombre if voz_nombre in config.VOCES_GEMINI else config.VOZ_GEMINI
     if guion_propio.strip():
         if formato_propio not in config.FORMATOS:
             raise ValueError(f"Formato desconocido: {formato_propio}")
         texto = " ".join(guion_propio.split())
         pid = f"{sello}-{_slug(idea or texto[:40])}"
         _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
+               voz_nombre=voz_nombre,
                version="propio", guion=texto, autor_guion="Tú",
                segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO))
         activar(pid)
@@ -185,7 +187,7 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
     for v in versiones:
         pid = f"{sello}-{v}-{_slug(idea)}"
         _nueva(pid, tema=idea.strip(), formato=config.VERSIONES[v]["formato"], version=v, familia=sello,
-               estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando",
+               estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando", voz_nombre=voz_nombre,
                tono=tono.strip()[:80], publico=publico.strip()[:80])
         pids.append(pid)
     activar(pids[0])
@@ -348,6 +350,14 @@ def renderizar(pid: str) -> None:
             raise
         modificar(pid, lambda q: q.update(estado="terminado", final={
             "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
+        # Siempre se entregan los 3 formatos: completo, Reels y Shorts, sin pulsar nada más.
+        _avisar(pid, "Preparando Reels y Shorts para publicar", 92)
+        try:
+            res = entregas.preparar(cargar(pid), carpeta(pid), avisar=lambda f, n: _avisar(pid, f, 92 + n // 13))
+            modificar(pid, lambda q: q.update(entregas=res, entregas_error=""))
+        except Exception as e:  # noqa: BLE001 - el vídeo completo ya está hecho; los recortes se pueden repetir
+            logger.exception("Entregas tras el render")
+            modificar(pid, lambda q: q.update(entregas_error=str(e)))
     _en_fondo(pid, "Render", fase)
 
 
@@ -366,8 +376,8 @@ def importar_carpeta(pid: str) -> int:
     p = cargar(pid)
     if not p.get("guion_aprobado") or not p.get("escenas") or p["trabajo"].get("ocupado"):
         return 0
-    if not p.get("carpeta"):
-        preparar_carpeta(pid)
+    if not p.get("carpeta") or not (Path(p["carpeta"]) / carpetas.subcarpeta(p, carpetas.CLIPS)).is_dir():
+        preparar_carpeta(pid)   # crea la carpeta o la pone al día (nombres con el título del vídeo)
         p = cargar(pid)
     nuevas = carpetas.importar(p, lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="carpeta"))
     if nuevas:

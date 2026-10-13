@@ -15,6 +15,9 @@
     <symbol id="i-render" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></symbol>
     <symbol id="i-entregas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
     <symbol id="i-yt" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12 31 31 0 0 0 1 16.8a3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.8 31 31 0 0 0-.5-4.8zM9.8 15.1V8.9l5.4 3.1z"/></symbol>
+    <symbol id="i-ajustes" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.9l12-7.5a1 1 0 0 0 0-1.7l-12-7.5A1 1 0 0 0 7 4.5z"/></symbol>
+    <symbol id="i-pausa" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/></symbol>
     <symbol id="i-renovar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
     <symbol id="i-carga" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></symbol>
     <symbol id="i-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
@@ -33,6 +36,7 @@
     <span id="en-marcha" class="pildora marcha" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
     <a id="yt-pildora" class="pildora" href="/youtube/conectar" title="Solo lectura: tu canal y lo que ya hay en YouTube sobre cada tema"><svg><use href="#i-yt"/></svg><span id="yt-txt">Conectar YouTube</span></a>
     <a id="flow-boton" class="pildora aviso" target="_blank" href="/flow/emparejar"><span class="piloto"></span><span>Flow: conectar</span></a>
+    <button id="abrir-ajustes" class="redondo" title="Ajustes: tema de color del panel"><svg><use href="#i-ajustes"/></svg></button>
     <button id="flow-renovar" class="redondo" title="Nueva vinculación: genera otro código y vuelve a emparejar la extensión"><svg><use href="#i-renovar"/></svg></button>
   </div>
 </header>
@@ -48,8 +52,8 @@
       <div class="compacta" id="a-compacta">
         <span class="meta" id="a-compacta-txt"></span>
         <div class="fila" style="margin-top:0">
-          <a class="primario" href="#flow">Continuar con esta producción <svg width="16" height="16"><use href="#i-flecha"/></svg></a>
-          <button class="boton" id="a-nuevo">Crear otro vídeo</button>
+          <a class="boton" href="#flow">Continuar <svg width="14" height="14"><use href="#i-flecha"/></svg></a>
+          <button class="boton" id="a-nuevo" hidden>Crear otro vídeo</button>
         </div>
       </div>
       <ol class="a-pasos" id="a-pasos">
@@ -109,7 +113,9 @@
         <div class="pista">El estilo se aplica igual a todas las escenas, para que el vídeo no cambie de aspecto. La voz se interpreta escena a escena.</div>
         <div class="pregunta"><b>¿Cómo se ve y cómo suena?</b></div>
         <div class="estilos" id="a-estilos"></div>
-        <div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select></div>
+        <div class="fila"><span class="meta">Servicio de voz</span><select id="a-voz" class="campo"></select></div>
+        <p class="meta">Elige la voz: pulsa el botón para escucharla antes de decidir.</p>
+        <div class="voces-lista" id="a-voces"></div>
         <p class="resumen" id="a-resumen"></p>
         <div class="acciones-paso"><button class="boton" data-ir="2">Atrás</button>
           <button class="primario" id="a-crear"><span id="a-crear-txt">Investigar y escribir</span> <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
@@ -201,7 +207,7 @@
       </div>
       <div class="carpeta-caja">
         <div><b>Tu carpeta de esta producción</b><span id="carpeta-ruta"></span>
-          <small>Descarga cada clip de Flow y déjalo en «1 Clips de Flow» con el número de su escena en el nombre (escena 3.mp4). Entra solo.</small></div>
+          <small id="carpeta-como">Descarga cada clip de Flow y déjalo en la carpeta de clips con el nombre del vídeo y su escena. Entra solo.</small></div>
         <div class="fila" style="margin-top:0"><button class="primario" data-abrir="1 Clips de Flow">Abrir carpeta de clips</button>
           <button class="boton" data-abrir="">Abrir carpeta</button></div>
       </div>
@@ -322,6 +328,14 @@
   </div>
 </main>
 
+<div id="ajustes" class="ajustes-capa" hidden>
+  <aside class="ajustes-panel tarjeta" aria-label="Ajustes">
+    <div class="cabeza" style="margin-bottom:0"><h2>Ajustes · Tema</h2><button class="redondo" id="cerrar-ajustes" title="Cerrar">✕</button></div>
+    <p class="meta">Elige el fondo y los colores del panel. Se guarda en este navegador.</p>
+    <div class="temas" id="temas"></div>
+  </aside>
+</div>
+<audio id="oir-voz" preload="none" hidden></audio>
 <script src="/web/panel.js"></script>
 </body>
 </html>

@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import config, flow, guion, miniaturas, produccion, registro, render, subtitulos, voz, youtube  # noqa: E402
+from studio4 import carpetas, config, flow, guion, miniaturas, produccion, registro, render, subtitulos, voz, youtube  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -199,6 +199,9 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(self._estado())
         if ruta == "/api/producciones":
             return self._json(produccion.listar())
+        if ruta == "/api/voz/oir":   # frase de presentación de una voz (se graba una vez y se guarda)
+            nombre = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("voz", [""])[0]
+            return self._archivo(voz.muestra_generica(nombre))
         if ruta == "/api/subtitulos/vista":   # fotograma de muestra con los subtítulos actuales
             pid = produccion.activa()
             if not pid:
@@ -285,7 +288,7 @@ class Panel(BaseHTTPRequestHandler):
             pids = produccion.crear(idea, list(d.get("versiones") or ["corto"]), d.get("estilo", "cinematografico"),
                                     d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
                                     formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
-                                    publico=str(d.get("publico", "")))
+                                    publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")))
             return self._json({"ok": True, "ids": pids})
         if ruta == "/api/activar":
             pid = str(self._cuerpo_json().get("id", ""))
@@ -329,7 +332,8 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/carpeta/abrir":
             base = produccion.preparar_carpeta(pid)
             sub = str(self._cuerpo_json().get("sub", ""))
-            destino = base / sub if sub in ("1 Clips de Flow", "2 Guion y escenas", "3 Entregas") else base
+            p_act = produccion.cargar(pid)
+            destino = base / carpetas.subcarpeta(p_act, sub) if sub in (carpetas.CLIPS, carpetas.GUION, carpetas.ENTREGAS) else base
             os.startfile(str(destino))  # noqa: S606 - abre el Explorador de Windows en tu propio PC
             return self._json({"ok": True, "ruta": str(destino)})
         if ruta == "/api/escenas/tipos":

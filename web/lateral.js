@@ -2,6 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const firmas = {};
+try { document.documentElement.dataset.tema = localStorage.getItem("studio4-tema") || "cristal"; } catch (_) { /* tema por defecto */ }
 let estado = null;
 let sesion = null;
 
