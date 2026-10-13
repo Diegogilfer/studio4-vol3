@@ -1,6 +1,6 @@
 // STUDIO #4 · Recoger de Google Flow — proceso de fondo de la extensión.
 //
-// Recibe las imágenes que ve `recoger.js` y las entrega a STUDIO #4 (por defecto en tu equipo,
+// Recibe los vídeos e imágenes que ve `recoger.js` y los entrega a STUDIO #4 (por defecto en tu equipo,
 // http://127.0.0.1:8000) con el código de emparejamiento. El código se copia una vez desde
 // STUDIO #4 › Ajustes › Conexiones › Google Flow. No se usa ninguna credencial de Google.
 
@@ -20,9 +20,9 @@ function deBase64(b64) {
 
 async function bytesDe(msg) {
   if (msg.b64) return { cuerpo: deBase64(msg.b64), mime: msg.mime || "application/octet-stream" };
-  if (!msg.url) throw new Error("No se pudo leer la imagen en Flow.");
+  if (!msg.url) throw new Error("No se pudo leer el clip en Flow.");
   const r = await fetch(msg.url, { credentials: "include" });
-  if (!r.ok) throw new Error(`Flow no dejó bajar la imagen (${r.status}).`);
+  if (!r.ok) throw new Error(`Flow no dejó bajar el clip (${r.status}).`);
   const blob = await r.blob();
   return { cuerpo: blob, mime: blob.type || "application/octet-stream" };
 }
@@ -98,7 +98,41 @@ async function emparejar(codigo, servidor) {
   return { ok: true };
 }
 
+// Cambiar la escena que toca (desde el panel flotante de Flow).
+async function activa(escena) {
+  const a = await ajustes();
+  const r = await fetch(`${a.servidor.replace(/\/+$/, "")}/api/flow/activa`, {
+    method: "POST",
+    headers: { "X-Studio4-Token": a.codigo, "X-Flow-Version": VERSION, "Content-Type": "application/json" },
+    body: JSON.stringify({ escena }),
+  });
+  const d = await r.json().catch(() => ({}));
+  return r.ok ? { ok: true, sesion: d.sesion } : { ok: false, error: d.error || `STUDIO #4 respondió ${r.status}.` };
+}
+
+// El portapapeles solo acepta PNG: la imagen inicial de la escena se convierte aquí.
+async function imagenPng(url) {
+  const a = await ajustes();
+  if (!url.startsWith(a.servidor.replace(/\/+$/, ""))) throw new Error("Solo imágenes de tu STUDIO #4");
+  const bmp = await createImageBitmap(await (await fetch(url)).blob());
+  const lienzo = new OffscreenCanvas(bmp.width, bmp.height);
+  lienzo.getContext("2d").drawImage(bmp, 0, 0);
+  const png = await lienzo.convertToBlob({ type: "image/png" });
+  const bytes = new Uint8Array(await png.arrayBuffer());
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { b64: btoa(bin) };
+}
+
 chrome.runtime.onMessage.addListener((msg, _quien, responder) => {
+  if (msg?.tipo === "activa") {
+    activa(Number(msg.escena)).then(responder).catch(() => responder({ ok: false }));
+    return true;
+  }
+  if (msg?.tipo === "imagen-png") {
+    imagenPng(String(msg.url || "")).then(responder).catch(() => responder({ error: true }));
+    return true;
+  }
   if (msg?.tipo === "emparejar") {
     emparejar(String(msg.codigo || ""), String(msg.servidor || ""))
       .then(responder)
@@ -110,7 +144,7 @@ chrome.runtime.onMessage.addListener((msg, _quien, responder) => {
       .then(async (d) => { if (!d.omitida) await anotar({ ok: true, error: "" }); responder({ ok: true, ...d }); })
       .catch(async (e) => {
         const error = e instanceof TypeError
-          ? "STUDIO #4 no responde: ábrelo (iniciar_panel.bat) y vuelve a generar."
+          ? "STUDIO #4 no responde: ábrelo (python servidor.py) y vuelve a generar."
           : String(e.message || e);
         await anotar({ ok: false, error });
         responder({ ok: false, error });

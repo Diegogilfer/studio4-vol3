@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>STUDIO #4</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238b5cf6'/><stop offset='1' stop-color='%232dd4bf'/></linearGradient></defs><rect width='32' height='32' rx='10' fill='url(%23g)'/><text x='16' y='21' font-size='12' font-family='Arial' font-weight='700' text-anchor='middle' fill='white'>S4</text></svg>">
+<link rel="stylesheet" href="/web/estilo.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-crear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/><path d="M19 3v4M21 5h-4"/></symbol>
+    <symbol id="i-escenas" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M7 4v16M17 4v16M2 9h5M17 9h5M2 15h5M17 15h5"/></symbol>
+    <symbol id="i-voz" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></symbol>
+    <symbol id="i-render" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></symbol>
+    <symbol id="i-publicar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-renovar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-carga" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></symbol>
+    <symbol id="i-flecha" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  </defs>
+</svg>
+
+<header class="barra">
+  <a class="marca" href="#crear" title="STUDIO #4 — Inicio"><span class="logo">S4</span><span>STUDIO #4</span></a>
+  <nav class="nav" aria-label="Navegación principal">
+    <a href="#crear" class="activo"><svg><use href="#i-crear"/></svg><span>Crear</span></a>
+    <a href="#escenas-sec"><svg><use href="#i-escenas"/></svg><span>Escenas</span></a>
+    <a href="#voz-sec"><svg><use href="#i-voz"/></svg><span>Voz</span></a>
+    <a href="#render-sec"><svg><use href="#i-render"/></svg><span>Render</span></a>
+    <a href="#publicar-sec"><svg><use href="#i-publicar"/></svg><span>Publicar</span></a>
+  </nav>
+  <div class="barra-der">
+    <span id="en-marcha" class="pildora marcha" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
+    <span id="consumo" class="pildora" title=""><span class="ocultable">Este mes</span><b id="consumo-txt">—</b></span>
+    <a id="flow-boton" class="pildora aviso" target="_blank" href="/flow/emparejar"><span class="piloto"></span><span>Flow: conectar</span></a>
+    <button id="flow-renovar" class="redondo" title="Nueva vinculación: genera otro código y vuelve a emparejar la extensión"><svg><use href="#i-renovar"/></svg></button>
+  </div>
+</header>
+
+<main>
+  <!-- Inicio: lo mismo que «¿Qué quieres crear hoy?» del STUDIO #4 -->
+  <section id="crear" class="hero entrar">
+    <div class="hero-fondo" aria-hidden="true"><div class="hero-vivo"><div class="hero-rejilla"></div></div></div>
+    <div class="hero-cuerpo">
+      <div class="intro">
+        <span class="etiqueta-sec">Gemini · Google Flow · Render local</span>
+        <h1>¿Qué quieres <em>crear</em> hoy?</h1>
+        <p>Escríbelo como se lo dirías a tu equipo. Gemini escribe el guion por escenas con el prompt listo para Flow; tú generas los clips con tu suscripción y STUDIO monta el vídeo.</p>
+      </div>
+      <form id="nuevo" class="caja-viva">
+        <textarea name="tema" rows="3" required placeholder="Ej.: El faro que siguió encendido 40 años sin farero"></textarea>
+        <div class="caja-pie">
+          <div class="segmentos" role="radiogroup" aria-label="Formato">
+            <label title="Shorts, Reels, TikTok"><input type="radio" name="formato" value="vertical" checked>9:16</label>
+            <label title="YouTube"><input type="radio" name="formato" value="horizontal">16:9</label>
+            <label title="Feed"><input type="radio" name="formato" value="cuadrado">1:1</label>
+          </div>
+          <label class="duracion">Duración <input type="range" name="segundos" min="15" max="180" step="5" value="45"><b id="seg-valor">45 s</b></label>
+          <select name="estilo" id="op-estilo" class="campo" aria-label="Estilo visual"></select>
+          <select name="voz" id="op-voz" class="campo" aria-label="Voz"></select>
+          <button class="primario" type="submit">Continuar <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+        </div>
+      </form>
+      <p class="aviso-txt" id="aviso-panel" hidden></p>
+      <p class="aviso-txt" id="aviso-gemini" hidden>Falta GEMINI_API_KEY en .env (gratis en aistudio.google.com/apikey).</p>
+      <div>
+        <p class="meta" style="margin-bottom:10px">Tus producciones</p>
+        <div id="lista" class="producciones"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="prod" class="prod" hidden>
+    <section class="tarjeta entrar">
+      <div class="cabeza" style="margin-bottom:0">
+        <div style="display:grid;gap:4px">
+          <h1 id="p-titulo" class="titulo-prod"></h1>
+          <p class="meta" id="p-meta"></p>
+        </div>
+        <ol class="pasos" id="pasos">
+          <li data-p="guion">Guion</li><li data-p="escenas">Escenas</li><li data-p="voz">Voz</li><li data-p="flow">Flow</li><li data-p="render">Render</li>
+        </ol>
+      </div>
+      <div id="trabajo" class="trabajo" hidden>
+        <div class="trabajo-txt"><span id="t-fase"></span><span id="t-pct"></span></div>
+        <div class="progreso"><div id="t-barra"></div></div>
+      </div>
+      <p id="t-error" class="error" hidden></p>
+    </section>
+
+    <section id="escenas-sec" class="tarjeta">
+      <div class="cabeza">
+        <div style="display:grid;gap:4px">
+          <h2>Escenas para Google Flow <span class="meta" id="e-cuenta"></span></h2>
+          <p class="meta">Copia el prompt, genera el vídeo en Flow y la extensión lo trae aquí solo. Elige la mejor toma con un clic.</p>
+        </div>
+      </div>
+      <div id="escenas" class="escenas"></div>
+    </section>
+
+    <div class="dos">
+      <section id="voz-sec" class="tarjeta">
+        <div class="cabeza"><h2>Voz</h2><span class="meta" id="v-info"></span></div>
+        <audio id="v-audio" controls preload="none"></audio>
+        <div class="fila">
+          <select id="v-proveedor" class="campo"></select>
+          <button id="v-rehacer" class="boton">Rehacer voz</button>
+        </div>
+      </section>
+      <section class="tarjeta">
+        <div class="cabeza"><h2>Subtítulos</h2></div>
+        <div class="fila" style="margin-top:0">
+          <label class="check"><input type="checkbox" id="s-activos"> Subtítulos palabra a palabra</label>
+          <label class="check"><input type="checkbox" id="s-gancho"> Gancho arriba al empezar</label>
+        </div>
+        <div class="fila">
+          <select id="s-paleta" class="campo"></select>
+          <select id="s-posicion" class="campo"><option value="abajo">Abajo</option><option value="centro">Centro</option><option value="arriba">Arriba</option></select>
+          <select id="s-tamano" class="campo"><option value="pequeno">Pequeños</option><option value="normal">Normales</option><option value="grande">Grandes</option></select>
+        </div>
+      </section>
+    </div>
+
+    <section id="render-sec" class="tarjeta">
+      <div class="cabeza">
+        <div style="display:grid;gap:4px"><h2>Render final</h2><p class="meta" id="r-falta"></p></div>
+        <button class="primario" id="r-boton">Renderizar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
+      </div>
+      <div id="r-final" class="final" hidden>
+        <video id="r-video" controls preload="metadata"></video>
+        <div style="display:grid;gap:10px">
+          <a id="r-descargar" class="primario" download>Descargar MP4</a>
+          <p class="meta">Render local con FFmpeg: voz, sonido ambiente de Veo bajo la voz y subtítulos quemados.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="publicar-sec" class="tarjeta">
+      <div class="cabeza"><h2>Para publicar</h2></div>
+      <div class="copiable"><div class="cab"><span class="meta">Título</span><button class="boton" data-copiar="pub-titulo">Copiar</button></div><p id="pub-titulo"></p></div>
+      <div class="copiable"><div class="cab"><span class="meta">Descripción y hashtags</span><button class="boton" data-copiar="pub-desc">Copiar</button></div><p id="pub-desc"></p></div>
+      <details><summary>Guion completo</summary><p id="pub-guion" class="guion"></p></details>
+      <details><summary>Biblia visual (lo que no cambia entre escenas)</summary><div id="pub-biblia"></div></details>
+    </section>
+  </div>
+</main>
+
+<script src="/web/panel.js"></script>
+</body>
+</html>

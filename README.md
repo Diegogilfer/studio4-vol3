@@ -1,129 +1,85 @@
-# STUDIO 4 Vol. 3 🎬
+# STUDIO #4 Vol. 3
 
-Pipeline automatizado de generación audiovisual de alta retención combinando inteligencia artificial generativa, síntesis vocal y renderizado de video con FFmpeg.
-
----
-
-## ⚡ Arquitectura del Sistema
+Vídeos cortos hechos solo con Google: lo **gratis** de Gemini y tu **suscripción** de Google Flow.
+El montaje final se hace en tu PC con FFmpeg, también gratis.
 
 ```
-                        ┌─────────────────────────────────────┐
-                        │          USUARIO / CLI              │
-                        │      python main.py "Tema"          │
-                        │      [--writer gemini | claude]     │
-                        └──────────────────┬──────────────────┘
-                                           │
-                                           ▼
-                      ┌─────────────────────────────────────────┐
-                      │ 1. writer.py (Google Gemini / Claude)   │
-                      │    - Por defecto: Gemini 2.5            │
-                      │    - Guion magnético de alta retención   │
-                      │    - Gancho viral en los 1ros 3 segundos│
-                      └────────────────────┬────────────────────┘
-                                           │
-                                           ▼
-                      ┌─────────────────────────────────────────┐
-                      │ 2. gemini_director.py (Gemini 2.5 Flash)│
-                      │    - Salida estructurada JSON estricta  │
-                      │    - Título viral + Descripción SEO     │
-                      │    - Desglose de escenas + B-roll Pexels│
-                      └─────────────┬─────────────────┬─────────┘
-                                    │                 │
-                   ┌────────────────┴──────┐   ┌──────┴────────────────┐
-                   │ 3. voice.py           │   │ 4. video_maker.py     │
-                   │    - Google Cloud TTS │   │    - Pexels API       │
-                   │    - Neural2/Journey  │   │    - Descarga B-roll  │
-                   │    - Audio WAV        │   │      en HD por escena │
-                   └───────────────┬───────┘   └──────┬────────────────┘
-                                   │                  │
-                                   └─────────┬────────┘
-                                             │
-                                             ▼
-                               ┌───────────────────────────┐
-                               │ 5. video_maker.py (FFmpeg)│
-                               │    - Normalización y trim │
-                               │    - Concat de escenas    │
-                               │    - Mezcla de audio final│
-                               │    - output/video_final   │
-                               └───────────────────────────┘
+ Tema ─► Gemini (gratis) ─► guion
+                │
+                ▼
+         Gemini (gratis) ─► escenas: texto de voz + prompt para Flow (biblia visual fija)
+                │                                   │
+                ▼                                   ▼
+   Gemini TTS (gratis) o ElevenLabs        Google Flow / Veo (tu suscripción)
+   una sola llamada por vídeo              tú pegas el prompt y generas;
+   + tiempo de cada escena y palabra       la extensión trae el clip a su escena
+                │                                   │
+                └──────────────► FFmpeg (tu PC) ◄───┘
+                     cada clip se ajusta a su trozo de voz,
+                     sonido ambiente de Veo bajo la voz,
+                     subtítulos palabra a palabra, −14 LUFS
+                                   │
+                                   ▼
+                     producciones/<id>/final.mp4
 ```
 
----
+## Qué es gratis y qué no
 
-## 🛠 Requisitos Previos
+| Paso | Servicio | Coste |
+|---|---|---|
+| Guion y escenas | Gemini API (AI Studio), nivel gratis | 0 $ (2 llamadas por vídeo) |
+| Voz | Gemini TTS, nivel gratis | 0 $ (1 llamada por vídeo; en preview hay ~50 al día) |
+| Voz (opcional) | ElevenLabs, plan gratis | 0 $, pero 10.000 créditos/mes, **sin uso comercial** y hay que citarlo |
+| Vídeo | Google Flow (Veo) en el navegador | tus créditos del plan; Flow **no tiene API**, por eso va con la extensión |
+| Render | FFmpeg en tu PC | 0 $ |
 
-- **Python 3.10+** (Detectado: Python 3.13)
-- **FFmpeg y FFprobe** instalados y disponibles en el PATH del sistema.
+La generación de imagen y de vídeo **por API** (Imagen/Veo) se cobra aparte, así que STUDIO no la usa.
 
----
+## Instalar
 
-## 📦 Instalación
+1. Python 3.10+ y **FFmpeg** en el PATH.
+2. `pip install -r requirements.txt`
+3. Copia `.env.example` como `.env` y pon tu `GEMINI_API_KEY` (gratis en https://aistudio.google.com/apikey).
+4. Carga la extensión: `chrome://extensions` › Modo de desarrollador › **Cargar sin empaquetar** › carpeta `extension-flow`.
 
-1. Crear un entorno virtual (recomendado) y activar:
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate   # En Windows
-   ```
+## Usar
 
-2. Instalar dependencias:
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. Doble clic en **`iniciar.bat`** (o `python servidor.py`). Se abre http://127.0.0.1:8000.
+2. Pulsa **«Flow: conectar»** arriba a la derecha: la extensión queda vinculada en un clic.
+3. Escribe el tema, elige formato, duración, estilo y voz, y pulsa **Continuar**. Gemini escribe el guion
+   y las escenas, y la voz se genera sola.
+4. Abre Google Flow. El panel flotante de STUDIO te enseña la escena que toca: **Copiar prompt**, lo pegas
+   en Flow y generas. El vídeo llega solo a esa escena. Si Flow saca varias variantes, todas quedan
+   como tomas y en el panel eliges la mejor.
+   Desde la escena 2, «Copiar imagen inicial» te da el último fotograma de la anterior para usarlo en
+   «Fotogramas a vídeo»: así la secuencia no salta.
+5. Cuando todas las escenas tienen clip, **Renderizar vídeo**. Copia el título, la descripción y los hashtags
+   desde «Para publicar».
 
----
+## Estructura
 
-## 🔑 Configuración (`.env`)
-
-Copia la plantilla `.env.example` como `.env`:
-
-```bash
-copy .env.example .env
+```
+servidor.py            panel local (solo 127.0.0.1; solo sirve web/ y los medios de cada producción)
+iniciar.bat            arranca el panel y abre el navegador
+studio4/
+  config.py            claves, modelos, formatos, estilos y el código de vinculación con Flow
+  gemini.py            cliente de Gemini con modelos de reserva y reintentos
+  guion.py             fase 1: guion
+  director.py          fase 2: escenas + biblia visual + prompt de Flow por escena
+  voz.py               fase 3: Gemini TTS / ElevenLabs y tiempos de cada escena y palabra
+  flow.py              fase 4: recibe los clips de la extensión y los coloca en su escena
+  render.py            fase 5: FFmpeg
+  subtitulos.py        subtítulos ASS palabra a palabra
+  produccion.py        guarda cada producción en producciones/<id>/proyecto.json y lanza las fases
+  medios.py            utilidades de FFmpeg/FFprobe
+  registro.py          consumo del mes (llamadas a Gemini, tomas de Flow, créditos de ElevenLabs)
+web/                   el panel, con el diseño del STUDIO #4 original
+extension-flow/        extensión de Chrome/Edge para Google Flow
+producciones/          tus vídeos (no se suben a git)
 ```
 
-Edita `.env` con tus credenciales:
+## Seguridad
 
-```ini
-# Anthropic Claude API Key (Guionista Creativo)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Google Gemini API Key (Director Técnico)
-GEMINI_API_KEY=AIzaSy...
-
-# Pexels API Key (B-roll & Footage)
-PEXELS_API_KEY=...
-
-# Google Cloud Service Account (Google Cloud TTS)
-GOOGLE_APPLICATION_CREDENTIALS=credentials.json
-```
-
----
-
-## 🚀 Uso
-
-### Ejecución básica:
-```bash
-python main.py "La paradoja de Fermi y el silencio del universo"
-```
-
-### Opciones avanzadas:
-```bash
-# Formato vertical (Shorts / Reels / TikTok) de 45 segundos:
-python main.py "3 hábitos estoicos que cambiarán tu vida" --duration 45 --orientation portrait
-
-# Especificar una voz particular de Google Cloud TTS:
-python main.py "El telescopio James Webb" --voice es-US-Journey-F
-
-# Cambiar ruta de salida:
-python main.py "El origen de la inteligencia artificial" --output output/ia_origen.mp4
-```
-
----
-
-## 📂 Archivos Generados en Cada Ejecución
-
-- `output/script.txt`: Guion limpio generado por Claude.
-- `output/production_plan.json`: Estructura JSON con desglose de escenas, palabras clave de Pexels, título y descripción SEO generados por Gemini.
-- `output/audio.wav`: Pista de locución continua de Google Cloud TTS.
-- `temp_clips/`: Metraje B-roll descargado y clips normalizados.
-- `output/video_final.mp4`: Video ensamblado y sincronizado listo para publicar.
-
+- El servidor solo escucha en tu equipo y solo entrega `web/` y los medios de cada producción. Nunca entrega `.env` ni el código.
+- Rechaza peticiones con un `Host` ajeno (protege contra el «DNS rebinding») y acciones que vengan de otras webs.
+- La extensión entra con el código de vinculación. **Nueva vinculación** genera otro y anula el anterior.

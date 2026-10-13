@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Conectar Google Flow · STUDIO #4</title>
   <style>
-    :root { --fondo: #0d0b14; --panel: #17131f; --borde: #2c2540; --texto: #ece9f5; --tenue: #a39cb8;
-            --violeta: #8b5cf6; --rosa: #f472b6; --ok: #34d399; --aviso: #f59e0b; }
+    :root { --fondo: #07080d; --panel: #12141d; --borde: #232736; --texto: #eef1f6; --tenue: #9aa3b2;
+            --violeta: #8b5cf6; --rosa: #2dd4bf; --ok: #34d399; --aviso: #f59e0b; }
+    @font-face { font-family: "Geist Variable"; src: url("/web/fuentes/geist-latin-wght-normal.woff2") format("woff2-variations"); font-weight: 100 900; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
            background: radial-gradient(1200px 600px at 20% 0%, color-mix(in oklab, var(--violeta) 22%, transparent), transparent 60%),
                        radial-gradient(900px 500px at 100% 100%, color-mix(in oklab, var(--rosa) 14%, transparent), transparent 60%), var(--fondo);
-           color: var(--texto); font: 16px/1.5 "Inter", system-ui, "Segoe UI", sans-serif; }
+           color: var(--texto); font: 16px/1.5 "Geist Variable", "Segoe UI", system-ui, sans-serif; }
     main { width: min(760px, 100%); display: grid; gap: 18px; }
     .tarjeta { border: 1px solid var(--borde); border-radius: 26px; background: color-mix(in oklab, var(--panel) 92%, transparent);
                padding: 28px; box-shadow: 0 30px 80px -40px #000; }
@@ -49,13 +50,13 @@
     <section class="tarjeta">
       <div class="marca"><b>S4</b> STUDIO #4 · Google Flow</div>
       <h1>Conectar la extensión</h1>
-      <p>Las imágenes que generes en Google Flow llegarán solas a tu estudio, escena a escena.</p>
+      <p>Los vídeos e imágenes que generes en Google Flow llegarán solos a tu estudio, escena a escena.</p>
     </section>
     <div id="estado" class="estado"><span class="punto"></span><span id="texto">Buscando la extensión en este navegador…</span></div>
     <section id="listo" class="tarjeta" hidden>
       <div class="botones">
         <a class="boton primario" href="https://labs.google/fx/tools/flow" target="_blank" rel="noreferrer">Abrir Google Flow</a>
-        <a class="boton" href="/#/ajustes/conexiones">Volver a STUDIO #4</a>
+        <a class="boton" href="/">Volver a STUDIO #4</a>
       </div>
     </section>
     <section id="instalar" class="tarjeta" hidden>
@@ -63,7 +64,7 @@
       <ol>
         <li><span class="n">1</span><b>Abre las extensiones</b>Escribe <code>chrome://extensions</code> (en Edge, <code>edge://extensions</code>).</li>
         <li><span class="n">2</span><b>Modo de desarrollador</b>Actívalo arriba a la derecha.</li>
-        <li><span class="n">3</span><b>Cargar sin empaquetar</b>Elige esta carpeta:<code id="carpeta">herramientas\extension-flow</code></li>
+        <li><span class="n">3</span><b>Cargar sin empaquetar</b>Elige esta carpeta:<code id="carpeta">studio4-vol3\extension-flow</code></li>
         <li><span class="n">4</span><b>Vuelve aquí</b>Pulsa «Conectar» otra vez en STUDIO #4 y quedará conectada sola.</li>
       </ol>
     </section>
@@ -84,7 +85,7 @@
         respondio = true;
         if (ev.data.estado === "emparejada") {
           estado.className = "estado ok";
-          texto.textContent = "¡Conectada! La extensión ya manda tus imágenes de Flow a STUDIO #4.";
+          texto.textContent = "¡Conectada! La extensión ya manda tus clips de Flow a STUDIO #4.";
           document.getElementById("listo").hidden = false;
         } else {
           estado.className = "estado mal";
@@ -100,7 +101,7 @@
         texto.textContent = "La extensión no está instalada en este navegador.";
         document.getElementById("instalar").hidden = false;
         try {
-          const r = await fetch("/api/flow");
+          const r = await fetch("/api/estado");
           const d = await r.json();
           if (d.carpeta_extension) document.getElementById("carpeta").textContent = d.carpeta_extension;
         } catch (_) { /* se queda la ruta corta */ }

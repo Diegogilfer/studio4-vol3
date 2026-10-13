@@ -26,7 +26,8 @@ __pycache__/
 *.so
 .pytest_cache/
 
-# Archivos de medios temporales y renders de salida
+# Producciones (guiones, clips de Flow, voz y vídeos) y restos de la versión anterior
+producciones/
 output/
 temp_clips/
 *.mp4

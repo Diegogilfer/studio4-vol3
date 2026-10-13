@@ -8,7 +8,7 @@ function pintarEstado(conexion, error) {
     caja.textContent = error;
   } else if (conexion === "ok") {
     caja.className = "estado ok";
-    caja.textContent = "Conectada con STUDIO #4. Genera en Flow y las imágenes aparecerán allí.";
+    caja.textContent = "Conectada con STUDIO #4. Genera en Flow y los clips aparecerán en su escena.";
   } else {
     caja.className = "estado mal";
     caja.textContent = conexion || "Sin probar todavía.";
@@ -100,7 +100,7 @@ $("activo").addEventListener("change", () => chrome.storage.local.set({ activo: 
 $("visibles").addEventListener("click", async () => {
   const [pestana] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!pestana?.url?.startsWith("https://labs.google/")) {
-    pintarEstado("", "Abre Google Flow (labs.google) en esta pestaña para enviar sus imágenes.");
+    pintarEstado("", "Abre Google Flow (labs.google) en esta pestaña para enviar sus clips.");
     return;
   }
   const r = await chrome.tabs.sendMessage(pestana.id, { tipo: "enviar-visibles" }).catch(() => null);
