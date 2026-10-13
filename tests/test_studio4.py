@@ -361,7 +361,7 @@ def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
     recibido = {}
 
-    def locutar(seg, destino, prov, produccion="", direcciones=None):
+    def locutar(seg, destino, prov, produccion="", direcciones=None, voz_nombre=None):
         recibido["direcciones"] = direcciones
         return {"proveedor": prov, "duracion": 3.0, "escenas": [{"ini": 0, "fin": 3.0}], "palabras": []}
     monkeypatch.setattr(voz, "locutar", locutar)

@@ -23,6 +23,21 @@ MODELOS_TEXTO_RESERVA = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.
 MODELO_TTS = os.getenv("GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview")
 MODELOS_TTS_RESERVA = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"]
 VOZ_GEMINI = os.getenv("GEMINI_TTS_VOICE", "Charon")
+# Voces de Gemini TTS buenas para narrar, con el carácter que les da Google.
+VOCES_GEMINI = {
+    "Charon": "Informativa y grave: documental",
+    "Sadaltager": "Con aire de experto: divulgación",
+    "Orus": "Firme y segura",
+    "Gacrux": "Madura y pausada",
+    "Iapetus": "Clara y cercana",
+    "Algenib": "Rasgada, con carácter",
+    "Kore": "Firme y nítida",
+    "Sulafat": "Cálida",
+    "Aoede": "Ligera y fresca",
+    "Puck": "Animada",
+    "Fenrir": "Enérgica, emocionante",
+    "Enceladus": "Suave, casi susurrada",
+}
 ESTILO_VOZ = os.getenv(
     "GEMINI_TTS_ESTILO",
     "Narra en español neutro, como un documental intrigante: ritmo ágil, pausas cortas entre frases",

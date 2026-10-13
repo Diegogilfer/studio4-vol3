@@ -99,7 +99,7 @@ def _leyo_etiquetas(wav: Path, texto: str, produccion: str) -> bool:
 
 
 # --- Gemini TTS -------------------------------------------------------------------------------
-def _gemini(texto: str, destino: Path, produccion: str) -> None:
+def _gemini(texto: str, destino: Path, produccion: str, voz_nombre: str | None = None) -> None:
     from google.genai import types
     from .gemini import cliente
 
@@ -107,7 +107,7 @@ def _gemini(texto: str, destino: Path, produccion: str) -> None:
         response_modalities=["AUDIO"],
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=config.VOZ_GEMINI)
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voz_nombre or config.VOZ_GEMINI)
             )
         ),
     )
@@ -236,8 +236,17 @@ def reserva(proveedor: str) -> str | None:
 
 
 # --- Entrada única ----------------------------------------------------------------------------
+def muestra(texto: str, voz_nombre: str, destino: Path, produccion: str = "") -> Path:
+    """Unos segundos de tu guion con una voz concreta, para compararlas antes de elegir."""
+    if voz_nombre not in config.VOCES_GEMINI:
+        raise ValueError(f"Voz desconocida: {voz_nombre}")
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    _gemini(" ".join(texto.split()), destino, produccion, voz_nombre)
+    return destino
+
+
 def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
-            direcciones: list[dict[str, str]] | None = None) -> dict[str, Any]:
+            direcciones: list[dict[str, str]] | None = None, voz_nombre: str | None = None) -> dict[str, Any]:
     """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
     Con `direcciones` (tono y ritmo por escena), Gemini TTS interpreta cada escena como toca."""
     limpios = [" ".join(s.split()) for s in segmentos]
@@ -250,11 +259,11 @@ def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", prod
         alineacion = _elevenlabs(texto, destino, produccion)
     else:
         dirigido = _texto_dirigido(limpios, direcciones)
-        _gemini(dirigido, destino, produccion)
+        _gemini(dirigido, destino, produccion, voz_nombre)
         dirigida = dirigido != texto
         if dirigida and _leyo_etiquetas(destino, texto, produccion):
             # Si la voz pronunció alguna etiqueta, se repite la toma sin dirección por escena.
-            _gemini(texto, destino, produccion)
+            _gemini(texto, destino, produccion, voz_nombre)
             dirigida = False
     total = medios.duracion(destino)
 
@@ -269,4 +278,4 @@ def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", prod
     escenas = [{"ini": round(c, 3), "fin": round(cortes[i + 1] if i + 1 < len(cortes) else total, 3)}
                for i, c in enumerate(cortes)]
     return {"proveedor": proveedor, "duracion": round(total, 3), "escenas": escenas, "palabras": palabras,
-            "dirigida": dirigida}
+            "dirigida": dirigida, "voz_nombre": voz_nombre or config.VOZ_GEMINI if proveedor == "gemini" else ""}

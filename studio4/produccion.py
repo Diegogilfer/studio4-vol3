@@ -285,7 +285,7 @@ def _generar_voz(pid: str) -> None:
     direcciones = [{"tono": e.get("tono_voz", "narrativo"), "ritmo": e.get("ritmo_voz", "normal")} for e in p["escenas"]]
     try:
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
-                              direcciones=direcciones)
+                              direcciones=direcciones, voz_nombre=p.get("voz_nombre"))
     except RuntimeError as e:
         # Cupo diario de Gemini TTS agotado (o ElevenLabs sin créditos): se prueba con la otra voz si existe.
         otra = voz.reserva(p["proveedor_voz"])
@@ -293,8 +293,40 @@ def _generar_voz(pid: str) -> None:
             raise
         logger.warning("Voz %s falló (%s); probando %s", p["proveedor_voz"], e, otra)
         _avisar(pid, f"{voz.PROVEEDORES[p['proveedor_voz']]} falló; uso {voz.PROVEEDORES[otra]}", 75)
-        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones)
+        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones,
+                              voz_nombre=p.get("voz_nombre"))
     modificar(pid, lambda q: q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")}))
+
+
+def muestras_voz(pid: str, voces: list[str]) -> None:
+    """Graba el arranque del guion con 1 a 3 voces para escucharlas y elegir."""
+    voces = [v for v in dict.fromkeys(voces) if v in config.VOCES_GEMINI][:3]
+    if not voces:
+        raise ValueError("Elige de 1 a 3 voces.")
+    p = cargar(pid)
+    texto = " ".join(" ".join(e["texto_voz"] for e in p["escenas"][:3]).split()[:40]) if p["escenas"] else p["guion"][:260]
+    if not texto:
+        raise ValueError("Hace falta el guion para grabar las muestras.")
+
+    def fase():
+        hechas = []
+        for i, v in enumerate(voces):
+            _avisar(pid, f"Grabando la muestra con la voz {v}", 10 + 80 * i // len(voces))
+            archivo = carpeta(pid) / "muestras" / f"{v}.wav"
+            voz.muestra(texto, v, archivo, produccion=pid)
+            hechas.append({"voz": v, "descripcion": config.VOCES_GEMINI[v], "archivo": f"muestras/{v}.wav",
+                           "generada": time.strftime("%H%M%S")})
+        modificar(pid, lambda q: q.update(muestras_voz=hechas))
+    _en_fondo(pid, "Muestras de voz", fase)
+
+
+def elegir_voz(pid: str, voz_nombre: str) -> None:
+    """Fija la voz elegida y vuelve a grabar la locución completa con ella."""
+    if voz_nombre not in config.VOCES_GEMINI:
+        raise ValueError(f"Voz desconocida: {voz_nombre}")
+    modificar(pid, lambda p: p.update(voz_nombre=voz_nombre, proveedor_voz="gemini"))
+    if cargar(pid)["escenas"]:
+        _en_fondo(pid, "Voz", lambda: _generar_voz(pid))
 
 
 def rehacer_voz(pid: str, proveedor: str) -> None:

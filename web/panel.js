@@ -454,12 +454,47 @@ function pintarVoz({ voz, proveedor, opciones }) {
   if (voz) {
     const src = `${urlMedio(voz.archivo)}?v=${encodeURIComponent(voz.generada || "")}`;
     if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
-    $("v-info").textContent = `· ${voz.duracion.toFixed(1)} s · ${opciones[voz.proveedor] || voz.proveedor}${voz.dirigida ? " · interpretada escena a escena" : ""}`;
+    $("v-info").textContent = `· ${voz.duracion.toFixed(1)} s · ${voz.voz_nombre ? `voz ${voz.voz_nombre}` : opciones[voz.proveedor] || voz.proveedor}${voz.dirigida ? " · interpretada escena a escena" : ""}`;
   } else {
     audio.removeAttribute("src"); audio.dataset.src = "";
     $("v-info").textContent = "· se graba sola al crear las escenas";
   }
 }
+// Probar voces: hasta 3 marcadas → muestras → «Usar esta voz».
+const vocesMarcadas = new Set();
+function pintarVoces({ voces, actual, muestras }) {
+  $("v-lista").innerHTML = Object.entries(voces).map(([v, d]) => `
+    <label class="voz-op ${vocesMarcadas.has(v) ? "si" : ""} ${v === actual ? "actual" : ""}">
+      <input type="checkbox" value="${esc(v)}" ${vocesMarcadas.has(v) ? "checked" : ""}>
+      <b>${esc(v)}${v === actual ? " · en uso" : ""}</b><span>${esc(d)}</span></label>`).join("");
+  $("v-probar").disabled = !vocesMarcadas.size;
+  $("v-cuenta").textContent = vocesMarcadas.size ? `${vocesMarcadas.size} de 3 marcadas` : "";
+  $("v-muestras").innerHTML = (muestras || []).map((m) => `
+    <div class="muestra ${m.voz === actual ? "actual" : ""}">
+      <div><b>${esc(m.voz)}</b><span>${esc(m.descripcion)}</span></div>
+      <audio controls preload="none" src="${urlMedio(m.archivo)}?v=${m.generada}"></audio>
+      <button class="${m.voz === actual ? "boton" : "primario"}" data-usar-voz="${esc(m.voz)}" ${m.voz === actual ? "disabled" : ""}>
+        ${m.voz === actual ? "En uso" : "Usar esta voz"}</button>
+    </div>`).join("");
+}
+$("v-lista").addEventListener("change", (ev) => {
+  const v = ev.target.value;
+  if (ev.target.checked) {
+    if (vocesMarcadas.size >= 3) { ev.target.checked = false; return alertaError("Como mucho 3 voces a la vez."); }
+    vocesMarcadas.add(v);
+  } else vocesMarcadas.delete(v);
+  firmas.voces = "";
+  refrescar();
+});
+$("v-probar").addEventListener("click", async () => {
+  try { await api("/api/voz/muestras", { voces: [...vocesMarcadas] }); await refrescar(); } catch (e) { aviso(e); }
+});
+$("v-muestras").addEventListener("click", async (ev) => {
+  const v = ev.target.dataset?.usarVoz;
+  if (!v) return;
+  try { await api("/api/voz/elegir", { voz: v }); await refrescar(); } catch (e) { aviso(e); }
+});
+
 $("v-rehacer").addEventListener("click", async () => {
   try { await api("/api/voz", { proveedor: $("v-proveedor").value }); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -635,6 +670,8 @@ async function refrescar() {
   siCambia("avisos", p.avisos || [], pintarAvisos);
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
+  siCambia("voces", { id: p.id, voces: o.voces_gemini, actual: p.voz_nombre || o.voz_por_defecto, muestras: p.muestras_voz,
+    marcadas: [...vocesMarcadas] }, (x) => pintarVoces(x));
   siCambia("subtitulos", { id: p.id, subtitulos: p.subtitulos, paletas: o.paletas,
     fondo: p.escenas[0] ? [p.escenas[0].elegida, p.escenas[0].tomas.length] : null, voz: p.voz?.generada }, pintarSubtitulos);
   siCambia("render", { p }, pintarRender);

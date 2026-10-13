@@ -31,7 +31,7 @@ logger = logging.getLogger("studio4.servidor")
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
 PAGINAS = {"/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
-MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
+MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
 class Error(Exception):
@@ -229,6 +229,7 @@ class Panel(BaseHTTPRequestHandler):
                 "gemini_ok": bool(config.GEMINI_API_KEY),
                 "deepseek_ok": bool(config.DEEPSEEK_API_KEY),
                 "sin_pago": config.SIN_PAGO,
+                "voces_gemini": config.VOCES_GEMINI, "voz_por_defecto": config.VOZ_GEMINI,
                 "versiones": config.VERSIONES,
                 "salud": config.salud(),
                 "plataformas": {k: v["nombre"] for k, v in miniaturas.PLATAFORMAS.items()},
@@ -342,6 +343,12 @@ class Panel(BaseHTTPRequestHandler):
             finally:
                 tmp.unlink(missing_ok=True)
             return self._json(res)
+        if ruta == "/api/voz/muestras":
+            produccion.muestras_voz(pid, [str(v) for v in self._cuerpo_json().get("voces", [])])
+            return self._json({"ok": True})
+        if ruta == "/api/voz/elegir":
+            produccion.elegir_voz(pid, str(self._cuerpo_json().get("voz", "")))
+            return self._json({"ok": True})
         if ruta == "/api/voz":
             produccion.rehacer_voz(pid, str(self._cuerpo_json().get("proveedor", "gemini")))
             return self._json({"ok": True})
