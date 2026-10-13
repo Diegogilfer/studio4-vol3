@@ -19,8 +19,9 @@
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; border-color: var(--line); scrollbar-width: none; }
-::-webkit-scrollbar { width: 0; height: 0; display: none; }
+* { box-sizing: border-box; border-color: var(--line); }
+/* Sin barras de scroll en escritorio; en móvil el scroll normal de la página se deja ver. */
+@media (min-width: 701px) { * { scrollbar-width: none; } ::-webkit-scrollbar { width: 0; height: 0; display: none; } }
 html, body { margin: 0; }
 body {
   background-color: var(--bg-app);
@@ -221,7 +222,11 @@ select.campo option { background: var(--bg-elevated); }
 .toma:hover video, .toma:hover img { transform: scale(1.06); }
 .toma span { position: absolute; left: 4px; bottom: 4px; font-size: 10.5px; background: rgb(0 0 0 / .7); padding: 0 5px; border-radius: 5px; }
 .toma .borrar { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; display: grid; place-items: center; font-size: 10px; border-radius: 999px; background: rgb(0 0 0 / .7); border: 0; cursor: pointer; opacity: 0; transition: opacity .2s; }
-.toma:hover .borrar { opacity: 1; }
+.toma:hover .borrar, .toma:focus-within .borrar { opacity: 1; }
+button.toma { padding: 0; font: inherit; color: inherit; text-align: left; }
+.toma .elegir { all: unset; position: absolute; inset: 0; cursor: pointer; }
+.toma .elegir:focus-visible, button.toma:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.toma .borrar:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
 .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
 .acciones .boton { height: 32px; font-size: 12.5px; padding: 0 12px; }
 .acciones input[type=file] { display: none; }
@@ -762,3 +767,27 @@ select.campo option { background: var(--bg-panel, #fff); color: #161827; }
 .compacta.en-curso { display: flex !important; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 10px 14px; border-radius: 16px; background: var(--caja); border: 1px solid var(--caja-borde); }
 .compacta.en-curso .meta { color: var(--fg); font-weight: 500; }
+
+/* ---------------------------------------------------------------- repaso de diseño (2026-10-13) */
+/* Las cajas de la guía ocupan todo el ancho; el botón principal se queda arriba a la derecha. */
+.guia { grid-template-columns: minmax(0, 1fr); position: relative; }
+@media (min-width: 1001px) { .guia-acciones { position: absolute; top: 0; right: 0; } }
+@media (max-width: 1000px) { .guia-acciones { grid-column: auto; } }
+/* Voz y subtítulos: dos cajas con aire, como el resto. */
+.ajustes-render > div { padding: 20px; border-radius: 20px; align-self: start; }
+.muestras { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+/* Entregas: sin piezas todavía no se dibujan dos rayas seguidas. */
+.piezas:empty { display: none; }
+#entregas-sec .textos { border-top: 0; padding-top: 0; margin-top: 0; }
+/* «Hazla como vídeo/imagen»: el color va dentro de la caja, sin barra lateral. */
+.hacer-como, .hacer-como.video, .hacer-como.imagen { border-left: 0; }
+/* Móvil: la barra no se monta encima de sí misma. */
+@media (max-width: 640px) {
+  .nav { min-width: 0; gap: 0; }
+  .nav a { padding: 0 9px; }
+  #flow-renovar { display: none; }
+}
+/* El porqué de un botón desactivado, bajo el botón. */
+.por-que { flex-basis: 100%; font-size: 12.5px; color: var(--fg-muted); text-align: right; }
+.por-que:empty { display: none; }
+@media (max-width: 1000px) { .por-que { text-align: left; } }

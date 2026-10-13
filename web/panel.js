@@ -32,6 +32,20 @@ function llenarSelect(sel, opciones, valor) {
 }
 const urlMedio = (archivo) => `/media/${estado.produccion.id}/${archivo}`;
 const miles = (n) => Number(n || 0).toLocaleString("es-ES");
+const FECHA = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const fecha = (iso) => { const d = new Date(String(iso).replace(" ", "T")); return isNaN(d) ? String(iso || "").slice(0, 16) : FECHA.format(d).replace(".", ""); };   // «13 oct, 00:19»
+// Un botón desactivado dice por qué, justo debajo (y al lector de pantalla).
+function porQue(id, motivo) {
+  const b = $(id);
+  let nota = $(`${id}-porque`);
+  if (!nota) {
+    nota = document.createElement("small");
+    nota.id = `${id}-porque`; nota.className = "por-que";
+    b.insertAdjacentElement("afterend", nota);
+    b.setAttribute("aria-describedby", nota.id);
+  }
+  nota.textContent = b.disabled ? motivo || "" : "";
+}
 
 const ESTADOS = { investigando: "investigando", escribiendo: "escribiendo guion", guion_listo: "guion por revisar",
   escenas: "creando escenas", rodando: "en Flow", renderizando: "renderizando", terminado: "terminado", error: "error" };
@@ -63,7 +77,7 @@ const TEMAS = [
 function aplicarTema(t) {
   document.documentElement.dataset.tema = t;
   try { localStorage.setItem("studio4-tema", t); } catch (_) { /* sin almacenamiento: vale solo para esta visita */ }
-  document.querySelectorAll("#temas button").forEach((b) => b.classList.toggle("si", b.dataset.tema === t));
+  document.querySelectorAll("#temas button").forEach((b) => { b.classList.toggle("si", b.dataset.tema === t); b.setAttribute("aria-pressed", b.dataset.tema === t); });
 }
 (() => {
   let t = "cristal";
@@ -79,9 +93,14 @@ function aplicarTema(t) {
   aplicarTema(t);
 })();
 $("temas").addEventListener("click", (ev) => { const b = ev.target.closest("[data-tema]"); if (b) aplicarTema(b.dataset.tema); });
-$("abrir-ajustes").addEventListener("click", () => { $("ajustes").hidden = false; });
-$("cerrar-ajustes").addEventListener("click", () => { $("ajustes").hidden = true; });
-$("ajustes").addEventListener("click", (ev) => { if (ev.target === $("ajustes")) $("ajustes").hidden = true; });
+function cerrarAjustes() { $("ajustes").hidden = true; $("abrir-ajustes").focus(); }
+$("abrir-ajustes").addEventListener("click", () => {
+  $("ajustes").hidden = false;
+  ($("temas").querySelector(".si") || $("cerrar-ajustes")).focus();   // el teclado entra en el panel
+});
+$("cerrar-ajustes").addEventListener("click", cerrarAjustes);
+$("ajustes").addEventListener("click", (ev) => { if (ev.target === $("ajustes")) cerrarAjustes(); });
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("ajustes").hidden) cerrarAjustes(); });
 
 // Escuchar una voz antes de elegirla: frase de presentación (la primera vez se graba; después, al instante).
 let botonSonando = null;
@@ -375,7 +394,7 @@ function pintarLista(lista) {
   const activa = estado.produccion?.id;
   $("lista").innerHTML = lista.length ? lista.map((p) => `
     <button type="button" data-id="${esc(p.id)}" class="${p.id === activa ? "activa" : ""}">
-      <b>${esc(p.titulo || p.tema)}</b><small>${p.version ? `${esc(VERSION[p.version] || p.version)} · ` : ""}${esc(p.creado.slice(0, 16))} · ${esc(ESTADOS[p.estado] || p.estado)}</small>
+      <b>${esc(p.titulo || p.tema)}</b><small>${p.version ? `${esc(VERSION[p.version] || p.version)} · ` : ""}${esc(fecha(p.creado))} · ${esc(ESTADOS[p.estado] || p.estado)}</small>
     </button>`).join("") : `<span class="meta faint">Todavía no hay ninguna.</span>`;
 }
 $("lista").addEventListener("click", async (ev) => {
@@ -456,10 +475,11 @@ function pintarEscenas({ escenas, activa }) {
   $("e-cuenta").textContent = escenas.length ? `· ${listas}/${escenas.length} con clip` : "";
   $("escenas").innerHTML = escenas.map((e) => {
     const tomas = e.tomas.map((t, i) => `
-      <div class="toma ${i === e.elegida ? "elegida" : ""}" data-orden="${e.orden}" data-toma="${i}" title="Usar esta toma">
-        ${t.tipo === "video" ? `<video src="${urlMedio(t.archivo)}#t=0.5" muted preload="metadata"></video>` : `<img src="${urlMedio(t.archivo)}" alt="">`}
-        <span>${t.tipo === "video" ? `${String(t.duracion).replace(".", ",")} s` : "imagen"}</span>
-        <button class="borrar" data-borrar="${i}" data-orden="${e.orden}" title="Borrar toma">✕</button>
+      <div class="toma ${i === e.elegida ? "elegida" : ""}" data-orden="${e.orden}" data-toma="${i}">
+        <button type="button" class="elegir" title="Usar esta toma" aria-label="Usar la toma ${i + 1} de la escena ${e.orden}" aria-pressed="${i === e.elegida}">
+          ${t.tipo === "video" ? `<video src="${urlMedio(t.archivo)}#t=0.5" muted preload="metadata"></video>` : `<img src="${urlMedio(t.archivo)}" alt="">`}
+          <span>${t.tipo === "video" ? `${String(t.duracion).replace(".", ",")} s` : "imagen"}</span></button>
+        <button type="button" class="borrar" data-borrar="${i}" data-orden="${e.orden}" title="Borrar toma" aria-label="Borrar la toma ${i + 1} de la escena ${e.orden}">✕</button>
       </div>`).join("");
     const estadoTxt = e.elegida !== null ? "Clip listo" : e.orden === activa ? "Genera esta en Flow" : "Pendiente";
     const tipo = e.tipo_clip === "imagen" ? "imagen" : "video";
@@ -494,6 +514,7 @@ $("escenas").addEventListener("click", async (ev) => {
       await api("/api/escena/activa", { escena: n });   // la extensión empieza a recoger para esta escena
     } else if (t.dataset.borrar !== undefined) {
       ev.stopPropagation();
+      if (!confirm(`¿Borrar la toma ${Number(t.dataset.borrar) + 1} de la escena ${t.dataset.orden}? No se puede deshacer.`)) return;
       await api("/api/escena", { orden: Number(t.dataset.orden), borrar_toma: Number(t.dataset.borrar) });
     } else {
       const toma = t.closest(".toma");
@@ -615,6 +636,7 @@ function pintarRender({ p }) {
   if (faltan.length) motivos.push(`Faltan clips de Flow en ${faltan.length === p.escenas.length ? "todas las escenas" : `las escenas ${faltan.join(", ")}`}.`);
   $("r-falta").textContent = motivos.join(" ") || (p.final ? `Renderizado ${p.final.renderizado}. Vuelve a renderizar si cambias tomas o subtítulos.` : "Todo listo para montar.");
   $("r-boton").disabled = motivos.length > 0 || p.trabajo.ocupado;
+  porQue("r-boton", p.trabajo.ocupado ? "Espera a que termine lo que está en marcha." : faltan.length ? "Necesitas un clip de Flow en cada escena." : motivos[0]);
   $("r-final").hidden = !p.final;
   if (p.final) {
     const src = `${urlMedio(p.final.archivo)}?v=${encodeURIComponent(p.final.renderizado)}`;
@@ -634,6 +656,7 @@ function pintarMiniaturas({ p, plataformas }) {
   const m = p.miniaturas;
   const sinClips = !p.escenas.some((e) => e.elegida !== null);
   $("m-generar").disabled = sinClips || p.trabajo.ocupado;
+  porQue("m-generar", p.trabajo.ocupado ? "Espera a que termine lo que está en marcha." : sinClips ? "Necesitas al menos un clip de Flow." : "");
   $("m-generar").firstChild.textContent = m ? "Volver a generar " : "Generar miniaturas ";
   $("m-info").textContent = sinClips
     ? "Las miniaturas salen de tus clips: cuando tengas tomas de Flow, Gemini elige el mejor fotograma y escribe el texto."
@@ -655,13 +678,14 @@ function pintarMiniaturas({ p, plataformas }) {
       <img src="${urlMedio(a.archivo)}?v=${v}" alt="${esc(a.texto)}"><span>${esc(a.texto)}</span></button>`).join("")
     || (m.alternativas || []).map((t) => `<button class="chip-alt" data-alt="${esc(t)}">${esc(t)}</button>`).join("");
   $("m-candidatos").innerHTML = m.candidatos.map((c, i) => `
-    <div class="toma ${i === m.elegido ? "elegida" : ""}" data-cand="${i}" title="${c.escena ? `Escena ${c.escena}` : c.origen === "flow" ? "Generada en Flow" : "Subida"}">
-      <img src="${urlMedio(c.archivo)}" alt="" loading="lazy"><span>${c.escena ? `esc. ${c.escena}` : c.origen === "flow" ? "Flow" : "subida"}</span></div>`).join("");
+    <button type="button" class="toma ${i === m.elegido ? "elegida" : ""}" data-cand="${i}" aria-pressed="${i === m.elegido}" title="${c.escena ? `Escena ${c.escena}` : c.origen === "flow" ? "Generada en Flow" : "Subida"}">
+      <img src="${urlMedio(c.archivo)}" alt="Fondo ${c.escena ? `de la escena ${c.escena}` : c.origen === "flow" ? "generado en Flow" : "subido"}" loading="lazy"><span>${c.escena ? `esc. ${c.escena}` : c.origen === "flow" ? "Flow" : "subida"}</span></button>`).join("");
 }
 // --- Paquete para publicar ---------------------------------------------------------------------
 function pintarPaquete({ p }) {
   const pq = p.entregas;
   $("pq-preparar").disabled = !p.final || p.trabajo.ocupado;
+  porQue("pq-preparar", p.trabajo.ocupado ? "Espera a que termine lo que está en marcha." : !p.final ? "Primero renderiza el vídeo en Render." : "");
   $("pq-preparar").firstChild.textContent = pq ? "Volver a preparar " : "Preparar los 3 formatos ";
   $("pq-info").textContent = !p.final ? "Al renderizar el vídeo completo, los 3 formatos se preparan solos."
     : p.entregas_error ? `No se pudieron preparar los recortes: ${p.entregas_error}. Pulsa «Volver a preparar».`

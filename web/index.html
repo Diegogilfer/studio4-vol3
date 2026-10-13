@@ -33,11 +33,11 @@
     <a href="#entregas"><svg><use href="#i-entregas"/></svg><span>Entregas</span></a>
   </nav>
   <div class="barra-der">
-    <span id="en-marcha" class="pildora marcha" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
+    <span id="en-marcha" class="pildora marcha" role="status" aria-live="polite" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
     <a id="yt-pildora" class="pildora" href="/youtube/conectar" title="Solo lectura: tu canal y lo que ya hay en YouTube sobre cada tema"><svg><use href="#i-yt"/></svg><span id="yt-txt">Conectar YouTube</span></a>
     <a id="flow-boton" class="pildora aviso" target="_blank" href="/flow/emparejar"><span class="piloto"></span><span>Flow: conectar</span></a>
-    <button id="abrir-ajustes" class="redondo" title="Ajustes: tema de color del panel"><svg><use href="#i-ajustes"/></svg></button>
-    <button id="flow-renovar" class="redondo" title="Nueva vinculación: genera otro código y vuelve a emparejar la extensión"><svg><use href="#i-renovar"/></svg></button>
+    <button id="abrir-ajustes" class="redondo" title="Ajustes: tema de color del panel" aria-label="Ajustes: tema de color del panel" aria-controls="ajustes"><svg><use href="#i-ajustes"/></svg></button>
+    <button id="flow-renovar" class="redondo" title="Nueva vinculación: genera otro código y vuelve a emparejar la extensión" aria-label="Nueva vinculación con la extensión de Flow"><svg><use href="#i-renovar"/></svg></button>
   </div>
 </header>
 
@@ -123,7 +123,7 @@
 
       <!-- Paso 4 · Revisa el guion -->
       <div class="paso" data-paso="4" hidden>
-        <div id="a-trabajo" class="a-trabajo" hidden>
+        <div id="a-trabajo" class="a-trabajo" role="status" aria-live="polite" hidden>
           <ol class="a-fases" id="a-fases"></ol>
           <div class="progreso"><div id="a-barra"></div></div>
         </div>
@@ -142,7 +142,7 @@
             <button class="primario" id="g-aprobar">Aprobar guion y crear escenas <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
             <button class="boton" id="g-guardar">Guardar cambios</button>
             <button class="boton" id="g-otra" title="Otra versión con la misma investigación">Escribir otra versión</button>
-            <span class="meta" id="g-estado"></span>
+            <span class="meta" id="g-estado" role="status" aria-live="polite"></span>
           </div>
           <details id="g-investigacion"><summary>Investigación <span class="meta" id="g-fuentes-n"></span></summary>
             <p class="guion" id="g-dossier"></p><ol id="g-fuentes" class="fuentes"></ol></details>
@@ -151,7 +151,7 @@
         <div class="acciones-paso"><button class="boton" id="a-otro">Empezar otro vídeo</button></div>
       </div>
 
-      <p class="aviso-txt" id="aviso-panel" hidden></p>
+      <p class="aviso-txt" id="aviso-panel" role="alert" hidden></p>
       <p class="aviso-txt" id="aviso-salud" hidden></p>
       <div>
         <p class="meta" style="margin-bottom:10px">Tus producciones</p>
@@ -181,11 +181,11 @@
           <a href="#entregas" data-p="entregas"><b>3</b><span>Entregas<small id="est-entregas"></small></span></a>
         </nav>
       </div>
-      <div id="trabajo" class="trabajo" hidden>
+      <div id="trabajo" class="trabajo" role="status" aria-live="polite" hidden>
         <div class="trabajo-txt"><span id="t-fase"></span><span id="t-pct"></span></div>
         <div class="progreso"><div id="t-barra"></div></div>
       </div>
-      <p id="t-error" class="error" hidden></p>
+      <p id="t-error" class="error" role="alert" hidden></p>
       <details><summary>Guion aprobado</summary><p id="p-guion" class="guion"></p>
         <div class="fila"><button class="boton" id="p-reabrir">Cambiar el guion</button></div></details>
     </section>
@@ -329,8 +329,8 @@
 </main>
 
 <div id="ajustes" class="ajustes-capa" hidden>
-  <aside class="ajustes-panel tarjeta" aria-label="Ajustes">
-    <div class="cabeza" style="margin-bottom:0"><h2>Ajustes · Tema</h2><button class="redondo" id="cerrar-ajustes" title="Cerrar">✕</button></div>
+  <aside class="ajustes-panel tarjeta" role="dialog" aria-modal="true" aria-label="Ajustes">
+    <div class="cabeza" style="margin-bottom:0"><h2>Ajustes · Tema</h2><button class="redondo" id="cerrar-ajustes" title="Cerrar" aria-label="Cerrar ajustes">✕</button></div>
     <p class="meta">Elige el fondo y los colores del panel. Se guarda en este navegador.</p>
     <div class="temas" id="temas"></div>
   </aside>

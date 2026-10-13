@@ -16,11 +16,11 @@
 
 <main class="l-main">
   <p id="l-vacio" class="meta" hidden>No hay ninguna producción abierta. Crea una en <a href="/" target="_blank">STUDIO</a>.</p>
-  <div id="l-trabajo" class="trabajo" hidden>
+  <div id="l-trabajo" class="trabajo" role="status" aria-live="polite" hidden>
     <div class="trabajo-txt"><span id="l-fase"></span><span id="l-pct"></span></div>
     <div class="progreso"><div id="l-barra"></div></div>
   </div>
-  <p id="l-error" class="error" hidden></p>
+  <p id="l-error" class="error" role="alert" hidden></p>
   <p id="l-vieja" class="error" hidden>Extensión antigua: en chrome://extensions pulsa ↻ y recarga la pestaña de Flow.</p>
 
   <section id="l-ahora" class="l-ahora" hidden>
