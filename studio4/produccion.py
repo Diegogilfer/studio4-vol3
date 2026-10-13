@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos, voz
+from . import config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos, voz, youtube
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -158,7 +158,8 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
 
 
 def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
-          segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical") -> list[str]:
+          segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical",
+          tono: str = "", publico: str = "") -> list[str]:
     """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
     Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
     if proveedor_voz not in voz.PROVEEDORES:
@@ -183,7 +184,8 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
     for v in versiones:
         pid = f"{sello}-{v}-{_slug(idea)}"
         _nueva(pid, tema=idea.strip(), formato=config.VERSIONES[v]["formato"], version=v, familia=sello,
-               estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando")
+               estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando",
+               tono=tono.strip()[:80], publico=publico.strip()[:80])
         pids.append(pid)
     activar(pids[0])
     _en_fondo(pids, "Investigación y guion", lambda: _investigar_y_escribir(pids, idea, segundos))
@@ -192,14 +194,19 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
 
 def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int], dossier: dict | None = None) -> None:
     if dossier is None:
-        _avisar(pids, "Gemini investiga el tema en Google", 10)
+        _avisar(pids, "Gemini investiga el tema", 10)
         dossier = investigacion.investigar(idea, produccion=pids[0])
+        if youtube.conectado():
+            _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
+            dossier["youtube"] = youtube.contexto_para_guion(idea)
         for pid in pids:
             modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
     autor = "DeepSeek" if deepseek.disponible() else "Gemini"
     _avisar(pids, f"{autor} escribe el guion a partir de la investigación", 45)
     versiones = {cargar(pid)["version"]: segundos[cargar(pid)["version"]] for pid in pids}
-    escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0])
+    p0 = cargar(pids[0])
+    escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0],
+                             tono=p0.get("tono", ""), publico=p0.get("publico", ""), youtube=dossier.get("youtube"))
     for pid in pids:
         v = cargar(pid)["version"]
         modificar(pid, lambda p: p.update(
@@ -228,6 +235,16 @@ def guardar_guion(pid: str, texto: str) -> None:
             raise ValueError("El guion ya está aprobado y tiene escenas: usa «Rehacer escenas» para cambiarlo.")
         p["guion"] = texto
     modificar(pid, cambio)
+
+
+def reabrir_guion(pid: str, forzar: bool = False) -> None:
+    """Vuelve a dejar el guion editable. Las escenas siguen ahí hasta que lo apruebes otra vez."""
+    p = cargar(pid)
+    if p["trabajo"].get("ocupado"):
+        raise RuntimeError("Espera a que termine la fase en curso.")
+    if any(e["tomas"] for e in p["escenas"]) and not forzar:
+        raise ValueError("Esta producción ya tiene clips de Flow: cambiar el guion obligará a rehacer las escenas.")
+    modificar(pid, lambda q: q.update(guion_aprobado=False, estado="guion_listo"))
 
 
 def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> None:

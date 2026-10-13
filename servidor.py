@@ -21,7 +21,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import config, flow, guion, miniaturas, produccion, registro, subtitulos, voz  # noqa: E402
+from studio4 import config, flow, guion, miniaturas, produccion, registro, subtitulos, voz, youtube  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -156,7 +156,27 @@ class Panel(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         self._atender("POST")
 
+    def _redirigir(self, destino: str) -> None:
+        self.send_response(302)
+        self.send_header("Location", destino)
+        self.end_headers()
+
     def _get(self, ruta: str) -> None:
+        if ruta == "/youtube/conectar":
+            return self._redirigir(youtube.url_autorizacion())
+        if ruta == "/youtube/volver":  # Google vuelve aquí tras tu clic en «Permitir»
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            if "error" in q:
+                return self._redirigir("/?youtube=cancelado")
+            youtube.completar((q.get("code") or [""])[0], (q.get("state") or [""])[0])
+            return self._redirigir("/?youtube=ok")
+        if ruta == "/api/youtube":
+            if not youtube.conectado():
+                return self._json({"conectado": False})
+            try:
+                return self._json({"conectado": True, **youtube.canal()})
+            except RuntimeError as e:
+                return self._json({"conectado": youtube.conectado(), "error": str(e)})
         if ruta in PAGINAS:
             return self._archivo(config.WEB / PAGINAS[ruta])
         if ruta.startswith("/web/"):
@@ -237,6 +257,9 @@ class Panel(BaseHTTPRequestHandler):
         self._solo_panel()
         if ruta == "/api/flow/renovar":
             return self._json({"ok": True, "codigo": config.renovar_token_flow()})
+        if ruta == "/api/youtube/desconectar":
+            youtube.desconectar()
+            return self._json({"ok": True})
         if ruta == "/api/producciones":
             d = self._cuerpo_json()
             idea = str(d.get("idea", "")).strip()
@@ -246,7 +269,8 @@ class Panel(BaseHTTPRequestHandler):
             segundos = {k: max(15, min(1200, int(v))) for k, v in (d.get("segundos") or {}).items() if str(v).isdigit()}
             pids = produccion.crear(idea, list(d.get("versiones") or ["corto"]), d.get("estilo", "cinematografico"),
                                     d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
-                                    formato_propio=d.get("formato", "vertical"))
+                                    formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
+                                    publico=str(d.get("publico", "")))
             return self._json({"ok": True, "ids": pids})
         if ruta == "/api/activar":
             pid = str(self._cuerpo_json().get("id", ""))
@@ -263,6 +287,9 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/guion/aprobar":
             d = self._cuerpo_json()
             produccion.aprobar_guion(pid, d.get("guion"), forzar=bool(d.get("forzar")))
+            return self._json({"ok": True})
+        if ruta == "/api/guion/reabrir":
+            produccion.reabrir_guion(pid, forzar=bool(self._cuerpo_json().get("forzar")))
             return self._json({"ok": True})
         if ruta == "/api/guion/reescribir":
             produccion.reescribir_guion(pid)

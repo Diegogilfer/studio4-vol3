@@ -51,8 +51,21 @@ Devuelve JSON: {{"titulo_provisional": "...", "<versión>": {{"guion": "...", "g
 donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste)."""
 
 
-def _peticion(idea: str, dossier: str, versiones: dict[str, int]) -> str:
-    partes = [f"Tema: {idea}", "", "--- DOSSIER DE INVESTIGACIÓN ---", dossier or "(sin investigación: usa solo hechos muy conocidos)",
+def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = "", publico: str = "",
+              youtube: dict[str, Any] | None = None) -> str:
+    partes = [f"Tema: {idea}"]
+    if tono:
+        partes.append(f"Tono: {tono}")
+    if publico:
+        partes.append(f"Público: {publico}")
+    yt = youtube or {}
+    if yt.get("competencia"):
+        partes += ["", "LO QUE YA HAY EN YOUTUBE SOBRE ESTO (no lo repitas: busca un ángulo, un dato o una historia que ellos no cuenten):"]
+        partes += [f"- «{v['titulo']}» ({v['canal']}, {v['vistas']:,} vistas)".replace(",", ".") for v in yt["competencia"][:8]]
+    if (yt.get("tu_canal") or {}).get("mas_vistos"):
+        partes += ["", f"LOS VÍDEOS QUE MEJOR FUNCIONAN EN EL CANAL «{yt['tu_canal']['nombre']}» (su público responde a este tono y estos temas):"]
+        partes += [f"- «{v['titulo']}» ({v['vistas']:,} vistas)".replace(",", ".") for v in yt["tu_canal"]["mas_vistos"][:8]]
+    partes += ["", "--- DOSSIER DE INVESTIGACIÓN ---", dossier or "(sin investigación: usa solo hechos muy conocidos)",
               "--- FIN DEL DOSSIER ---", "", "Escribe estas versiones:"]
     for v, seg in versiones.items():
         nombre = "CORTO (Shorts y Reels, vertical)" if v == "corto" else "LARGO (YouTube, horizontal)"
@@ -67,9 +80,10 @@ def _limpiar(texto: str) -> str:
     return " ".join(texto.split())
 
 
-def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "") -> dict[str, Any]:
+def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "", tono: str = "",
+             publico: str = "", youtube: dict[str, Any] | None = None) -> dict[str, Any]:
     """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
-    prompt = _peticion(idea, dossier, versiones)
+    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube)
     if deepseek.disponible():
         datos, autor = deepseek.generar_json(SISTEMA, prompt, detalle="guion", produccion=produccion), "DeepSeek"
     else:

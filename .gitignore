@@ -45,3 +45,6 @@ temp_clips/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Acceso a YouTube (token OAuth): nunca a git
+secrets/

@@ -387,3 +387,17 @@ def test_deepseek_lee_json_y_apunta_tokens(aislado, monkeypatch):
     monkeypatch.setattr(deepseek.requests, "post", lambda *a, **k: R())
     assert deepseek.generar_json("s", "p", detalle="guion") == {"corto": {"guion": "x"}}
     assert registro.consumo_del_mes()["DeepSeek"]["total"] == 15
+
+
+def test_peticion_de_guion_lleva_tono_publico_y_youtube():
+    yt = {"competencia": [{"titulo": "Pulpos: 3 corazones", "canal": "Ciencia X", "vistas": 1200000}],
+          "tu_canal": {"nombre": "Mi canal", "mas_vistos": [{"titulo": "El faro maldito", "vistas": 50000}]}}
+    p = guion._peticion("pulpos", "dossier", {"corto": 50}, tono="con humor", publico="jóvenes", youtube=yt)
+    for trozo in ("Tono: con humor", "Público: jóvenes", "Pulpos: 3 corazones", "1.200.000", "El faro maldito", "busca un ángulo"):
+        assert trozo in p
+
+
+def test_youtube_desconectado_no_bloquea_el_guion(aislado, monkeypatch):
+    from studio4 import youtube
+    monkeypatch.setattr(youtube, "TOKEN", aislado / "no_existe.json")
+    assert youtube.conectado() is False and youtube.contexto_para_guion("pulpos") == {}
