@@ -144,6 +144,9 @@
       <a href="/flow/emparejar" target="_blank" id="flowBadge" class="px-3 py-1.5 rounded-lg bg-teal-500/10 text-teal-300 border border-teal-500/30 flex items-center gap-1.5 font-bold hover:bg-teal-500/20 transition">
         <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span> Google Flow: Conectar
       </a>
+      <button type="button" id="flowRenovar" title="Genera un código nuevo y vuelve a vincular la extensión" class="px-2 py-1.5 rounded-lg bg-slate-500/10 text-slate-300 border border-slate-500/30 hover:bg-slate-500/20 transition">
+        ↻ Nueva vinculación
+      </button>
       <span class="px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 font-medium">
         <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Servidor :8000
       </span>
@@ -637,6 +640,19 @@
       if (nombre === 'subtitulos') renderEditorSubtitulos();
     }
 
+    // Nueva vinculación: código nuevo y se abre /flow/emparejar con él (la extensión lo guarda sola)
+    document.getElementById('flowRenovar').addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/flow/renovar', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || !data.codigo) throw new Error('sin código');
+        window.open('/flow/emparejar#c=' + encodeURIComponent(data.codigo), '_blank');
+        actualizarFlow();
+      } catch (e) {
+        console.error('[STUDIO4] No se pudo renovar la vinculación:', e);
+      }
+    });
+
     // Actualizar estado de Google Flow y Escenas
     async function actualizarFlow() {
       try {
@@ -645,6 +661,8 @@
         const data = await res.json();
 
         const badge = document.getElementById('flowBadge');
+        // El código viaja en el «#»: la extensión lo lee en /flow/emparejar y no llega al servidor ni al historial.
+        if (data.codigo) badge.href = '/flow/emparejar#c=' + encodeURIComponent(data.codigo);
         if (data.conectada) {
           badge.className = "px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 font-bold";
           badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Google Flow: Conectado ✓`;

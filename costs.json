@@ -1,26 +1,26 @@
 {
   "total_usd": 0.0,
-  "count": 10,
+  "count": 16,
   "presupuesto_diario_usd": 10.0,
-  "ahorro_acumulado_usd": 0.285,
+  "ahorro_acumulado_usd": 0.6596,
   "by_provider": {
     "Google Gemini": {
       "usd": 0.0,
-      "calls": 2,
-      "tokens_in": 1250,
-      "tokens_out": 2840,
+      "calls": 4,
+      "tokens_in": 1462,
+      "tokens_out": 3472,
       "status": "Suscripción Google Activa ($0.00)"
     },
     "Google Flow": {
       "usd": 0.0,
-      "calls": 5,
+      "calls": 8,
       "tokens_in": 0,
       "tokens_out": 0,
       "status": "Suscripción Google Labs ($0.00)"
     },
     "Google Cloud TTS": {
       "usd": 0.0,
-      "calls": 1,
+      "calls": 2,
       "tokens_in": 340,
       "tokens_out": 0,
       "status": "Studio Voice 24kHz ($0.00)"

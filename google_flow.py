@@ -22,7 +22,7 @@ from pathlib import Path
 import threading
 import time
 from typing import Any, Optional
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 from PIL import Image, UnidentifiedImageError
 
 load_dotenv()
@@ -30,7 +30,7 @@ load_dotenv()
 logger = logging.getLogger("studio4.google_flow")
 
 VAR_TOKEN = "STUDIO4_FLOW_TOKEN"
-DEFAULT_TOKEN = os.getenv(VAR_TOKEN, "Pw28699tyYXiUj9QhKB1Vzj9")
+ENV_FILE = Path(__file__).resolve().parent / ".env"
 CONECTADA_TIMEOUT_S = 15 * 60  # 15 minutos sin latido = desconectada
 MAX_BYTES = 25 * 1024 * 1024  # 25 MB max
 
@@ -41,7 +41,6 @@ _SESSION_FILE = Path("temp_clips/_flow_session.json")
 _ESTADO: dict[str, Any] = {
     "ultima_conexion": 0.0,
     "version": "",
-    "token": DEFAULT_TOKEN,
     "sesion": {
         "titulo": "",
         "estilo": "cinematografico realista 4K",
@@ -78,17 +77,20 @@ cargar_estado()
 
 
 def token() -> str:
-    """Devuelve el token de emparejamiento."""
-    return os.getenv(VAR_TOKEN) or _ESTADO.get("token") or DEFAULT_TOKEN
+    """Devuelve el token de emparejamiento; si no existe, crea uno y lo guarda en .env."""
+    return os.getenv(VAR_TOKEN) or renovar_token()
 
 
 def renovar_token() -> str:
-    """Genera un nuevo token seguro."""
+    """Genera un token nuevo y lo persiste en .env (la extensión tendrá que volver a vincularse)."""
     import secrets
     nuevo = secrets.token_urlsafe(18)
-    _ESTADO["token"] = nuevo
     os.environ[VAR_TOKEN] = nuevo
-    guardar_estado()
+    _ESTADO["ultima_conexion"] = 0.0  # la extensión con el código viejo ya no cuenta como conectada
+    try:
+        set_key(str(ENV_FILE), VAR_TOKEN, nuevo)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("No se pudo guardar %s en .env: %s", VAR_TOKEN, e)
     return nuevo
 
 

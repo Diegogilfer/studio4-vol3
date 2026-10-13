@@ -61,6 +61,42 @@ class ScenePlan(BaseModel):
         default="crossfade",
         description="Transición cinematográfica con la siguiente escena: 'crossfade', 'fadeblack', 'wipeleft', 'none'."
     )
+    flow_prompt_en: str = Field(
+        default="",
+        description=(
+            "Dirección de IMAGEN en INGLÉS para Google Flow (un solo fotograma): tipo de plano + sujeto "
+            "haciendo una acción VISIBLE y concreta + lugar + composición. Usa los nombres de personaje "
+            "definidos en visual_bible. Sin estilo artístico (va aparte) y sin texto en la imagen. "
+            "Ej: 'Medium close-up of LEO, looking up at a cracked observatory dome, night sky through the gap, "
+            "subject on the left third'."
+        )
+    )
+    characters: list[str] = Field(
+        default_factory=list,
+        description="Nombres (de visual_bible.characters) que aparecen en esta escena. Vacío si no sale ninguno."
+    )
+
+
+class CharacterSheet(BaseModel):
+    name: str = Field(description="Nombre corto en MAYÚSCULAS para referenciarlo en las escenas (ej. 'LEO').")
+    look_en: str = Field(
+        description=(
+            "Aspecto FIJO en inglés, idéntico en todas las escenas: edad, rasgos, pelo, ropa exacta y un "
+            "detalle distintivo (ej. '30-year-old man, short black curly hair, round glasses, mustard wool coat')."
+        )
+    )
+
+
+class VisualBible(BaseModel):
+    """La biblia visual: lo que NO cambia entre escenas para que Flow mantenga la secuencia."""
+    style_lock_en: str = Field(default="", description="Dirección de arte fija en inglés, una frase.")
+    palette_en: str = Field(default="", description="Paleta de color dominante en inglés (3-4 colores).")
+    lighting_en: str = Field(default="", description="Esquema de luz constante en inglés.")
+    setting_en: str = Field(default="", description="Mundo/época/lugar común de la historia en inglés.")
+    characters: list[CharacterSheet] = Field(
+        default_factory=list,
+        description="Personajes recurrentes (0 a 3). Vacío si el vídeo no tiene protagonistas humanos."
+    )
 
 
 class ProductionPlan(BaseModel):
@@ -69,6 +105,10 @@ class ProductionPlan(BaseModel):
     )
     description: str = Field(
         description="Descripción estructurada para SEO incluyendo resumen, puntos clave y hashtags (#shorts #tecnologia etc.)."
+    )
+    visual_bible: VisualBible = Field(
+        default_factory=VisualBible,
+        description="Biblia visual común a todas las escenas (personajes, paleta, luz, escenario)."
     )
     scenes: list[ScenePlan] = Field(
         description="Lista ordenada y cronológica de todas las escenas que componen el video."
@@ -103,13 +143,26 @@ CRITERIOS DIRECTORIALES:
 5. METADATOS:
    - Título: Intrigante, que genere curiosidad sin ser engañoso (máx 70 caracteres).
    - Descripción: Con gancho, síntesis y entre 4 y 8 hashtags populares.
+6. BIBLIA VISUAL (para Google Flow, que genera UNA imagen por escena):
+   - Define una sola vez lo que no cambia: personajes con aspecto y ropa exactos, escenario/época, paleta y luz.
+   - La dirección de arte debe respetar el ESTILO GRÁFICO indicado abajo.
+7. FLOW_PROMPT_EN (una imagen fija por escena, en inglés):
+   - Plano (wide / medium / close-up / macro / aerial) + sujeto + acción VISIBLE + lugar + composición.
+   - Lo que se narra tiene que VERSE: si la voz dice "su radar falla", la imagen muestra el radar fallando.
+   - Encuadra pensando en el FORMATO indicado (vertical = sujeto centrado y alto; horizontal = espacio lateral).
+   - Varía el plano entre escenas consecutivas (no dos close-ups seguidos) pero mantén personajes y lugar.
+   - Nunca pidas texto, letras, logos ni pantallas divididas.
 """
+
+FORMATOS_ASPECTO = {"portrait": "9:16", "landscape": "16:9", "square": "1:1"}
 
 
 def estructurar_produccion(
     guion_claude: str,
     model: str = DEFAULT_MODEL,
     api_key: Optional[str] = None,
+    style: str = "cinematic",
+    orientation: str = "portrait",
 ) -> dict[str, Any]:
     """
     Transforma un guion en un plan de producción estructurado usando Gemini 2.5 Flash.
@@ -118,17 +171,28 @@ def estructurar_produccion(
         guion_claude: Texto completo del guion producido por Claude.
         model: Modelo de Gemini (por defecto 'gemini-2.5-flash').
         api_key: Clave opcional de API de Gemini.
+        style: Clave del estilo gráfico elegido en el panel (visual_generator.ESTILOS_GRAFICOS).
+        orientation: 'portrait' | 'landscape' | 'square' (formato final del vídeo).
 
     Returns:
-        dict: Diccionario validado con 'title', 'description' y 'scenes'.
+        dict: Diccionario validado con 'title', 'description', 'visual_bible' y 'scenes'.
     """
     if not guion_claude or not guion_claude.strip():
         raise ValueError("El guion proporcionado está vacío.")
 
     client = get_gemini_client(api_key)
 
+    try:
+        from visual_generator import ESTILOS_GRAFICOS
+        estilo_txt = ESTILOS_GRAFICOS.get(style, style)
+    except Exception:  # noqa: BLE001
+        estilo_txt = style
+    aspecto = FORMATOS_ASPECTO.get(orientation, "9:16")
+
     prompt = (
         f"{DIRECTOR_INSTRUCTIONS}\n\n"
+        f"ESTILO GRÁFICO: {estilo_txt}\n"
+        f"FORMATO: {aspecto}\n\n"
         f"--- GUION A ESTRUCTURAR ---\n"
         f"{guion_claude.strip()}\n"
         f"--- FIN DEL GUION ---"

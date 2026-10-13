@@ -152,8 +152,16 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(BASE_DIR), **kwargs)
 
+    def _origen_local(self) -> bool:
+        """Sin cabecera Origin (misma página / extensión) o desde este mismo equipo."""
+        origen = self.headers.get("Origin", "")
+        return not origen or origen.startswith(("http://127.0.0.1:", "http://localhost:", "chrome-extension://"))
+
     def _set_cors_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # Nada de "*": cualquier web abierta podría leer /api/flow (y con él el código de emparejamiento).
+        if self._origen_local() and self.headers.get("Origin"):
+            self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
+            self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "*")
 
@@ -244,6 +252,22 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         content_length = int(self.headers.get("Content-Length", 0))
+
+        # ---------------------------------------------------------------------
+        # GOOGLE FLOW: Nueva vinculación (genera otro código; la extensión se re-empareja)
+        # ---------------------------------------------------------------------
+        if parsed.path == "/api/flow/renovar":
+            if not self._origen_local():
+                self.send_response(403)
+                self.end_headers()
+                return
+            nuevo = google_flow.renovar_token()
+            self.send_response(200)
+            self._set_cors_headers()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"ok": True, "codigo": nuevo}).encode("utf-8"))
+            return
 
         # ---------------------------------------------------------------------
         # GOOGLE FLOW: Heartbeat de la extensión
@@ -536,7 +560,8 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
 
 def run_server() -> None:
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), StudioHandler) as httpd:
+    google_flow.token()  # crea y guarda el código de emparejamiento si aún no existe
+    with socketserver.TCPServer(("127.0.0.1", PORT), StudioHandler) as httpd:
         print(f"\n=======================================================")
         print(f"  🎬 STUDIO 4 Vol. 3 - Servidor Local Activo")
         print(f"  URL: http://localhost:{PORT}")
