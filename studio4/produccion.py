@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos, voz, youtube
+from . import config, deepseek, director, guion, investigacion, miniaturas, render, subtitulos, visuales_api, voz, youtube
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -315,6 +315,25 @@ def renderizar(pid: str) -> None:
         modificar(pid, lambda q: q.update(estado="terminado", final={
             "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
     _en_fondo(pid, "Render", fase)
+
+
+# --- Imágenes y vídeo por la API de Google (de pago, con presupuesto) ---------------------------
+def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | None = None) -> None:
+    """Rellena las escenas sin clip con imágenes (y vídeo Veo en las elegidas) sin pasar de `limite_usd`."""
+    from . import flow
+    p = cargar(pid)
+    if not p["escenas"]:
+        raise ValueError("Primero aprueba el guion: hacen falta las escenas.")
+    aspecto = config.FORMATOS[p["formato"]]["aspecto"]
+    presupuesto = visuales_api.Presupuesto(limite_usd)
+
+    def fase():
+        res = visuales_api.generar_escenas(
+            cargar(pid)["escenas"], aspecto, presupuesto,
+            recibir=lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="api"),
+            con_video=set(con_video or []), produccion=pid, avisar=lambda f, n: _avisar(pid, f, n))
+        modificar(pid, lambda q: q.update(gasto_api=round(q.get("gasto_api", 0.0) + res["gastado"], 4)))
+    _en_fondo(pid, "Imágenes por API", fase)
 
 
 # --- Miniaturas --------------------------------------------------------------------------------

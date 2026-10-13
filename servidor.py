@@ -310,6 +310,13 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/escena/activa":
             flow.marcar_activa(int(self._cuerpo_json().get("escena", 0)))
             return self._json({"ok": True})
+        if ruta == "/api/visuales-api":
+            d = self._cuerpo_json()
+            limite = float(d.get("limite_usd", 0))
+            if not 0 < limite <= 20:
+                raise Error(400, "Indica un presupuesto entre 0 y 20 $")
+            produccion.generar_visuales_api(pid, limite, [int(x) for x in d.get("video", [])])
+            return self._json({"ok": True})
         if ruta == "/api/miniaturas/generar":
             produccion.generar_miniaturas(pid)
             return self._json({"ok": True})

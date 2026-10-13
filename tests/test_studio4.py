@@ -426,3 +426,14 @@ def test_texto_dirigido_solo_etiqueta_cuando_cambia_el_tono():
                             {"tono": "tenso", "ritmo": "lento"}, {"tono": "emocionante", "ritmo": "rapido"}])
     assert t == "[tense, suspenseful, slowly] Uno. Dos. [excited, energetic, fast] Tres."
     assert voz._texto_dirigido(["Uno."], None) == "Uno."
+
+
+def test_presupuesto_para_antes_de_pasarse_y_devuelve_lo_fallido():
+    from studio4 import visuales_api as v
+    p = v.Presupuesto(0.10)
+    p.reservar(0.039, "imagen"); p.reservar(0.039, "imagen")
+    with pytest.raises(v.PresupuestoAgotado):
+        p.reservar(0.039, "imagen")          # 0,117 $ > 0,10 $: no se hace
+    p.devolver(0.039)
+    assert p.gastado == pytest.approx(0.039)
+    assert v.estimar(23, 1) == pytest.approx(23 * 0.039 + 8 * 0.03)

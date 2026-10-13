@@ -29,7 +29,8 @@ def _leer_consumo() -> dict[str, Any]:
         return {}
 
 
-def apuntar(servicio: str, detalle: str, cantidad: int = 1, unidad: str = "llamadas", produccion: str = "") -> None:
+def apuntar(servicio: str, detalle: str, cantidad: int = 1, unidad: str = "llamadas", produccion: str = "",
+            usd: float = 0.0) -> None:
     """Suma un uso al mes en curso y deja la línea en el historial."""
     with _lock:
         config.PRODUCCIONES.mkdir(parents=True, exist_ok=True)
@@ -37,9 +38,11 @@ def apuntar(servicio: str, detalle: str, cantidad: int = 1, unidad: str = "llama
         mes = consumo.setdefault(_mes(), {})
         fila = mes.setdefault(servicio, {"unidad": unidad, "total": 0})
         fila["total"] += int(cantidad)
+        if usd:
+            fila["usd"] = round(fila.get("usd", 0.0) + usd, 4)
         _CONSUMO.write_text(json.dumps(consumo, ensure_ascii=False, indent=2), encoding="utf-8")
         linea = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), "servicio": servicio, "detalle": detalle,
-                 "cantidad": int(cantidad), "unidad": unidad, "produccion": produccion}
+                 "cantidad": int(cantidad), "unidad": unidad, "produccion": produccion, "usd": round(usd, 4)}
         with _MOVIMIENTOS.open("a", encoding="utf-8") as f:
             f.write(json.dumps(linea, ensure_ascii=False) + "\n")
 
