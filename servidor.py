@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import carpetas, config, flow, guion, miniaturas, produccion, registro, render, subtitulos, voz, youtube  # noqa: E402
+from studio4 import canales, carpetas, config, flow, guion, miniaturas, produccion, registro, render, subtitulos, voz, youtube  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -198,7 +198,9 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/estado":
             return self._json(self._estado())
         if ruta == "/api/producciones":
-            return self._json(produccion.listar())
+            return self._json(produccion.listar(canales.activo()["id"]))
+        if ruta == "/api/canales":
+            return self._json({"canales": canales.listar(), "activo": canales.activo()["id"], "redes": canales.REDES})
         if ruta == "/api/voz/oir":   # frase de presentación de una voz (se graba una vez y se guarda)
             nombre = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("voz", [""])[0]
             return self._archivo(voz.muestra_generica(nombre))
@@ -219,6 +221,8 @@ class Panel(BaseHTTPRequestHandler):
             p["hermanas"] = [x for x in produccion.listar() if p.get("familia") and x["familia"] == p["familia"]]
         return {
             "produccion": p,
+            "canal": canales.activo(),
+            "canales": [{"id": c["id"], "nombre": c["nombre"]} for c in canales.listar()],
             "extension": flow.estado_extension(),
             "codigo": config.token_flow(),
             "carpeta_extension": str(config.RAIZ / "extension-flow"),
@@ -290,9 +294,13 @@ class Panel(BaseHTTPRequestHandler):
                                     formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
                                     publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")))
             return self._json({"ok": True, "ids": pids})
+        if ruta == "/api/canales":
+            return self._json({"ok": True, "canal": canales.guardar(self._cuerpo_json())})
+        if ruta == "/api/canales/activar":
+            return self._json({"ok": True, "canal": canales.activar(str(self._cuerpo_json().get("id", "")))})
         if ruta == "/api/activar":
             pid = str(self._cuerpo_json().get("id", ""))
-            produccion.cargar(pid)
+            canales.activar(produccion.cargar(pid)["canal"])   # abrir una producción abre su canal
             produccion.activar(pid)
             return self._json({"ok": True})
 

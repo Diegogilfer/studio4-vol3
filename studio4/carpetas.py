@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import config
+from . import canales, config
 
 logger = logging.getLogger("studio4.carpetas")
 
@@ -60,12 +60,19 @@ def subcarpeta(p: dict[str, Any], cual: str) -> str:
 
 
 def ruta(p: dict[str, Any]) -> Path:
-    return Path(p["carpeta"]) if p.get("carpeta") else RAIZ_USUARIO / nombre(p)
+    """Vídeos/STUDIO 4/<canal>/<fecha · título>. Las carpetas de antes de los canales (sin la del canal) se mueven."""
+    if p.get("carpeta") and Path(p["carpeta"]).parent != RAIZ_USUARIO:
+        return Path(p["carpeta"])
+    return RAIZ_USUARIO / _limpio(canales.de_produccion(p)["nombre"]) / nombre(p)
 
 
 def preparar(p: dict[str, Any]) -> Path:
     """Crea (o completa) la carpeta y escribe el guion y la lista de escenas, todo con el nombre del vídeo."""
     base = ruta(p)
+    vieja_raiz = Path(p["carpeta"]) if p.get("carpeta") else None
+    if vieja_raiz and vieja_raiz != base and vieja_raiz.is_dir() and not base.exists():
+        base.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(vieja_raiz), str(base))   # a la carpeta de su canal
     c = corto(p)
     for cual in (CLIPS, GUION, ENTREGAS):
         nueva = base / subcarpeta(p, cual)

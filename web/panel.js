@@ -783,10 +783,58 @@ document.addEventListener("click", async (ev) => {
 function crecer(area) { area.style.height = "auto"; area.style.height = `${area.scrollHeight + 2}px`; }
 ["a-idea", "a-guion", "g-texto"].forEach((id) => $(id).addEventListener("input", () => crecer($(id))));
 
+
+// ============================================================== Canales
+// Cada canal ve solo sus producciones, su YouTube y su carpeta. Se cambia arriba y se edita en Ajustes.
+const REDES = { youtube: ["YouTube", "@usuario"], instagram: ["Instagram", "@usuario"], tiktok: ["TikTok", "@usuario"], facebook: ["Facebook", "@página o enlace"] };
+let canalActual = "";
+function pintarSelectorCanal({ cs, a }) {
+  $("canal").innerHTML = cs.map((c) => `<option value="${esc(c.id)}" ${c.id === a ? "selected" : ""}>${esc(c.nombre)}</option>`).join("");
+  const nombre = cs.find((c) => c.id === a)?.nombre || "";
+  $("lista-titulo").textContent = nombre ? `Producciones de ${nombre}` : "Tus producciones";
+  if (canalActual && canalActual !== a) { empezarOtro = false; paso = 1; cargarYoutube(); }
+  canalActual = a;
+}
+$("canal").addEventListener("change", async () => {
+  try { await api("/api/canales/activar", { id: $("canal").value }); await refrescar(); } catch (e) { aviso(e); }
+});
+function fichaCanal(c, redes) {
+  const id = c.id || "nuevo";
+  return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
+    <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
+    ${Object.keys(redes).map((r) => `<label><span>${esc(REDES[r]?.[0] || redes[r])}</span>
+      <input class="campo" name="${r}" value="${esc(c.redes?.[r] || "")}" placeholder="${esc(REDES[r]?.[1] || "@usuario")}…" autocomplete="off" spellcheck="false" id="red-${esc(id)}-${r}"></label>`).join("")}
+    <div class="fila"><button class="primario" type="submit">${c.id ? "Guardar canal" : "Crear canal"}</button><span class="meta" role="status" aria-live="polite"></span></div>
+  </form>`;
+}
+async function pintarCanalesAjustes(conNuevo = false) {
+  try {
+    const d = await api("/api/canales");
+    $("canales-lista").innerHTML = d.canales.map((c) => fichaCanal(c, d.redes)).join("") + (conNuevo ? fichaCanal({}, d.redes) : "");
+    if (conNuevo) $("canales-lista").lastElementChild.querySelector("input").focus();
+  } catch (e) { aviso(e); }
+}
+$("canales-lista").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const f = ev.target;
+  const datos = Object.fromEntries(new FormData(f));
+  const cuerpo = { nombre: datos.nombre, redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
+  if (f.dataset.canal) cuerpo.id = f.dataset.canal;
+  try {
+    await api("/api/canales", cuerpo);
+    await pintarCanalesAjustes();
+    await refrescar();
+    if (f.dataset.canal === canalActual) cargarYoutube();
+  } catch (e) { f.querySelector("[role=status]").textContent = e.message || String(e); }
+});
+$("canal-nuevo").addEventListener("click", () => pintarCanalesAjustes(true));
+$("abrir-ajustes").addEventListener("click", () => pintarCanalesAjustes());
+
 // ============================================================== Ciclo
 async function refrescar() {
   const [d, lista] = await Promise.all([api("/api/estado"), api("/api/producciones")]);
   estado = d;
+  siCambia("canales", { cs: d.canales, a: d.canal.id }, pintarSelectorCanal);
   const o = d.opciones;
   llenarSelect($("a-voz"), o.voces);
   siCambia("voces-asistente", o.voces_gemini, () => pintarVocesAsistente(o.voces_gemini, o.voz_por_defecto));

@@ -33,6 +33,7 @@
     <a href="#entregas"><svg><use href="#i-entregas"/></svg><span>Entregas</span></a>
   </nav>
   <div class="barra-der">
+    <select id="canal" class="campo canal-campo" aria-label="Canal con el que trabajas" title="Canal: cada uno tiene sus producciones, su YouTube y su carpeta"></select>
     <span id="en-marcha" class="pildora marcha" role="status" aria-live="polite" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
     <a id="yt-pildora" class="pildora" href="/youtube/conectar" title="Solo lectura: tu canal y lo que ya hay en YouTube sobre cada tema"><svg><use href="#i-yt"/></svg><span id="yt-txt">Conectar YouTube</span></a>
     <a id="flow-boton" class="pildora aviso" target="_blank" href="/flow/emparejar"><span class="piloto"></span><span>Flow: conectar</span></a>
@@ -154,7 +155,7 @@
       <p class="aviso-txt" id="aviso-panel" role="alert" hidden></p>
       <p class="aviso-txt" id="aviso-salud" hidden></p>
       <div>
-        <p class="meta" style="margin-bottom:10px">Tus producciones</p>
+        <p class="meta" style="margin-bottom:10px" id="lista-titulo">Tus producciones</p>
         <div id="lista" class="producciones"></div>
       </div>
     </div>
@@ -330,9 +331,18 @@
 
 <div id="ajustes" class="ajustes-capa" hidden>
   <aside class="ajustes-panel tarjeta" role="dialog" aria-modal="true" aria-label="Ajustes">
-    <div class="cabeza" style="margin-bottom:0"><h2>Ajustes · Tema</h2><button class="redondo" id="cerrar-ajustes" title="Cerrar" aria-label="Cerrar ajustes">✕</button></div>
-    <p class="meta">Elige el fondo y los colores del panel. Se guarda en este navegador.</p>
-    <div class="temas" id="temas"></div>
+    <div class="cabeza" style="margin-bottom:0"><h2>Ajustes</h2><button class="redondo" id="cerrar-ajustes" title="Cerrar" aria-label="Cerrar ajustes">✕</button></div>
+    <section class="ajustes-seccion">
+      <h3>Canales</h3>
+      <p class="meta">Cada canal tiene sus producciones, su carpeta en Vídeos\STUDIO 4 y sus redes. Nada se mezcla entre canales. Las redes se leen, no se publica nada.</p>
+      <div class="canales-lista" id="canales-lista"></div>
+      <div class="fila"><button class="boton" id="canal-nuevo" type="button">Añadir canal</button></div>
+    </section>
+    <section class="ajustes-seccion">
+      <h3>Tema</h3>
+      <p class="meta">Elige el fondo y los colores del panel. Se guarda en este navegador.</p>
+      <div class="temas" id="temas"></div>
+    </section>
   </aside>
 </div>
 <audio id="oir-voz" preload="none" hidden></audio>

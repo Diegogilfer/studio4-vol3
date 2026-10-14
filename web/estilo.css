@@ -791,3 +791,17 @@ select.campo option { background: var(--bg-panel, #fff); color: #161827; }
 .por-que { flex-basis: 100%; font-size: 12.5px; color: var(--fg-muted); text-align: right; }
 .por-que:empty { display: none; }
 @media (max-width: 1000px) { .por-que { text-align: left; } }
+/* Canales: selector arriba y fichas en Ajustes. */
+.canal-campo { height: 36px; border-radius: 999px; padding: 0 14px; font-weight: 600; max-width: 180px; cursor: pointer; }
+.ajustes-seccion { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.ajustes-seccion h3 { font-size: 15px; }
+.canales-lista { display: grid; gap: 12px; }
+.canal-ficha { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; padding: 16px; border-radius: 20px;
+  background: var(--caja); border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.canal-ficha label { display: grid; gap: 4px; font-size: 12.5px; color: var(--fg-muted); min-width: 0; }
+.canal-ficha label:first-child, .canal-ficha .fila { grid-column: 1 / -1; }
+.canal-ficha .campo { width: 100%; }
+.canal-ficha .fila { margin-top: 2px; }
+@media (max-width: 640px) { .canal-campo { max-width: 120px; padding: 0 10px; } }
+/* Móvil: Flow solo se usa en el ordenador; su píldora deja sitio al selector de canal. */
+@media (max-width: 640px) { #flow-boton { display: none; } }

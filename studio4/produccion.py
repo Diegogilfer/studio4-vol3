@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, render, subtitulos,
+from . import (canales, carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, render, subtitulos,
                visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -40,6 +40,7 @@ def cargar(pid: str) -> dict[str, Any]:
     for campo, vacio in (("version", ""), ("familia", ""), ("investigacion", None), ("ganchos", []),
                          ("avisos", []), ("autor_guion", "")):
         p.setdefault(campo, vacio)
+    p.setdefault("canal", canales.listar()[0]["id"])   # las de antes de los canales son del primero
     return p
 
 
@@ -62,11 +63,16 @@ def modificar(pid: str, cambio: Callable[[dict[str, Any]], Any]) -> dict[str, An
 
 
 def activa() -> Optional[str]:
+    """La producción abierta, siempre del canal activo (al cambiar de canal se abre la última de ese canal)."""
+    canal = canales.activo()["id"]
     try:
         pid = _ACTIVA.read_text(encoding="utf-8").strip()
-        return pid if (carpeta(pid) / "proyecto.json").exists() else None
+        if (carpeta(pid) / "proyecto.json").exists() and cargar(pid)["canal"] == canal:
+            return pid
     except (OSError, ValueError):
-        return None
+        pass
+    del_canal = listar(canal)
+    return del_canal[0]["id"] if del_canal else None
 
 
 def activar(pid: str) -> None:
@@ -74,17 +80,19 @@ def activar(pid: str) -> None:
     _ACTIVA.write_text(pid, encoding="utf-8")
 
 
-def listar() -> list[dict[str, Any]]:
+def listar(canal: str | None = None) -> list[dict[str, Any]]:
+    """Las producciones, de la más nueva a la más vieja; con `canal`, solo las de ese canal."""
+    primero = canales.listar()[0]["id"]
     salida = []
     for f in sorted(config.PRODUCCIONES.glob("*/proyecto.json"), reverse=True):
         try:
             p = json.loads(f.read_text(encoding="utf-8"))
             salida.append({"id": p["id"], "tema": p["tema"], "titulo": p.get("titulo", ""), "estado": p["estado"],
                            "creado": p["creado"], "formato": p["formato"], "version": p.get("version", ""),
-                           "familia": p.get("familia", "")})
+                           "familia": p.get("familia", ""), "canal": p.get("canal") or primero})
         except (OSError, ValueError, KeyError):
             continue
-    return salida
+    return [x for x in salida if canal is None or x["canal"] == canal]
 
 
 def recuperar_trabajos_colgados() -> int:
@@ -151,7 +159,7 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
         "trabajo": {}, "investigacion": None, "guion": "", "ganchos": [], "autor_guion": "", "guion_aprobado": False,
         "titulo": "", "descripcion": "", "hashtags": [], "biblia": {}, "avisos": [],
         "escenas": [], "escena_activa": 1, "voz": None, "subtitulos": dict(subtitulos.POR_DEFECTO), "final": None,
-        "miniaturas": None, "recoger_para": "escenas",
+        "miniaturas": None, "recoger_para": "escenas", "canal": canales.activo()["id"],
     }
     p.update(campos)
     guardar(p)
@@ -201,7 +209,8 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
         dossier = investigacion.investigar(idea, produccion=pids[0])
     if youtube.disponible() and not dossier.get("youtube"):   # también al reescribir con una investigación vieja
         _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
-        dossier["youtube"] = youtube.contexto_para_guion(idea)
+        usuario = canales.de_produccion(cargar(pids[0]))["redes"].get("youtube") or config.YOUTUBE_CANAL
+        dossier["youtube"] = youtube.contexto_para_guion(idea, usuario)
     for pid in pids:
         modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
     autor = "DeepSeek" if deepseek.disponible() else "Gemini"
@@ -376,7 +385,8 @@ def importar_carpeta(pid: str) -> int:
     p = cargar(pid)
     if not p.get("guion_aprobado") or not p.get("escenas") or p["trabajo"].get("ocupado"):
         return 0
-    if not p.get("carpeta") or not (Path(p["carpeta"]) / carpetas.subcarpeta(p, carpetas.CLIPS)).is_dir():
+    if (not p.get("carpeta") or carpetas.ruta(p) != Path(p["carpeta"])
+            or not (Path(p["carpeta"]) / carpetas.subcarpeta(p, carpetas.CLIPS)).is_dir()):
         preparar_carpeta(pid)   # crea la carpeta o la pone al día (nombres con el título del vídeo)
         p = cargar(pid)
     nuevas = carpetas.importar(p, lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="carpeta"))

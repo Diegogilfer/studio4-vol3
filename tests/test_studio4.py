@@ -545,3 +545,41 @@ def test_numero_de_escena_aunque_el_titulo_tenga_numeros():
     assert carpetas.numero_de_escena(p, "Las 2 bombas de 1945 - escena 07.mp4") == 7
     assert carpetas.numero_de_escena(p, "Las 2 bombas de 1945 - 12.png") == 12
     assert carpetas.numero_de_escena(p, "Escena3.mp4") == 3
+
+
+# --- Canales: cada uno con lo suyo ----------------------------------------------------------------
+def test_canales_por_defecto_y_alta(aislado):
+    from studio4 import canales
+    assert [c["nombre"] for c in canales.listar()] == ["FourLevel", "ARIGAB"]
+    assert canales.activo()["redes"]["youtube"] == "@Four4Level"
+    c = canales.guardar({"nombre": "Mi Canal", "redes": {"tiktok": "https://www.tiktok.com/@mi.canal", "instagram": "mi_canal"}})
+    assert c["id"] == "mi-canal" and c["redes"] == {"tiktok": "@mi.canal", "instagram": "@mi_canal"}
+    assert canales.guardar({"nombre": "Mi Canal"})["id"] == "mi-canal-2"   # no pisa al que ya existe
+    canales.guardar({**c, "redes": {**c["redes"], "facebook": "https://facebook.com/profile.php?id=1"}})
+    assert canales.obtener("mi-canal")["redes"]["facebook"] == "https://facebook.com/profile.php?id=1"
+    with pytest.raises(ValueError):
+        canales.guardar({"nombre": " "})
+
+
+def test_producciones_separadas_por_canal(aislado):
+    from studio4 import canales
+    _produccion("20261012-100000-viejo")                        # de antes de los canales → del primero
+    canales.activar("arigab")
+    assert produccion.activa() is None                          # ARIGAB no ve la de FourLevel
+    _produccion("20261012-110000-ari", canal="arigab")
+    assert [x["id"] for x in produccion.listar("arigab")] == ["20261012-110000-ari"]
+    assert [x["id"] for x in produccion.listar("fourlevel")] == ["20261012-100000-viejo"]
+    canales.activar("fourlevel")
+    assert produccion.activa() == "20261012-100000-viejo"      # al volver, se abre la última de ese canal
+    assert produccion._nueva("20261012-120000-nueva")["canal"] == "fourlevel"
+
+
+def test_carpeta_va_dentro_de_su_canal_y_se_mueve_la_vieja(aislado):
+    from studio4 import carpetas
+    vieja = carpetas.RAIZ_USUARIO / "2026-10-12 · Faro"
+    (vieja / "1 Clips de Flow · Faro").mkdir(parents=True)
+    (vieja / "1 Clips de Flow · Faro" / "Faro - escena 01.mp4").write_bytes(b"x")
+    p = _produccion("20261012-100000-faro", titulo="Faro", carpeta=str(vieja), canal="arigab")
+    base = carpetas.preparar(p)
+    assert base == carpetas.RAIZ_USUARIO / "ARIGAB" / "2026-10-12 · Faro"
+    assert (base / "1 Clips de Flow · Faro" / "Faro - escena 01.mp4").exists() and not vieja.exists()

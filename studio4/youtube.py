@@ -22,7 +22,7 @@ from typing import Any
 
 import requests
 
-from . import config, registro
+from . import canales, config, registro
 
 logger = logging.getLogger("studio4.youtube")
 
@@ -58,7 +58,7 @@ def disponible() -> bool:
 
 
 def guardar_canal(canal: str) -> str:
-    """Guarda tu canal (@usuario, id UC… o enlace) en .env para leer sus datos públicos con la clave."""
+    """Guarda el YouTube (@usuario, id UC… o enlace) del canal activo de STUDIO."""
     import re
     from dotenv import set_key
     canal = canal.strip()
@@ -66,8 +66,11 @@ def guardar_canal(canal: str) -> str:
     if not m:
         raise ValueError("Escribe tu canal como @usuario o pega su enlace (youtube.com/@usuario).")
     valor = m.group(0)
-    set_key(str(config.ENV_FILE), "YOUTUBE_CANAL", valor, quote_mode="never")
-    config.YOUTUBE_CANAL = valor
+    c = canales.activo()
+    canales.guardar({**c, "redes": {**c["redes"], "youtube": valor}})
+    if c["id"] == canales.listar()[0]["id"]:   # el primer canal sigue también en .env, como antes
+        set_key(str(config.ENV_FILE), "YOUTUBE_CANAL", valor, quote_mode="never")
+        config.YOUTUBE_CANAL = valor
     _cache.clear()
     return valor
 
@@ -164,20 +167,28 @@ def _estadisticas(ids: list[str]) -> list[dict[str, Any]]:
 
 
 # --- Lo que usa STUDIO ---------------------------------------------------------------------------
-def canal() -> dict[str, Any]:
-    """Tu canal y tus vídeos más vistos (se guarda 15 min para no gastar cupo)."""
+def usuario_activo() -> str:
+    """El @usuario de YouTube del canal activo de STUDIO (o el de .env si el canal no tiene)."""
+    return canales.activo()["redes"].get("youtube") or config.YOUTUBE_CANAL
+
+
+def canal(usuario: str | None = None) -> dict[str, Any]:
+    """Un canal de YouTube y sus vídeos más vistos (se guarda 15 min para no gastar cupo).
+    Por defecto, el del canal activo de STUDIO: así cada canal ve solo lo suyo."""
+    usuario = usuario_activo() if usuario is None else usuario
+
     def leer():
-        if conectado():
+        if usuario.startswith("UC"):
+            filtro = {"id": usuario}
+        elif usuario:
+            filtro = {"forHandle": usuario}
+        elif conectado():
             filtro = {"mine": "true"}
-        elif config.YOUTUBE_CANAL.startswith("UC"):
-            filtro = {"id": config.YOUTUBE_CANAL}
-        elif config.YOUTUBE_CANAL:
-            filtro = {"forHandle": config.YOUTUBE_CANAL}
         else:
-            raise RuntimeError("Falta tu canal: dime tu @usuario de YouTube.")
+            raise RuntimeError("Falta el YouTube de este canal: escribe su @usuario en Ajustes → Canales.")
         d = _get("channels", part="snippet,statistics,contentDetails", **filtro)
         if not d.get("items"):
-            raise RuntimeError(f"No encuentro el canal «{config.YOUTUBE_CANAL}» en YouTube." if not conectado()
+            raise RuntimeError(f"No encuentro el canal «{usuario}» en YouTube." if usuario
                                else "Esta cuenta de Google no tiene canal de YouTube.")
         ch = d["items"][0]
         subidas = ch["contentDetails"]["relatedPlaylists"]["uploads"]
@@ -193,7 +204,7 @@ def canal() -> dict[str, Any]:
                 "vistas": int(ch["statistics"].get("viewCount", 0)), "videos": int(ch["statistics"].get("videoCount", 0)),
                 "foto": ch["snippet"]["thumbnails"].get("default", {}).get("url", ""),
                 "mas_vistos": sorted(videos, key=lambda v: -v["vistas"])[:10], "recientes": videos[:10]}
-    return _guardado("canal", 900, leer)
+    return _guardado(f"canal:{usuario.lower()}", 900, leer)
 
 
 def sobre_el_tema(tema: str, n: int = 8) -> list[dict[str, Any]]:
@@ -206,7 +217,7 @@ def sobre_el_tema(tema: str, n: int = 8) -> list[dict[str, Any]]:
     return _guardado(f"tema:{tema.lower()}", 3600, buscar)
 
 
-def contexto_para_guion(tema: str) -> dict[str, Any]:
+def contexto_para_guion(tema: str, usuario: str | None = None) -> dict[str, Any]:
     """Lo que la investigación pasa a DeepSeek. Si YouTube no está conectado o falla, vacío (no bloquea)."""
     if not disponible():
         return {}
@@ -216,7 +227,7 @@ def contexto_para_guion(tema: str) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.warning("YouTube (búsqueda): %s", e)
     try:
-        c = canal()
+        c = canal(usuario)
         salida["tu_canal"] = {"nombre": c["nombre"], "mas_vistos": c["mas_vistos"][:8]}
     except Exception as e:  # noqa: BLE001
         logger.warning("YouTube (canal): %s", e)
