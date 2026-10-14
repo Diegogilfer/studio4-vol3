@@ -38,7 +38,7 @@
 </svg>
 
 <header class="barra">
-  <a class="marca" href="#crear" title="STUDIO #4 — Inicio"><span class="logo">S4</span><span>STUDIO #4</span></a>
+  <a class="marca" href="#inicio" title="Inicio"><span class="logo">S4</span><span>STUDIO #4</span></a>
   <nav class="nav" aria-label="Navegación principal">
     <a href="#crear" class="activo" title="Crear"><svg><use href="#i-crear"/></svg><span>Crear</span></a>
     <a href="#canales" title="Canales"><svg><use href="#i-canales"/></svg><span>Canales</span></a>
@@ -49,7 +49,6 @@
   </nav>
   <div class="barra-der">
     <select id="canal" class="campo canal-campo" aria-label="Canal con el que trabajas" title="Canal: cada uno tiene sus producciones, su YouTube y su carpeta"></select>
-    <span id="en-marcha" class="pildora marcha" role="status" aria-live="polite" hidden><svg class="girando"><use href="#i-carga"/></svg><span id="en-marcha-txt"></span><b id="en-marcha-pct"></b></span>
     <a id="yt-pildora" class="pildora" href="/youtube/conectar" title="Solo lectura: tu canal y lo que ya hay en YouTube sobre cada tema"><svg><use href="#i-yt"/></svg><span id="yt-txt">Conectar YouTube</span></a>
     <a id="flow-boton" class="pildora aviso" target="_blank" href="/flow/emparejar"><span class="piloto"></span><span>Flow: conectar</span></a>
     <button id="abrir-ajustes" class="redondo" title="Ajustes: tema de color del panel" aria-label="Ajustes: tema de color del panel" aria-controls="ajustes"><svg><use href="#i-ajustes"/></svg></button>
@@ -58,9 +57,8 @@
 </header>
 
 <main>
-  <!-- ================================================================ CREAR: asistente de guion -->
-  <section id="crear" class="crear-vista">
-    <!-- Presentación: el canal, sus vídeos y el motor -->
+  <!-- ================================================================ INICIO: el canal, sus vídeos y el motor -->
+  <section id="inicio" class="crear-vista">
     <div class="presentacion entrar">
       <span class="sello" id="sello"></span>
       <h1 class="display">Tu idea, convertida en <em>vídeo</em><br>listo para publicar</h1>
@@ -75,6 +73,10 @@
       <h2 class="display">De la idea al <em>vídeo</em>, en cinco pasos</h2>
       <div class="motor-pasos" id="motor"></div>
     </div>
+  </section>
+
+  <!-- ================================================================ CREAR: el asistente, en su propia vista -->
+  <section id="crear" class="crear-vista">
     <div class="seccion-num" id="nuevo-video">
       <span class="num-hueco" aria-hidden="true">01</span>
       <div><span class="sello">Nuevo vídeo</span><h2 class="display">Empieza por la <em>idea</em></h2></div>
@@ -83,6 +85,7 @@
     <div class="hero">
     <div class="hero-fondo" aria-hidden="true"><div class="hero-vivo"><div class="hero-rejilla"></div></div></div>
     <div class="hero-cuerpo">
+      <p class="aviso-txt" id="aviso-panel" role="alert" hidden></p>
       <ol class="a-pasos" id="a-pasos">
         <li data-paso="1"><b>1</b> Idea</li><li data-paso="2"><b>2</b> Formatos</li><li data-paso="3"><b>3</b> Estilo y voz</li><li data-paso="4"><b>4</b> Guion</li>
       </ol>
@@ -178,7 +181,6 @@
         <div class="acciones-paso"><button class="boton" id="a-otro">Empezar otro vídeo</button></div>
       </div>
 
-      <p class="aviso-txt" id="aviso-panel" role="alert" hidden></p>
       <p class="aviso-txt" id="aviso-salud" hidden></p>
     </div>
     </div>
@@ -373,6 +375,12 @@
       <div class="temas" id="temas"></div>
     </section>
   </aside>
+</div>
+<!-- Lo que está en marcha, flotando abajo a la derecha: no aprieta la barra y se ve desde cualquier vista -->
+<div id="en-marcha" class="en-marcha" role="status" aria-live="polite" hidden>
+  <svg class="girando" width="20" height="20"><use href="#i-carga"/></svg>
+  <div class="en-marcha-cuerpo"><b id="en-marcha-txt"></b><div class="progreso"><div id="en-marcha-barra"></div></div></div>
+  <b id="en-marcha-pct"></b>
 </div>
 <audio id="oir-voz" preload="none" hidden></audio>
 <script src="/web/panel.js"></script>

@@ -93,7 +93,7 @@ def _portada(fuente: Path, destino: Path, plataforma: str, texto: str, foco: tup
 def preparar(p: dict[str, Any], base: Path, avisar: Callable[[str, int], None] = lambda *_: None) -> dict[str, Any]:
     if not p.get("final"):
         raise RuntimeError("Primero renderiza el vídeo completo (pestaña Render).")
-    avisar("Gemini elige los mejores momentos y escribe los textos", 5)
+    avisar("Eligiendo los mejores momentos y escribiendo los textos", 5)
     plan = elegir(p)
     salida = base / "entregas"
     salida.mkdir(exist_ok=True)

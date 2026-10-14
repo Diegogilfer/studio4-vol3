@@ -194,7 +194,7 @@ def actualizar(cid: str) -> dict[str, Any]:
     if not videos:
         raise RuntimeError("YouTube no devolvió vídeos populares: revisa la clave de YouTube.")
     m = metricas(videos)
-    avisar("Gemini convierte las cifras en pautas para el canal")
+    avisar("Convirtiendo las cifras en pautas para el canal")
     crudo = gemini.generar(_texto_para_gemini(canal, m, videos), sistema=SISTEMA, esquema=Informe, temperatura=0.6,
                            detalle=f"tendencias · {canal['nombre']}")
     bloque = re.search(r"\{.*\}", crudo, re.DOTALL)

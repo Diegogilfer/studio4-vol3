@@ -656,3 +656,43 @@ def test_enlace_de_google_maps_da_nombre_y_ubicacion():
     assert referencias.es_maps("https://maps.app.goo.gl/AbC123") and not referencias.es_maps("https://es.wikipedia.org/wiki/Mapa")
     sitio = referencias.lugar_de_maps("https://www.google.com/maps/place/Moviraider+Sevilla/@37.3891,-5.9845,17z/data=!3m1")
     assert sitio["nombre"] == "Moviraider Sevilla" and (sitio["lat"], sitio["lng"]) == (37.3891, -5.9845)
+
+
+# --- Errores claros y reintentar --------------------------------------------------------------------
+def test_error_legible_y_reintentar(aislado, monkeypatch):
+    assert produccion._error_legible("Investigación y guion", RuntimeError("DeepSeek no respondió: Expecting value: line 1 column 1")) == (
+        "No se pudo escribir el guion: el servicio está saturado o sin conexión; suele bastar con esperar un minuto. Pulsa «Reintentar».")
+    assert "Expecting" not in produccion._error_legible("Render", ValueError("Expecting value"))
+    assert produccion._error_legible("Render", ValueError("Primero renderiza el vídeo completo.")) == "Primero renderiza el vídeo completo."
+    p = _produccion("20261013-100000-corto-faro", version="corto", familia="20261013-100000", guion="", investigacion={"dossier": "d"},
+                    trabajo={"ocupado": False, "nombre": "Investigación y guion", "error": "x", "reintentable": True})
+    llamadas = []
+    monkeypatch.setattr(produccion, "_investigar_y_escribir", lambda pids, idea, seg, dossier=None: llamadas.append((pids, seg, dossier)))
+    produccion.reintentar(p["id"])
+    for _ in range(50):
+        if llamadas and not produccion.cargar(p["id"])["trabajo"]["ocupado"]:
+            break
+        import time; time.sleep(.05)
+    assert llamadas == [(["20261013-100000-corto-faro"], {"corto": 20}, {"dossier": "d"})]   # aprovecha la investigación
+    with pytest.raises(ValueError):
+        produccion.reintentar(p["id"])   # ya salió bien: no hay nada que reintentar
+
+
+def test_deepseek_sin_espacio_reintenta_una_vez_con_mas_margen(aislado, monkeypatch):
+    from studio4 import deepseek
+    monkeypatch.setattr(deepseek.config, "DEEPSEEK_API_KEY", "x")
+    monkeypatch.setattr(deepseek.time, "sleep", lambda _s: None)
+    pedidos = []
+
+    class R:
+        status_code = 200
+        def __init__(self, cuerpo): self.cuerpo = cuerpo
+        def json(self): return self.cuerpo
+
+    def post(url, json, timeout, headers):
+        pedidos.append(json["max_tokens"])
+        return R({"choices": [{"message": {"content": ""}, "finish_reason": "length"}], "usage": {"completion_tokens": json["max_tokens"]}})
+    monkeypatch.setattr(deepseek.requests, "post", post)
+    with pytest.raises(RuntimeError):
+        deepseek.generar_json("s", "p")
+    assert pedidos == [16000, 32000]   # no repite igual: un reintento con el doble y se rinde

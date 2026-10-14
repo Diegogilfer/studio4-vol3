@@ -93,12 +93,17 @@ def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str
              publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "") -> dict[str, Any]:
     """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
     prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias)
+    datos = None
     if deepseek.disponible():
-        datos, autor = deepseek.generar_json(SISTEMA, prompt, detalle="guion", produccion=produccion), "DeepSeek"
+        try:
+            datos, autor = deepseek.generar_json(SISTEMA, prompt, detalle="guion", produccion=produccion), "DeepSeek"
+        except RuntimeError as e:   # DeepSeek caído o sin espacio: Gemini (gratis) escribe para no dejarte sin guion
+            logger.warning("%s: el guion lo escribe Gemini.", e)
     else:
         logger.warning("Sin DEEPSEEK_API_KEY: el guion lo escribe Gemini.")
+    if datos is None:
         crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.9,
-                               detalle="guion (sin DeepSeek)", produccion=produccion)
+                               detalle="guion (reserva)", produccion=produccion)
         m = re.search(r"\{.*\}", crudo, re.DOTALL)
         datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
 

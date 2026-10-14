@@ -330,6 +330,9 @@ class Panel(BaseHTTPRequestHandler):
         pid = produccion.activa()
         if not pid:
             raise Error(409, "No hay producción activa")
+        if ruta == "/api/reintentar":
+            produccion.reintentar(pid)
+            return self._json({"ok": True})
         if ruta == "/api/guion":
             produccion.guardar_guion(pid, self._cuerpo_json().get("guion", ""))
             return self._json({"ok": True})

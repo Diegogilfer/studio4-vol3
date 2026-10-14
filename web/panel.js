@@ -349,19 +349,21 @@ pintarRefs();
 
 function nuevoVideo() {
   empezarOtro = true; paso = 1; pintarAsistente();
-  $("nuevo-video").scrollIntoView({ behavior: "smooth", block: "start" });
+  location.hash = "#crear";
+  window.scrollTo({ top: 0 });
   $("a-idea").focus({ preventScroll: true });
 }
 $("ir-crear").addEventListener("click", nuevoVideo);
 
-// Pestañas: cada parte del estudio es su propia vista (#crear, #flow, #render, #entregas).
-const VISTAS = ["crear", "canales", "tendencias", "flow", "render", "entregas"];
-const vistaActual = () => (VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "crear");
+// Pestañas: cada parte del estudio es su propia vista. Inicio (el logo) es la portada; Crear, solo el asistente.
+const VISTAS = ["inicio", "crear", "canales", "tendencias", "flow", "render", "entregas"];
+const vistaActual = () => (VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio");
 function mostrarVista() {
   const v = vistaActual();
   const p = estado?.produccion;
   const lista = !!(p && p.guion_aprobado);
-  const fuera = ["crear", "canales", "tendencias"].includes(v);   // vistas que no dependen de una producción
+  const fuera = ["inicio", "crear", "canales", "tendencias"].includes(v);   // vistas que no dependen de una producción
+  $("inicio").hidden = v !== "inicio";
   $("crear").hidden = v !== "crear";
   $("tendencias").hidden = v !== "tendencias";
   $("canales").hidden = v !== "canales";
@@ -469,7 +471,11 @@ $("lista").addEventListener("click", async (ev) => {
   if (ev.target.closest("[data-nuevo]")) return nuevoVideo();
   const b = ev.target.closest("[data-id]");
   if (!b) return;
-  try { await api("/api/activar", { id: b.dataset.id }); empezarOtro = false; await refrescar(); } catch (e) { aviso(e); }
+  try {
+    await api("/api/activar", { id: b.dataset.id }); empezarOtro = false; await refrescar();
+    const p = estado.produccion;   // se abre en su paso: el guion en Crear; si ya está aprobado, donde va
+    location.hash = p && p.guion_aprobado ? `#${pasoActual(p)}` : "#crear";
+  } catch (e) { aviso(e); }
 });
 const MOTOR = [
   ["idea", "i-crear", "Idea", "La escribes o eliges una tendencia"],
@@ -501,7 +507,7 @@ $("motor").addEventListener("click", (ev) => {
   if (!b) return;
   const k = b.dataset.motor;
   if (k === "idea") return nuevoVideo();
-  if (k === "guion") { empezarOtro = false; pintarAsistente(); return $("nuevo-video").scrollIntoView({ behavior: "smooth" }); }
+  if (k === "guion") { empezarOtro = false; pintarAsistente(); location.hash = "#crear"; return; }
   location.hash = `#${k}`;
 });
 
@@ -530,14 +536,24 @@ function pintarTrabajo(t) {
   $("en-marcha").hidden = !t.ocupado;
   $("en-marcha-txt").textContent = t.fase || "";
   $("en-marcha-pct").textContent = `${t.progreso || 0}%`;
+  $("en-marcha-barra").style.width = `${t.progreso || 0}%`;
   $("trabajo").hidden = !t.ocupado;
   $("t-fase").textContent = t.fase || "";
   $("t-pct").textContent = t.ocupado ? `${t.progreso || 0}%` : "";
   $("t-barra").style.width = `${t.progreso || 0}%`;
+  // Un trabajo que falló se queda a la vista, con su botón para reintentarlo, hasta que salga bien.
   for (const id of ["t-error", "aviso-panel"]) {
-    if (t.error) { $(id).textContent = t.error; $(id).hidden = false; }
+    $(id).hidden = !t.error;
+    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${!t.ocupado
+      ? `<button class="boton" type="button" data-reintentar="1"><svg width="14" height="14"><use href="#i-renovar"/></svg>Reintentar</button>` : ""}` : "";
   }
 }
+document.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-reintentar]");
+  if (!b) return;
+  b.disabled = true;
+  try { await api("/api/reintentar", {}); await refrescar(); } catch (e) { aviso(e); b.disabled = false; }
+});
 
 function pintarExtension(ext) { $("ext-vieja").hidden = !(ext.conectada && ext.desactualizada); }
 function portada(e) {
@@ -874,8 +890,12 @@ function fichaCanal(c, redes) {
   return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
     <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
     <label class="ancho"><span>Nicho (de qué trata el canal)</span><input class="campo" name="nicho" value="${esc(c.nicho || "")}" placeholder="historia y ciencia curiosa…" autocomplete="off"></label>
-    ${Object.keys(redes).map((r) => `<label><span>${esc(REDES[r]?.[0] || redes[r])}</span>
-      <input class="campo" name="${r}" value="${esc(c.redes?.[r] || "")}" placeholder="${esc(REDES[r]?.[1] || "@usuario")}…" autocomplete="off" spellcheck="false" id="red-${esc(id)}-${r}"></label>`).join("")}
+    ${Object.keys(redes).map((r) => {
+      const ok = !!c.redes?.[r];   // con logo a color si está vinculada; en gris oscuro si falta
+      return `<label class="red-campo ${ok ? "vinculada" : ""}"><span><svg class="red-logo" aria-hidden="true"><use href="#l-${r}"/></svg>${esc(REDES[r]?.[0] || redes[r])}
+        <small>${ok ? "Vinculado" : "Sin vincular"}</small></span>
+      <input class="campo" name="${r}" value="${esc(c.redes?.[r] || "")}" placeholder="${esc(REDES[r]?.[1] || "@usuario")}…" autocomplete="off" spellcheck="false" id="red-${esc(id)}-${r}"></label>`;
+    }).join("")}
     <div class="fila"><button class="primario" type="submit">${c.id ? "Guardar canal" : "Crear canal"}</button><span class="meta" role="status" aria-live="polite"></span></div>
   </form>`;
 }
@@ -895,6 +915,8 @@ $("canales-lista").addEventListener("submit", async (ev) => {
   try {
     await api("/api/canales", cuerpo);
     await pintarCanalesAjustes();
+    const guardada = $("canales-lista").querySelector(`[data-canal="${cuerpo.id || ""}"] [role=status]`) || $("canales-lista").lastElementChild?.querySelector("[role=status]");
+    if (guardada) guardada.textContent = "Guardado";
     await refrescar();
     if (f.dataset.canal === canalActual) cargarYoutube();
   } catch (e) { f.querySelector("[role=status]").textContent = e.message || String(e); }

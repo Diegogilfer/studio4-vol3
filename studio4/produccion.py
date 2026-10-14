@@ -17,9 +17,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (canales, carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, referencias, render,
-               subtitulos, tendencias,
-               visuales_api, voz, youtube)
+from . import (canales, carpetas, config, director, entregas, guion, investigacion, miniaturas, referencias, render,
+               subtitulos, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -118,6 +117,10 @@ def recuperar_trabajos_colgados() -> int:
             p = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        t = p.get("trabajo") or {}
+        if t.get("error") and not t.get("ocupado") and "reintentable" not in t:   # errores de antes: frase clara
+            t.update(error=_error_legible(t.get("nombre", ""), RuntimeError(t["error"])), reintentable=True)
+            guardar(p)
         if p.get("trabajo", {}).get("ocupado"):
             p["trabajo"].update(ocupado=False, error=f"Se interrumpió «{p['trabajo'].get('fase', '')}» al cerrar STUDIO: vuelve a lanzarlo.")
             if p.get("estado") in ("investigando", "escribiendo", "escenas", "renderizando"):
@@ -138,6 +141,32 @@ def _avisar(pid: str | list[str], fase: str, progreso: int) -> None:
         modificar(uno, lambda p: p["trabajo"].update(fase=fase, progreso=progreso))
 
 
+# Lo que ve la persona cuando un trabajo falla: qué no se pudo hacer, sin jerga ni nombres de servicios.
+# El detalle técnico queda en el registro del servidor.
+_QUE_FALLO = {
+    "Investigación y guion": "No se pudo escribir el guion",
+    "Guion": "No se pudo escribir la otra versión del guion",
+    "Escenas y voz": "No se pudieron crear las escenas y la voz",
+    "Voz": "No se pudo grabar la voz",
+    "Muestras de voz": "No se pudieron grabar las muestras de voz",
+    "Render": "No se pudo montar el vídeo",
+    "Entregas": "No se pudieron preparar los 3 formatos",
+    "Vídeo o imagen": "No se pudo decidir qué escenas van en vídeo o imagen",
+    "Miniaturas": "No se pudieron crear las miniaturas",
+    "Imágenes por API": "No se pudieron generar las imágenes",
+}
+
+
+def _error_legible(nombre: str, e: Exception) -> str:
+    texto = str(e)
+    motivo = ("el servicio está saturado o sin conexión; suele bastar con esperar un minuto"
+              if any(k in texto for k in ("429", "503", "ocupado", "Timeout", "timed out", "Connection", "no respondió", "vacía", "cortada"))
+              else "")
+    if isinstance(e, ValueError) and len(texto) < 160 and "Expecting" not in texto:
+        return texto   # los ValueError propios ya están escritos para la persona («Primero renderiza…»)
+    return f"{_QUE_FALLO.get(nombre, f'No se pudo completar «{nombre}»')}{f': {motivo}' if motivo else ''}. Pulsa «Reintentar»."
+
+
 def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None]) -> None:
     """Lanza `fn` en un hilo. Con varias producciones (corto y largo de la misma idea), todas quedan ocupadas."""
     pids = [pid] if isinstance(pid, str) else pid
@@ -148,10 +177,11 @@ def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None]) -> None
         except Exception as e:  # noqa: BLE001 - el error se muestra en el panel
             logger.exception("%s falló", nombre)
             for uno in pids:
-                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=str(e), fase=f"{nombre}: error"))
+                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=_error_legible(nombre, e), fase=nombre,
+                                                             reintentable=True))
         else:
             for uno in pids:
-                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100))
+                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100, reintentable=False))
 
     with _lock:
         for uno in pids:
@@ -234,7 +264,7 @@ def _material(pids: list[str]) -> dict[str, Any] | None:
     r = cargar(pids[0]).get("referencias")
     if not r or r.get("material") is not None:
         return r
-    _avisar(pids, "Gemini estudia tus referencias", 5)
+    _avisar(pids, "Estudiando tus referencias", 5)
     material = referencias.estudiar(carpeta(pids[0]), r, produccion=pids[0])
     for pid in pids:
         modificar(pid, lambda p: p["referencias"].update(material=material))
@@ -244,7 +274,7 @@ def _material(pids: list[str]) -> dict[str, Any] | None:
 def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int], dossier: dict | None = None) -> None:
     refs = _material(pids)
     if dossier is None:
-        _avisar(pids, "Gemini investiga el tema", 10)
+        _avisar(pids, "Investigando el tema", 10)
         dossier = investigacion.investigar(idea, produccion=pids[0])
     if youtube.disponible() and not dossier.get("youtube"):   # también al reescribir con una investigación vieja
         _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
@@ -254,8 +284,7 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
         dossier.setdefault("youtube", {})["tendencias"] = t
     for pid in pids:
         modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
-    autor = "DeepSeek" if deepseek.disponible() else "Gemini"
-    _avisar(pids, f"{autor} escribe el guion a partir de la investigación", 45)
+    _avisar(pids, "Escribiendo el guion", 45)
     versiones = {cargar(pid)["version"]: segundos[cargar(pid)["version"]] for pid in pids}
     p0 = cargar(pids[0])
     escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0],
@@ -266,6 +295,37 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
         modificar(pid, lambda p: p.update(
             guion=escrito[v]["guion"], ganchos=escrito[v]["ganchos"], autor_guion=escrito["autor"],
             titulo=p.get("titulo") or escrito["titulo_provisional"], estado="guion_listo", guion_aprobado=False))
+
+
+def reintentar(pid: str) -> None:
+    """Vuelve a lanzar el último trabajo que falló, con lo que ya se tenía (no repite lo que salió bien)."""
+    p = cargar(pid)
+    t = p.get("trabajo") or {}
+    if t.get("ocupado"):
+        raise ValueError("Esta producción ya está trabajando.")
+    if not t.get("error"):
+        raise ValueError("No hay nada que reintentar.")
+    nombre = t.get("nombre", "")
+    if nombre in ("Investigación y guion", "Guion"):
+        # Corto y largo de la misma idea fallan juntos: se reintentan juntos, aprovechando la investigación si ya estaba.
+        pids = [x["id"] for x in listar() if p.get("familia") and x["familia"] == p["familia"]
+                and not cargar(x["id"]).get("guion")] or [pid]
+        segundos = {cargar(x)["version"]: cargar(x)["segundos"] for x in pids}
+        _en_fondo(pids, nombre, lambda: _investigar_y_escribir(pids, p["tema"], segundos, dossier=p.get("investigacion")))
+    elif nombre == "Escenas y voz":
+        aprobar_guion(pid)
+    elif nombre == "Voz":
+        _en_fondo(pid, "Voz", lambda: _generar_voz(pid))
+    elif nombre == "Render":
+        renderizar(pid)
+    elif nombre == "Entregas":
+        preparar_entregas(pid)
+    elif nombre == "Miniaturas":
+        generar_miniaturas(pid)
+    elif nombre == "Vídeo o imagen":
+        recomendar_tipos(pid)
+    else:
+        raise ValueError("Ese paso se relanza desde su propio botón.")
 
 
 def reescribir_guion(pid: str) -> None:
@@ -315,7 +375,7 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
 
     def fases():
         refs = _material([pid])   # con tu propio guion, las referencias se estudian aquí
-        _avisar(pid, "Gemini convierte el guion en escenas para Flow", 20)
+        _avisar(pid, "Creando las escenas para Flow", 20)
         q = cargar(pid)
         competencia = ((q.get("investigacion") or {}).get("youtube") or {}).get("competencia") or []
         plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid,
@@ -455,7 +515,7 @@ def recomendar_tipos(pid: str) -> None:
     def fase():
         p = cargar(pid)
         escenas = p["escenas"]
-        _avisar(pid, "Gemini decide qué escenas hacer en vídeo y cuáles en imagen", 30)
+        _avisar(pid, "Decidiendo qué escenas van en vídeo y cuáles en imagen", 30)
         director.recomendar_tipos(escenas, p.get("biblia") or {}, p.get("estilo_en", ""),
                                   config.FORMATOS[p["formato"]]["aspecto"], produccion=pid)
         modificar(pid, lambda q: q.update(escenas=[{**viejo, **{k: nuevo[k] for k in ("tipo_clip", "motivo_tipo", "prompt_flow")}}
@@ -492,7 +552,7 @@ def generar_miniaturas(pid: str) -> None:
         # Las imágenes que subiste o generaste en Flow para la miniatura siguen siendo candidatas.
         previas = [c for c in (p.get("miniaturas") or {}).get("candidatos", []) if c.get("origen")]
         candidatos += [c for c in previas if (base / c["archivo"]).exists()]
-        _avisar(pid, "Gemini elige el fotograma y escribe el texto", 45)
+        _avisar(pid, "Eligiendo el fotograma y el texto", 45)
         e = miniaturas.analizar(p, base, candidatos)
         _avisar(pid, "Componiendo las miniaturas", 85)
 

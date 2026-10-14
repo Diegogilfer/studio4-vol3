@@ -75,8 +75,6 @@ input[type=checkbox] { accent-color: var(--accent); }
 .pildora b { color: var(--fg); font-weight: 500; }
 .pildora.ok { border-color: color-mix(in oklab, var(--ok) 45%, transparent); background: color-mix(in oklab, var(--ok) 10%, transparent); color: var(--ok); }
 .pildora.aviso { border-color: color-mix(in oklab, var(--warn) 50%, transparent); background: color-mix(in oklab, var(--warn) 10%, transparent); color: var(--warn); }
-.pildora.marcha { border-color: color-mix(in oklab, var(--accent) 40%, transparent); background: color-mix(in oklab, var(--accent) 10%, transparent); color: var(--fg); max-width: 300px; }
-.pildora.marcha span { overflow: hidden; text-overflow: ellipsis; }
 .redondo { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--fg-muted); cursor: pointer; }
 .redondo:hover { color: var(--fg); border-color: var(--line-strong); }
 .piloto { display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: currentColor; animation: latido 1.8s var(--ease) infinite; }
@@ -1112,8 +1110,6 @@ html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"
 .ref-quitar { flex: none; width: 26px; height: 26px; border-radius: 999px; border: 0; background: transparent; color: var(--fg-muted); cursor: pointer; }
 .ref-quitar:hover { background: var(--suave); color: var(--fg); }
 .ref-datos { width: 100%; min-height: 64px; height: auto; padding: 10px 14px; resize: none; font: 14px/1.5 var(--sans); }
-/* Barra: con 6 pestañas, en pantallas medianas solo los iconos (el nombre sale al pasar el ratón). */
-@media (max-width: 1240px) { .nav span { display: none; } .nav a { padding: 0 10px; } }
 
 /* ======================================================================= NUBE (2026-10-13)
  * Dos familias en todo el proyecto: Geist (textos y botones) e Instrument Serif (titulares grandes).
@@ -1186,3 +1182,25 @@ html :is(.escena, .motor-paso, .pieza-mosaico, .td-idea):nth-child(n+5) { animat
 html .motor-paso.ahora, html .pieza-mosaico.activa { animation: aparecer .9s var(--calma) both, flotar 7s ease-in-out .9s infinite; }
 html .ajustes-panel { animation-duration: .7s; animation-timing-function: var(--calma); }
 html .progreso div { transition: width 1.2s var(--calma); }
+
+/* Barra: el nombre de las pestañas siempre a la vista; si falta sitio se recoge antes lo secundario. */
+@media (max-width: 1240px) { .marca > span:last-child, #yt-txt { display: none; } }
+@media (max-width: 1000px) { .nav span { display: none; } .nav a { padding: 0 10px; } }
+/* Trabajo en marcha: tarjeta flotante, tranquila */
+.en-marcha { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; align-items: center; gap: 12px; width: min(380px, calc(100vw - 32px));
+  padding: 14px 18px; border-radius: var(--r-caja); background: var(--cristal); border: 1px solid var(--cristal-borde);
+  box-shadow: var(--cristal-brillo), 0 24px 50px -24px color-mix(in oklab, var(--accent) 55%, transparent), var(--cristal-sombra);
+  backdrop-filter: blur(24px) saturate(170%); -webkit-backdrop-filter: blur(24px) saturate(170%); animation: aparecer .7s var(--calma) both; }
+.en-marcha svg { flex: none; color: var(--accent); }
+.en-marcha-cuerpo { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.en-marcha-cuerpo b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-marcha > b { font-size: 13px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+/* Error de un trabajo: frase clara y su botón */
+#t-error:not([hidden]), #aviso-panel:not([hidden]) { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+#t-error .boton, #aviso-panel .boton { flex: none; }
+/* Ajustes › Canales: cada red con su logo; a color si está vinculada, en gris oscuro si no */
+.red-campo > span { display: flex; align-items: center; gap: 8px; }
+.red-campo .red-logo { width: 22px; height: 22px; flex: none; filter: grayscale(1) brightness(.55); opacity: .55; transition: filter .6s var(--calma), opacity .6s var(--calma); }
+.red-campo.vinculada .red-logo { filter: none; opacity: 1; }
+.red-campo small { margin-left: auto; font-size: 11.5px; color: var(--fg-faint); }
+.red-campo.vinculada small { color: var(--ok); font-weight: 600; }
