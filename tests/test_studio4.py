@@ -797,3 +797,15 @@ def test_eliminar_produccion_la_desvincula(aislado):
     produccion.modificar(nueva["id"], lambda q: q["trabajo"].update(ocupado=True))
     with pytest.raises(ValueError):
         produccion.eliminar(nueva["id"])   # trabajando: no se elimina
+
+
+def test_crear_rapido_usa_lo_de_siempre_del_canal(aislado, monkeypatch):
+    from studio4 import canales
+    canales.guardar({**canales.obtener("fourlevel"), "tono": "intrigante", "voz_nombre": "Puck"})
+    llamadas = []
+    monkeypatch.setattr(produccion, "crear", lambda idea, versiones, estilo, voz, **k: llamadas.append((idea, versiones, estilo, k)) or ["x"])
+    assert produccion.crear_rapido("  El faro de Alejandría ", "largo") == ["x"]
+    idea, versiones, estilo, k = llamadas[0]
+    assert (idea, versiones, estilo, k["tono"], k["voz_nombre"]) == ("El faro de Alejandría", ["largo"], "cinematografico", "intrigante", "Puck")
+    with pytest.raises(ValueError):
+        produccion.crear_rapido("x")

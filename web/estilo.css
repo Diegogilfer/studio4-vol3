@@ -1236,3 +1236,56 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .pieza-mosaico:hover .quitar-pieza, .pieza-mosaico:focus-within .quitar-pieza { opacity: 1; }
 .quitar-pieza:hover { background: var(--danger, #dc2626); }
 @media (hover: none) { .quitar-pieza { opacity: .85; } }
+
+/* ======================================================================= DISEÑO STUDIO 4 (todas las vistas)
+ * Mismo lenguaje en todo: sello pequeño, titular serif grande, tarjetas de nube. */
+.guia h2 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 3.4vw, 44px); letter-spacing: -0.01em; line-height: 1.05; }
+.guia .paso-de { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 999px; font-size: 11px;
+  border: 1px solid var(--line-strong); background: var(--control); color: var(--fg-muted); }
+.guia .paso-de::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+.titulo-prod { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 3.6vw, 46px); letter-spacing: -0.01em; }
+
+/* Tendencias: cifras arriba, gráficas en tarjetas */
+.tendencias { display: grid; gap: 22px; }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.kpi { display: grid; gap: 6px; padding: 18px 20px; border-radius: var(--r-caja); background: var(--caja); border: 1px solid var(--caja-borde);
+  box-shadow: var(--caja-sombra); }
+.kpi small { font-size: 12.5px; color: var(--fg-muted); }
+.kpi b { font: 400 clamp(30px, 3vw, 42px)/1 var(--display); color: var(--fg); }
+.graficas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grafica { margin: 0; padding: 20px 22px; border-radius: var(--r-caja); background: var(--caja); border: 1px solid var(--caja-borde);
+  box-shadow: var(--caja-sombra); display: grid; gap: 14px; align-content: start; }
+.grafica.ancha { grid-column: 1 / -1; }
+.grafica figcaption { font-size: 14px; font-weight: 600; color: var(--fg); }
+.barras { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.barras li { position: relative; display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr) 64px; gap: 12px; align-items: center;
+  padding: 5px 6px; border-radius: 10px; font-size: 13px; transition: background .4s var(--calma); }
+.grafica:not(.ancha) .barras li { grid-template-columns: minmax(0, 34%) minmax(0, 1fr) 52px; }
+.barras li:hover { background: var(--suave); }
+.barra-etq { color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra-pista { height: 10px; border-radius: 999px; background: var(--suave); overflow: hidden; }
+.barra-pista i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--accent); transition: width .9s var(--calma); }
+.barras li:hover .barra-pista i { background: color-mix(in oklab, var(--accent) 80%, var(--fg)); }
+.barras b { text-align: right; font-weight: 600; color: var(--fg); font-variant-numeric: tabular-nums; }
+.barras li:hover::after { content: attr(data-tip); position: absolute; left: 6px; bottom: calc(100% + 4px); z-index: 5; max-width: min(520px, 90%);
+  padding: 8px 12px; border-radius: 12px; font-size: 12.5px; color: var(--fg); background: var(--cristal); border: 1px solid var(--cristal-borde);
+  box-shadow: var(--cristal-sombra); backdrop-filter: blur(16px); pointer-events: none; }
+.td-idea .fila { margin-top: 4px; }
+.td-nicho li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.td-nicho li span { font-size: 14px; }
+.td-nicho ul { list-style: none; padding-left: 0; }
+@media (max-width: 1000px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .graficas { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .barras li, .grafica:not(.ancha) .barras li { grid-template-columns: minmax(0, 40%) minmax(0, 1fr) 48px; } }
+
+/* Inicio: ideas para hoy, un clic */
+.ideas-hoy { display: grid; gap: 14px; }
+.ideas-cab { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ideas-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; }
+.idea-hoy, .ideas-vacio { display: grid; gap: 10px; align-content: space-between; padding: 20px; border-radius: var(--r-caja); background: var(--caja);
+  border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.idea-hoy small { font-size: 12px; color: var(--fg-muted); }
+.idea-hoy b.display { font-size: 22px; line-height: 1.15; }
+.idea-hoy .primario { justify-self: start; }
+.ideas-vacio { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.ideas-vacio b.display { font-size: clamp(22px, 2.4vw, 30px); }
+.td-nicho li .boton, .idea-hoy .primario, .td-idea .primario { white-space: nowrap; flex: none; }

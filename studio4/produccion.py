@@ -269,6 +269,18 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
     return pids
 
 
+def crear_rapido(idea: str, version: str = "corto") -> list[str]:
+    """Un clic: la idea pasa a producción con lo de siempre del canal (su voz, su estilo y su tono) y la duración
+    por defecto. Lo demás se puede cambiar después, al revisar el guion."""
+    if len(idea.strip()) < 3:
+        raise ValueError("Falta la idea.")
+    if version not in config.VERSIONES:
+        raise ValueError(f"Versión desconocida: {version}")
+    c = canales.activo()
+    return crear(idea.strip(), [version], c.get("estilo") or "cinematografico", "gemini",
+                 tono=c.get("tono", ""), publico=c.get("publico", ""), voz_nombre=c.get("voz_nombre", ""))
+
+
 def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "") -> str:
     """Un vídeo ya hecho (enlace o archivo) pasa a ser una producción: escenas con su texto y su trozo de vídeo,
     lista para revisar, renderizar con subtítulos y sacar los 3 formatos."""

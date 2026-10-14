@@ -119,6 +119,15 @@ def metricas(videos: list[dict[str, Any]]) -> dict[str, Any]:
                     "en_mayusculas": round(100 * sum(sum(c.isupper() for c in t) > len(t) * 0.5 for t in titulos) / n),
                     "largo_medio": round(sum(len(t) for t in titulos) / n)},
         "etiquetas": [t for t, _ in etiquetas.most_common(20)],
+        # Para las gráficas del panel: recuentos y los que más crecen (sin enlaces, solo cifras).
+        "etiquetas_cuenta": [[t, c] for t, c in etiquetas.most_common(12)],
+        "por_pais": [[k, c] for k, c in Counter(v["origen"].split(" · ")[0] for v in videos
+                                                  if not v["origen"].startswith("Nicho")).most_common()],
+        "por_categoria": [[k, c] for k, c in Counter(v["origen"].split(" · ")[-1] for v in videos
+                                                       if not v["origen"].startswith("Nicho")).most_common()],
+        "mas_rapidos": [{"titulo": v["titulo"][:90], "canal": v["canal"], "vistas_hora": v["vistas_hora"],
+                         "segundos": v["segundos"]} for v in rapidos[:10]],
+        "vistas_hora_mediana": int(statistics.median(v["vistas_hora"] for v in videos)),
     }
 
 

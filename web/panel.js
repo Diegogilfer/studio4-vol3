@@ -1094,35 +1094,52 @@ async function cargarTendencias() {
   try { t = await api("/api/tendencias"); } catch (e) { return aviso(e); }
   siCambia("tendencias", { t, c: estado?.canal }, () => pintarTendencias(t));
 }
+// Gráficas de barras de una serie (color del tema), con el dato al pasar el ratón.
+function barras(titulo, filas, opciones = {}) {
+  const max = Math.max(...filas.map((f) => f.valor), 1);
+  return `<figure class="grafica ${opciones.ancha ? "ancha" : ""}"><figcaption>${esc(titulo)}</figcaption><ol class="barras">${
+    filas.map((f) => `<li data-tip="${esc(f.tip || `${f.etiqueta}: ${f.texto}`)}"><span class="barra-etq">${esc(f.etiqueta)}</span>
+      <span class="barra-pista"><i style="width:${Math.max(2, (100 * f.valor) / max)}%"></i></span><b>${esc(f.texto)}</b></li>`).join("")}</ol></figure>`;
+}
+const compactoNum = (n) => new Intl.NumberFormat("es-ES", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 function pintarTendencias(t) {
   const c = estado?.canal || {};
-  $("td-canal").textContent = `Tendencias · ${c.nombre || ""}`;
+  $("td-canal").textContent = ["Tendencias", c.nombre, t.datos ? fecha(t.datos.fecha) : ""].filter(Boolean).join(" · ");
   $("td-trabajo").hidden = !t.ocupado; $("td-fase").textContent = t.fase ? `${t.fase}…` : "";
   $("td-actualizar").disabled = t.ocupado;
   $("td-error").hidden = !t.error; $("td-error").textContent = t.error ? `No se pudieron actualizar: ${t.error}` : "";
   $("td-nicho").hidden = !!c.nicho;
   const d = t.datos;
-  $("td-fecha").textContent = d ? fecha(d.fecha) : "";
   $("td-cuerpo").hidden = !d;
   if (!d) return;
   const m = d.metricas, i = d.informe;
   $("td-resumen").textContent = i.resumen;
-  const barras = Object.entries(m.duraciones).map(([k, v]) => `<li><span>${esc(k)}</span><i style="--v:${v}%"></i><b>${v} %</b></li>`).join("");
-  $("td-cifras").innerHTML = `
-    <div><small>Vídeos analizados</small><b>${miles(m.total)}</b></div>
-    <div><small>En HD</small><b>${m.hd} %</b></div>
-    <div><small>Duración de los que más crecen</small><b>${minSeg(m.duracion_mas_rapidos)}</b></div>
-    <div><small>Largo medio del título</small><b>${m.titulos.largo_medio} letras</b></div>
-    <div class="td-duraciones"><small>Duración de lo más visto</small><ul>${barras}</ul></div>`;
+  $("td-kpis").innerHTML = [
+    ["Vídeos analizados", miles(m.total)], ["En HD", `${m.hd} %`],
+    ["Duración de los que más crecen", minSeg(m.duracion_mas_rapidos)],
+    ["Vistas por hora (mediana)", m.vistas_hora_mediana != null ? compactoNum(m.vistas_hora_mediana) : "—"],
+    ["Largo del título", `${m.titulos.largo_medio} letras`],
+  ].map(([k, v]) => `<div class="kpi"><small>${k}</small><b>${v}</b></div>`).join("");
+  const graf = [barras("Duración de lo más visto", Object.entries(m.duraciones).map(([k, v]) => ({ etiqueta: k, valor: v, texto: `${v} %` })))];
+  graf.push(barras("Cómo titulan", [["Con número", m.titulos.con_numero], ["Con pregunta", m.titulos.con_pregunta],
+    ["En mayúsculas", m.titulos.en_mayusculas]].map(([k, v]) => ({ etiqueta: k, valor: v, texto: `${v} %` }))));
+  if (m.mas_rapidos?.length) graf.push(barras("Los que más rápido crecen (vistas por hora)", m.mas_rapidos.map((v) => ({
+    etiqueta: v.titulo, valor: v.vistas_hora, texto: compactoNum(v.vistas_hora),
+    tip: `${v.titulo} · ${v.canal} · ${compactoNum(v.vistas_hora)} vistas/hora · ${minSeg(v.segundos)}` })), { ancha: true }));
+  if (m.etiquetas_cuenta?.length) graf.push(barras("Etiquetas que más se repiten", m.etiquetas_cuenta.slice(0, 10).map(([k, n]) => ({ etiqueta: k, valor: n, texto: `${n}` }))));
+  if (m.por_categoria?.length) graf.push(barras("Por categoría", m.por_categoria.map(([k, n]) => ({ etiqueta: k, valor: n, texto: `${n}` }))));
+  if (m.por_pais?.length) graf.push(barras("Por país", m.por_pais.map(([k, n]) => ({ etiqueta: k, valor: n, texto: `${n}` }))));
+  $("td-graficas").innerHTML = graf.join("");
   $("td-formato").innerHTML = [["Vídeo corto", i.duracion_corto], ["Vídeo largo", i.duracion_largo], ["Calidad", i.calidad], ["Títulos", i.titulos]]
     .map(([k, v]) => `<div><b>${k}</b><p>${esc(v)}</p></div>`).join("");
   $("td-ideas").innerHTML = i.ideas.map((x) => `
     <div class="td-idea"><small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"}</small>
       <b>${esc(x.idea)}</b>
-      <button class="boton" type="button" data-idea="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear este vídeo <svg width="14" height="14"><use href="#i-flecha"/></svg></button></div>`).join("");
+      <div class="fila"><button class="primario" type="button" data-rapido="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear ya</button>
+        <button class="boton" type="button" data-idea="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Ajustar</button></div></div>`).join("");
   $("td-nichos").innerHTML = i.nichos.map((n) => `
     <div class="td-nicho"><b>${esc(n.nombre)}</b>
-      <ul>${n.ideas.map((x) => `<li><button class="enlace" type="button" data-idea="${esc(x)}" data-formato="corto">${esc(x)}</button></li>`).join("")}</ul></div>`).join("");
+      <ul>${n.ideas.map((x) => `<li><span>${esc(x)}</span><button class="boton" type="button" data-rapido="${esc(x)}" data-formato="corto">Crear ya</button></li>`).join("")}</ul></div>`).join("");
   $("td-consejos").innerHTML = i.consejos.map((x) => `<li>${esc(x)}</li>`).join("");
   $("td-evitar").innerHTML = i.evitar.map((x) => `<li>${esc(x)}</li>`).join("");
 }
@@ -1130,6 +1147,41 @@ $("td-nicho").addEventListener("click", () => { $("abrir-ajustes").click(); });
 $("td-actualizar").addEventListener("click", async () => {
   try { await api("/api/tendencias", {}); await cargarTendencias(); } catch (e) { aviso(e); }
 });
+// Un clic: la idea (de Tendencias, de un nicho o de Inicio) se convierte en producción con lo de siempre del canal.
+async function crearRapido(idea, version = "corto", boton = null) {
+  if (boton) boton.disabled = true;
+  try {
+    await api("/api/crear-rapido", { idea, version });
+    empezarOtro = false; paso = 1;
+    await refrescar();
+    location.hash = "#crear";
+  } catch (e) { aviso(e); } finally { if (boton) boton.disabled = false; }
+}
+document.addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-rapido]");
+  if (b) crearRapido(b.dataset.rapido, b.dataset.formato || "corto", b);
+});
+$("a-rapido").addEventListener("click", () => {
+  if (modo() === "propio") return irA(2);   // con tu guion se elige el formato: es un paso más
+  const idea = $("a-idea").value.trim();
+  if (idea.length < 3) return alertaError("Escribe la idea del vídeo.");
+  crearRapido(idea, $("a-largo").checked && !$("a-corto").checked ? "largo" : "corto", $("a-rapido"));
+});
+// Inicio: las ideas del día del canal, para crear con un clic.
+async function pintarIdeasHoy() {
+  let t;
+  try { t = await api("/api/tendencias"); } catch (_) { return; }
+  const ideas = t.datos?.informe?.ideas || [];
+  $("ideas-hoy").hidden = false;
+  $("ideas-hoy").innerHTML = ideas.length ? `<div class="ideas-cab"><span class="sello">Ideas para hoy</span>
+      <a class="boton" href="#tendencias">Ver tendencias</a></div>
+    <div class="ideas-lista">${ideas.slice(0, 4).map((x) => `<div class="idea-hoy"><small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"}</small>
+      <b class="display">${esc(x.idea)}</b>
+      <button class="primario" type="button" data-rapido="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear ya</button></div>`).join("")}</div>`
+    : `<div class="ideas-cab"><span class="sello">Ideas para hoy</span></div>
+    <div class="ideas-vacio"><b class="display">Busca ideas con <em>tirón</em> para tu canal</b>
+      <a class="primario" href="#tendencias">Ver tendencias</a></div>`;
+}
 $("tendencias").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-idea]");
   if (!b) return;
@@ -1155,6 +1207,7 @@ async function refrescar() {
   $("aviso-salud").textContent = o.salud.join(" ");
   pintarFlow(d);
   siCambia("lista", { lista, activa: d.produccion?.id, c: d.canal?.nombre }, () => pintarLista(lista));
+  siCambia("ideas-hoy", d.canal?.id, pintarIdeasHoy);
   siCambia("motor", d.produccion && { a: d.produccion.guion_aprobado, g: !!d.produccion.guion, e: d.produccion.escenas,
     v: !!d.produccion.voz, f: !!d.produccion.final, p: d.produccion.entregas?.piezas?.length }, () => pintarMotor(d.produccion));
 

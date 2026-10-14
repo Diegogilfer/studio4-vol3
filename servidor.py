@@ -347,6 +347,9 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/referencias/borrar":
             referencias.borrar(str(self._cuerpo_json().get("id", "")))
             return self._json({"ok": True})
+        if ruta == "/api/crear-rapido":   # un clic desde una idea o un nicho: lo de siempre del canal
+            d = self._cuerpo_json()
+            return self._json({"ok": True, "ids": produccion.crear_rapido(str(d.get("idea", "")), str(d.get("version", "corto")))})
         if ruta == "/api/producciones/eliminar":
             produccion.eliminar(str(self._cuerpo_json().get("id", "")))
             return self._json({"ok": True})

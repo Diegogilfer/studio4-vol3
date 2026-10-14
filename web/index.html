@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>STUDIO #4</title>
+<title>Studio 4</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%238b5cf6'/><stop offset='1' stop-color='%232dd4bf'/></linearGradient></defs><rect width='32' height='32' rx='10' fill='url(%23g)'/><text x='16' y='21' font-size='12' font-family='Arial' font-weight='700' text-anchor='middle' fill='white'>S4</text></svg>">
 <link rel="stylesheet" href="/web/estilo.css">
 </head>
@@ -38,7 +38,7 @@
 </svg>
 
 <header class="barra">
-  <a class="marca" href="#inicio" title="Inicio"><span class="logo">S4</span><span>STUDIO #4</span></a>
+  <a class="marca" href="#inicio" title="Inicio"><span class="logo">S4</span><span>Studio 4</span></a>
   <nav class="nav" aria-label="Navegación principal">
     <a href="#crear" class="activo" title="Crear"><svg><use href="#i-crear"/></svg><span>Crear</span></a>
     <a href="#canales" title="Canales"><svg><use href="#i-canales"/></svg><span>Canales</span></a>
@@ -67,6 +67,7 @@
         <a class="cta-sec" href="#tendencias">Ver tendencias <svg width="14" height="14"><use href="#i-tendencias"/></svg></a>
       </div>
     </div>
+    <div class="ideas-hoy" id="ideas-hoy" hidden></div>
     <div class="mosaico" id="lista"></div>
     <div class="motor">
       <span class="sello">El motor</span>
@@ -131,7 +132,8 @@
             <button data-v="público general" class="si">Público general</button><button data-v="curiosos de la ciencia y la historia">Curiosos</button>
             <button data-v="jóvenes de 16 a 25 años">Jóvenes</button><button data-v="niños y familias">Familias</button><button data-v="gente que ya sabe del tema">Expertos</button></div></div>
         </div>
-        <div class="acciones-paso"><button class="primario" data-ir="2">Siguiente <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
+        <div class="acciones-paso"><button class="boton" data-ir="2">Personalizar</button>
+          <button class="primario" id="a-rapido" type="button">Crear ya <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
 
       <!-- Paso 2 · ¿Dónde se publica? -->
@@ -210,20 +212,18 @@
   </section>
 
   <!-- ================================================================ TENDENCIAS del canal -->
-  <section id="tendencias" class="tarjeta tendencias" hidden>
-    <div class="guia">
-      <div class="guia-cuerpo">
-        <span class="paso-de" id="td-canal">Tendencias</span>
-        <h2>Tendencias de hoy</h2>
-        <p class="meta" id="td-fecha"></p>
-      </div>
-      <div class="guia-acciones"><button class="boton" id="td-nicho" hidden>Definir nicho del canal</button><button class="primario" id="td-actualizar">Actualizar tendencias <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
+  <section id="tendencias" class="tendencias" hidden>
+    <div class="panel-cab">
+      <div><span class="sello" id="td-canal">Tendencias</span><h2 class="display">Lo que se ve <em>hoy</em></h2></div>
+      <div class="fila"><button class="boton" id="td-nicho" hidden>Definir nicho del canal</button>
+        <button class="primario" id="td-actualizar">Actualizar tendencias <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
     </div>
     <div id="td-trabajo" class="trabajo" role="status" aria-live="polite" hidden><div class="trabajo-txt"><span id="td-fase"></span></div><div class="progreso"><div style="width:60%"></div></div></div>
     <p id="td-error" class="error" role="alert" hidden></p>
     <div id="td-cuerpo" hidden>
+      <div class="kpis" id="td-kpis"></div>
+      <div class="graficas" id="td-graficas"></div>
       <p class="td-resumen" id="td-resumen"></p>
-      <div class="td-cifras" id="td-cifras"></div>
       <h3 class="td-titulo">Formato que funciona hoy</h3>
       <div class="td-formato" id="td-formato"></div>
       <h3 class="td-titulo">Ideas listas para crear</h3>
