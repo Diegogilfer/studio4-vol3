@@ -119,6 +119,21 @@ def guardar(datos: dict[str, Any]) -> dict[str, Any]:
         return c
 
 
+def resumen(cid: str, youtube_de, producciones: list[dict[str, Any]]) -> dict[str, Any]:
+    """Lo que enseña el panel de control de un canal: sus redes, su YouTube (si se puede leer) y lo hecho en STUDIO.
+    `youtube_de(usuario)` devuelve los datos públicos del canal de YouTube; si falla, el panel muestra el error."""
+    c = obtener(cid)
+    yt, error = None, ""
+    if c["redes"].get("youtube"):
+        try:
+            yt = youtube_de(c["redes"]["youtube"])
+        except Exception as e:  # noqa: BLE001 - un canal sin datos no tumba el panel
+            error = str(e)
+    return {"canal": c, "youtube": yt, "error": error,
+            "producciones": {"total": len(producciones), "terminadas": sum(p["estado"] == "terminado" for p in producciones),
+                             "en_flow": sum(p["estado"] == "rodando" for p in producciones)}}
+
+
 def de_produccion(p: dict[str, Any]) -> dict[str, Any]:
     """El canal de una producción (las de antes de los canales son del primero)."""
     try:

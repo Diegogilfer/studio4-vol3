@@ -201,6 +201,10 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(produccion.listar(canales.activo()["id"]))
         if ruta == "/api/tendencias":
             return self._json(tendencias.estado(canales.activo()["id"]))
+        if ruta == "/api/panel":   # panel de control: todos los canales con sus redes y su YouTube
+            leer = youtube.canal if youtube.disponible() else (lambda _u: None)
+            return self._json({"activo": canales.activo()["id"],
+                               "canales": [canales.resumen(c["id"], leer, produccion.listar(c["id"])) for c in canales.listar()]})
         if ruta == "/api/canales":
             return self._json({"canales": canales.listar(), "activo": canales.activo()["id"], "redes": canales.REDES})
         if ruta == "/api/voz/oir":   # frase de presentación de una voz (se graba una vez y se guarda)

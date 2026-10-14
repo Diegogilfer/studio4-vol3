@@ -1047,3 +1047,48 @@ html main::before { background-image: radial-gradient(circle at 1px 1px, color-m
   .pieza-mosaico { padding: 14px; } .pieza-mosaico b.display { font-size: 20px; -webkit-line-clamp: 3; }
   .pieza-mosaico.m0 b.display { font-size: 28px; }
 }
+
+/* ======================================================================= CANALES: panel de control */
+.panel-canales { display: grid; gap: 22px; }
+.panel-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; padding-top: 20px; }
+.panel-cab > div:first-child { display: grid; gap: 12px; justify-items: start; }
+.panel-cab h2.display { font-size: clamp(38px, 5.4vw, 66px); }
+.pc-lista { display: grid; gap: 22px; }
+.pc-canal { display: grid; gap: 18px; padding: 26px; border-radius: var(--r-tarjeta); background: var(--cristal); border: var(--b-ancho) solid var(--cristal-borde);
+  box-shadow: var(--cristal-brillo), var(--cristal-sombra); backdrop-filter: blur(var(--desenfoque)) saturate(170%); -webkit-backdrop-filter: blur(var(--desenfoque)) saturate(170%); }
+.pc-canal.activo { border-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+.pc-cab { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.pc-avatar { width: 64px; height: 64px; flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font: 400 30px var(--display); }
+.pc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pc-nombre { display: grid; gap: 2px; flex: 1; min-width: 160px; }
+.pc-nombre h3.display { font-size: clamp(30px, 3.4vw, 42px); }
+.pc-nombre small { color: var(--fg-muted); font-size: 13px; }
+.sello.ok { color: var(--ok); } .sello.ok::before { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+.pc-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pc-kpi { display: grid; gap: 4px; align-content: start; padding: 16px 18px; border-radius: var(--r-caja); background: var(--caja);
+  border: var(--b-ancho) solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.pc-kpi small { font-size: 12.5px; color: var(--fg-muted); }
+.pc-kpi b { font: 400 40px/1 var(--display); color: var(--fg); letter-spacing: -0.01em; }
+.pc-kpi span { font-size: 12.5px; color: var(--accent); }
+.pc-redes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.pc-red { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--r-caja);
+  background: var(--caja); border: var(--b-ancho) solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.pc-red.vacia .pc-logo { opacity: .45; filter: grayscale(1); }
+.pc-logo { width: 40px; height: 40px; }
+.pc-red > div { display: grid; min-width: 0; }
+.pc-red b { font-size: 15px; } .pc-red small { font-size: 12.5px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-red .sello { padding: 5px 10px; font-size: 10px; } .pc-red .sello:not(.ok)::before { background: var(--fg-faint); box-shadow: none; }
+.pc-videos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pc-video { display: grid; gap: 6px; text-decoration: none; color: var(--fg); min-width: 0; }
+.pc-video img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--r-mini); background: #000; }
+.pc-video b { font-size: 13.5px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pc-video small { font-size: 12px; color: var(--fg-muted); }
+html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"], html[data-tema="bosque"], html[data-tema="oro"], html[data-tema="vino"] { --tiktok: #fff; }
+@media (max-width: 1000px) { .pc-kpis, .pc-videos { grid-template-columns: repeat(2, minmax(0, 1fr)); } .pc-redes { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .pc-canal { padding: 18px; }
+  .pc-red { grid-template-columns: 40px minmax(0, 1fr) auto; } .pc-red .sello { display: none; }
+  .pc-kpi b { font-size: 32px; }
+  .nav a { padding: 0 7px; } .canal-campo { max-width: 104px; }
+}

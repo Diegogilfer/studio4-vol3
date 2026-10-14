@@ -289,15 +289,16 @@ function nuevoVideo() {
 $("ir-crear").addEventListener("click", nuevoVideo);
 
 // Pestañas: cada parte del estudio es su propia vista (#crear, #flow, #render, #entregas).
-const VISTAS = ["crear", "tendencias", "flow", "render", "entregas"];
+const VISTAS = ["crear", "canales", "tendencias", "flow", "render", "entregas"];
 const vistaActual = () => (VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "crear");
 function mostrarVista() {
   const v = vistaActual();
   const p = estado?.produccion;
   const lista = !!(p && p.guion_aprobado);
-  const fuera = v === "crear" || v === "tendencias";   // vistas que no dependen de una producción
+  const fuera = ["crear", "canales", "tendencias"].includes(v);   // vistas que no dependen de una producción
   $("crear").hidden = v !== "crear";
   $("tendencias").hidden = v !== "tendencias";
+  $("canales").hidden = v !== "canales";
   $("prod").hidden = fuera || !lista;
   $("sin-prod").hidden = fuera || lista;
   for (const id of ["flow", "render", "entregas"]) $(`${id}-sec`).hidden = v !== id;
@@ -305,6 +306,8 @@ function mostrarVista() {
   document.querySelectorAll("#pasos a").forEach((a) => a.classList.toggle("abierta", a.dataset.p === v));
 }
 window.addEventListener("hashchange", () => { mostrarVista(); window.scrollTo({ top: 0 }); });
+// Cada vista se llama como su ancla (#crear, #canales…): al terminar de cargar, el navegador salta hasta ella; se vuelve arriba.
+window.addEventListener("load", () => setTimeout(() => window.scrollTo({ top: 0 }), 0));
 
 // Paso 4: progreso de la investigación y editor del guion
 function pintarProgresoGuion(p) {
@@ -833,6 +836,63 @@ $("canales-lista").addEventListener("submit", async (ev) => {
 $("canal-nuevo").addEventListener("click", () => pintarCanalesAjustes(true));
 $("abrir-ajustes").addEventListener("click", () => pintarCanalesAjustes());
 
+// ============================================================== Canales: panel de control
+const REDES_PANEL = {
+  youtube: ["YouTube", (u) => (u.startsWith("UC") ? `https://www.youtube.com/channel/${u}` : `https://www.youtube.com/${u}`)],
+  instagram: ["Instagram", (u) => `https://www.instagram.com/${u.replace(/^@/, "")}/`],
+  tiktok: ["TikTok", (u) => `https://www.tiktok.com/@${u.replace(/^@/, "")}`],
+  facebook: ["Facebook", (u) => (u.startsWith("http") ? u : `https://www.facebook.com/${u.replace(/^@/, "")}`)],
+};
+const compacto = new Intl.NumberFormat("es-ES", { notation: "compact", maximumFractionDigits: 1 });
+async function cargarPanel(forzar = false) {
+  if (forzar) $("pc-actualizar").disabled = true;
+  try {
+    const d = await api("/api/panel");
+    siCambia("panel", d, () => pintarPanel(d));
+  } catch (e) { aviso(e); } finally { $("pc-actualizar").disabled = false; }
+}
+function pintarPanel({ activo, canales: lista }) {
+  $("pc-lista").innerHTML = lista.map(({ canal: c, youtube: yt, error, producciones: pr }) => {
+    const inicial = esc(c.nombre.slice(0, 1).toUpperCase());
+    const avatar = yt?.foto ? `<img src="${esc(yt.foto)}" alt="" width="64" height="64">` : `<span>${inicial}</span>`;
+    const kpis = [
+      ["Suscriptores", yt ? compacto.format(yt.suscriptores) : "—"],
+      ["Visualizaciones", yt ? compacto.format(yt.vistas) : "—"],
+      ["Vídeos en YouTube", yt ? miles(yt.videos) : "—"],
+      ["Producciones en STUDIO", `${pr.total}`, pr.terminadas ? `${pr.terminadas} terminadas` : pr.en_flow ? `${pr.en_flow} en Flow` : ""],
+    ].map(([k, v, s]) => `<div class="pc-kpi"><small>${k}</small><b>${esc(v)}</b>${s ? `<span>${esc(s)}</span>` : ""}</div>`).join("");
+    const redes = Object.entries(REDES_PANEL).map(([r, [nombre, url]]) => {
+      const u = c.redes[r] || "";
+      const estadoRed = !u ? "Sin añadir" : r === "youtube" ? (yt ? "Conectado · lectura" : error ? "Sin datos" : "Guardado") : "Guardado";
+      const accion = u ? `<a class="boton" href="${esc(url(u))}" target="_blank" rel="noreferrer">Abrir</a>`
+        : `<button class="boton" type="button" data-editar-canal="1">Añadir</button>`;
+      return `<div class="pc-red ${u ? "" : "vacia"}"><svg class="pc-logo" aria-hidden="true"><use href="#l-${r}"/></svg>
+        <div><b>${nombre}</b><small>${esc(u || "—")}</small></div><span class="sello ${estadoRed.startsWith("Conectado") ? "ok" : ""}">${esc(estadoRed)}</span>${accion}</div>`;
+    }).join("");
+    const videos = (yt?.mas_vistos || []).slice(0, 4).map((v) => `
+      <a class="pc-video" href="${esc(v.url)}" target="_blank" rel="noreferrer">
+        <img src="${esc(v.miniatura)}" alt="" width="320" height="180" loading="lazy"><b>${esc(v.titulo)}</b><small>${miles(v.vistas)} vistas</small></a>`).join("");
+    return `<article class="pc-canal ${c.id === activo ? "activo" : ""}">
+      <header class="pc-cab"><div class="pc-avatar">${avatar}</div>
+        <div class="pc-nombre"><h3 class="display">${esc(c.nombre)}</h3><small>${esc(c.nicho || c.redes.youtube || "")}</small></div>
+        ${c.id === activo ? `<span class="sello ok">En uso</span>` : `<button class="primario" type="button" data-usar-canal="${esc(c.id)}">Trabajar con este canal</button>`}</header>
+      ${error ? `<p class="error">${esc(error)}</p>` : ""}
+      <div class="pc-kpis">${kpis}</div>
+      <div class="pc-redes">${redes}</div>
+      ${yt ? `<div class="pc-videos">${videos || `<p class="meta">Sin vídeos publicados todavía.</p>`}</div>` : ""}
+    </article>`;
+  }).join("");
+}
+$("pc-actualizar").addEventListener("click", () => cargarPanel(true));
+window.addEventListener("hashchange", () => { if (vistaActual() === "canales") cargarPanel(); });
+$("pc-editar").addEventListener("click", () => $("abrir-ajustes").click());
+$("pc-lista").addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-editar-canal]")) return $("abrir-ajustes").click();
+  const b = ev.target.closest("[data-usar-canal]");
+  if (!b) return;
+  try { await api("/api/canales/activar", { id: b.dataset.usarCanal }); await refrescar(); await cargarPanel(); } catch (e) { aviso(e); }
+});
+
 // ============================================================== Tendencias
 const minSeg = (s) => (s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} min` : `${s} s`);
 async function cargarTendencias() {
@@ -917,6 +977,7 @@ async function refrescar() {
   }
   mostrarVista();
   if (vistaActual() === "tendencias") cargarTendencias();
+  if (vistaActual() === "canales" && !firmas.panel) cargarPanel();
   if (!p || !p.guion_aprobado) return;
   siCambia("cabecera", { p: { ...p, trabajo: null } }, () => pintarCabecera(p));
   siCambia("extension", [d.extension.conectada, d.extension.desactualizada], () => pintarExtension(d.extension));

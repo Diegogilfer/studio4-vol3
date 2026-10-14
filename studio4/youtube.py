@@ -162,7 +162,8 @@ def _estadisticas(ids: list[str]) -> list[dict[str, Any]]:
     d = _get("videos", part="snippet,statistics,contentDetails", id=",".join(ids[:50]))
     return [{"titulo": v["snippet"]["title"], "canal": v["snippet"]["channelTitle"],
              "vistas": int(v["statistics"].get("viewCount", 0)), "publicado": v["snippet"]["publishedAt"][:10],
-             "duracion": v["contentDetails"].get("duration", ""), "url": f"https://youtu.be/{v['id']}"}
+             "duracion": v["contentDetails"].get("duration", ""), "url": f"https://youtu.be/{v['id']}",
+             "miniatura": f"https://i.ytimg.com/vi/{v['id']}/mqdefault.jpg"}
             for v in d.get("items", [])]
 
 

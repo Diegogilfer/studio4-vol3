@@ -607,3 +607,16 @@ def test_tendencias_cifras_y_pautas_para_el_guion(aislado):
     texto = guion._peticion("faros", "dossier", {"corto": 40}, youtube={"tendencias": t})
     assert "2026-10-01" in texto and "30 a 45 s" in texto and "gancho en 2 s" in texto and "Evita: saludos largos" in texto
     assert tendencias.estado("fourlevel")["caducado"] is True
+
+
+def test_resumen_del_canal_para_el_panel(aislado):
+    from studio4 import canales
+    datos = {"nombre": "FourLevel", "suscriptores": 10, "vistas": 99, "videos": 2, "mas_vistos": []}
+    r = canales.resumen("fourlevel", lambda u: {**datos, "pedido": u},
+                        [{"estado": "terminado"}, {"estado": "rodando"}, {"estado": "guion_listo"}])
+    assert r["youtube"]["pedido"] == "@Four4Level" and r["error"] == ""
+    assert r["producciones"] == {"total": 3, "terminadas": 1, "en_flow": 1}
+
+    def falla(_u):
+        raise RuntimeError("cuota agotada")
+    assert canales.resumen("arigab", falla, [])["error"] == "cuota agotada"   # un canal sin datos no tumba el panel
