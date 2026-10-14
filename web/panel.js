@@ -50,8 +50,6 @@ function porQue(id, motivo) {
 const ESTADOS = { investigando: "investigando", escribiendo: "escribiendo guion", guion_listo: "guion por revisar",
   escenas: "creando escenas", rodando: "en Flow", renderizando: "renderizando", terminado: "terminado", error: "error" };
 const VERSION = { corto: "Corto", largo: "Largo", propio: "Tu guion" };
-const TONO = { narrativo: "narrativo", intrigante: "intrigante", tenso: "tenso", emocionante: "emocionante",
-  cinematografico: "cinematográfico", intimo: "íntimo", solemne: "solemne", asombro: "asombro", triunfal: "triunfal" };
 const ESTILOS = {
   cinematografico: ["Cinematográfico", "Película realista, óptica anamórfica"],
   documental: ["Documental", "Real, cámara en mano, luz natural"],
@@ -62,17 +60,22 @@ const ESTILOS = {
 };
 
 // ============================================================== Ajustes: tema de color (se guarda en este navegador)
+// [id, nombre, plantilla, colores de la muestra, radio de la muestra]
 const TEMAS = [
-  ["cristal", "Cristal", "Claro · lavanda y aguamarina", ["#ece6fb", "#a78bfa", "#5eead4", "#f9a8d4"]],
-  ["oceano", "Océano", "Claro · cielo y turquesa", ["#e3f2fb", "#7dd3fc", "#5eead4", "#a5b4fc"]],
-  ["atardecer", "Atardecer", "Claro · melocotón y rosa", ["#fbe9ee", "#fdba74", "#f9a8d4", "#c4b5fd"]],
-  ["arena", "Arena", "Claro · cálido y sereno", ["#efe8dc", "#d6c4a5", "#c9d6c2", "#e7d3b0"]],
-  ["rosa", "Orquídea", "Claro · rosa y lila", ["#f5e9fb", "#f9a8d4", "#d8b4fe", "#c7d2fe"]],
-  ["grafito", "Grafito", "Oscuro · sobrio y premium", ["#0a0b10", "#4f46e5", "#0d9488", "#8b5cf6"]],
-  ["medianoche", "Medianoche", "Oscuro · azul profundo", ["#0a1026", "#3b82f6", "#6366f1", "#06b6d4"]],
-  ["aurora", "Aurora", "Oscuro · violeta vivo", ["#2c1470", "#a855f7", "#2dd4bf", "#f472b6"]],
-  ["bosque", "Bosque", "Oscuro · verdes", ["#0a1712", "#10b981", "#65a30d", "#0d9488"]],
-  ["oro", "Carbón y oro", "Oscuro · ámbar", ["#0f0d09", "#f59e0b", "#b45309", "#fde68a"]],
+  ["cristal", "Cristal", "Cristal flotante", ["#ece6fb", "#a78bfa", "#5eead4", "#f9a8d4"], 16],
+  ["oceano", "Océano", "Nube sólida", ["#e3f2fb", "#7dd3fc", "#5eead4", "#a5b4fc"], 10],
+  ["atardecer", "Atardecer", "Burbuja", ["#fbe9ee", "#fdba74", "#f9a8d4", "#c4b5fd"], 22],
+  ["arena", "Arena", "Editorial", ["#efe8dc", "#d6c4a5", "#c9d6c2", "#e7d3b0"], 2],
+  ["rosa", "Orquídea", "Pastel", ["#f5e9fb", "#f9a8d4", "#d8b4fe", "#c7d2fe"], 12],
+  ["menta", "Menta", "Minimal", ["#eef6f2", "#99d8c0", "#cfe8df", "#b9e3d3"], 8],
+  ["hielo", "Hielo", "Ventanas", ["#eaf0f7", "#93c5fd", "#c7d7ea", "#dbe7f5"], 6],
+  ["comic", "Cómic", "Viñeta", ["#fff1b8", "#ff5a36", "#2f6bff", "#111111"], 4],
+  ["grafito", "Grafito", "Estudio", ["#0a0b10", "#4f46e5", "#0d9488", "#8b5cf6"], 8],
+  ["medianoche", "Medianoche", "Neón", ["#0a1026", "#3b82f6", "#6366f1", "#06b6d4"], 6],
+  ["aurora", "Aurora", "Cristal oscuro", ["#2c1470", "#a855f7", "#2dd4bf", "#f472b6"], 16],
+  ["bosque", "Bosque", "Terminal", ["#07120d", "#10b981", "#65a30d", "#0d9488"], 0],
+  ["oro", "Carbón y oro", "Lujo", ["#0f0d09", "#f59e0b", "#b45309", "#fde68a"], 0],
+  ["vino", "Vino", "Revista", ["#1a0b12", "#f43f5e", "#fbbf24", "#7f1d1d"], 4],
 ];
 function aplicarTema(t) {
   document.documentElement.dataset.tema = t;
@@ -82,13 +85,13 @@ function aplicarTema(t) {
 (() => {
   let t = "cristal";
   try { t = localStorage.getItem("studio4-tema") || t; } catch (_) { /* sin almacenamiento */ }
-  $("temas").innerHTML = TEMAS.map(([id, nombre, desc, c]) => `
+  $("temas").innerHTML = TEMAS.map(([id, nombre, desc, c, r]) => `
     <button type="button" data-tema="${id}">
-      <span class="muestra-tema" style="background:${c[0]}">
+      <span class="muestra-tema" style="background:${c[0]};border-radius:${r}px">
         <i style="inset:-20% auto auto -10%;width:70%;height:90%;background:radial-gradient(closest-side,${c[1]},transparent);filter:blur(8px)"></i>
         <i style="inset:auto -10% -25% auto;width:65%;height:90%;background:radial-gradient(closest-side,${c[2]},transparent);filter:blur(8px)"></i>
-        <i style="inset:22% 14% 22% 14%;background:${["grafito", "medianoche", "aurora", "bosque", "oro"].includes(id) ? "rgb(20 22 32 / .55)" : "rgb(255 255 255 / .5)"};border:1px solid rgb(255 255 255 / .5);backdrop-filter:blur(6px)"></i>
-        <i style="left:22%;top:34%;width:30%;height:9px;border-radius:5px;background:${c[3]}"></i>
+        <i style="inset:22% 14% 22% 14%;background:${["grafito", "medianoche", "aurora", "bosque", "oro", "vino"].includes(id) ? "rgb(20 22 32 / .55)" : "rgb(255 255 255 / .5)"};border:${id === "comic" ? "2px solid #111" : "1px solid rgb(255 255 255 / .5)"};border-radius:${r}px;backdrop-filter:blur(6px)"></i>
+        <i style="left:22%;top:34%;width:30%;height:9px;border-radius:${Math.min(r, 5)}px;background:${c[3]}"></i>
       </span><b>${nombre}</b><small>${desc}</small></button>`).join("");
   aplicarTema(t);
 })();
@@ -172,9 +175,6 @@ async function cargarYoutube() {
     $("yt-txt").textContent = canal.error ? "Reconectar YouTube" : "Conectar YouTube";
     p.title = canal.error || "Solo lectura: tu canal y lo que ya hay en YouTube sobre cada tema";
   }
-  $("a-yt-nota").textContent = canal.conectado
-    ? "Con tu canal conectado, el guion tendrá en cuenta el tono de tus vídeos más vistos y buscará un ángulo que no esté ya en YouTube."
-    : "";
 }
 $("yt-pildora").addEventListener("click", async (ev) => {
   if (!canal?.sin_canal) return;   // sin clave ni autorización, el enlace lleva a «Conectar YouTube»
@@ -261,9 +261,9 @@ function pintarResumen() {
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s (Shorts y Reels)`,
        $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
   const voz = $("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "";
-  $("a-resumen").innerHTML = propio
-    ? `Tu guion se usa <b>tal cual</b> para un vídeo <b>${esc(formatos)}</b>, estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, <b>${esc(voz)}</b>. Lo revisas y lo apruebas en el paso 4.`
-    : `Se <b>investiga</b> el tema${canal?.conectado ? " y lo que ya hay en <b>YouTube</b>" : ""} y se escribe un guion <b>${esc(formatos)}</b> en tono <b>${esc(elegido("tono").split(",")[0])}</b> para <b>${esc(elegido("publico"))}</b>. Estilo <b>${esc(ESTILOS[estiloElegido][0])}</b>, <b>${esc(voz)}</b>. Lo revisas antes de crear escenas.`;
+  const partes = propio ? [formatos, ESTILOS[estiloElegido][0], voz]
+    : [formatos, elegido("tono").split(",")[0], elegido("publico"), ESTILOS[estiloElegido][0], voz];
+  $("a-resumen").innerHTML = partes.filter(Boolean).map((x) => `<b>${esc(x)}</b>`).join(" · ");
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 
@@ -340,23 +340,12 @@ function pintarGuion({ p }) {
   $("g-ia").hidden = !(p.ia_detectada || []).length;
   $("g-ia").innerHTML = `<span class="ia-nota">Conviene cambiar: ${(p.ia_detectada || []).map((f) => `«${esc(f)}»`).join(", ")}</span>`;
   $("g-ganchos").hidden = !(p.ganchos || []).length;
-  $("g-ganchos").innerHTML = `<span class="meta" style="width:100%">Otras primeras frases (clic para usarla):</span>` +
+  $("g-ganchos").innerHTML = `<span class="meta" style="width:100%">Otros comienzos</span>` +
     (p.ganchos || []).map((g) => `<button class="chip-alt" data-gancho="${esc(g)}">${esc(g)}</button>`).join("");
   $("g-aprobar").disabled = ocupado || !p.guion;
   $("g-guardar").disabled = ocupado;
   $("g-otra").hidden = !["corto", "largo"].includes(p.version);
   $("g-otra").disabled = ocupado;
-  const inv = p.investigacion;
-  $("g-investigacion").hidden = !inv;
-  if (inv) {
-    $("g-dossier").textContent = inv.dossier;
-    $("g-fuentes-n").textContent = `· ${inv.metodo || "Google"} · ${inv.fuentes.length} fuentes`;
-    $("g-fuentes").innerHTML = inv.fuentes.map((f) => `<li><a href="${esc(f.url)}" target="_blank" rel="noreferrer">${esc(f.titulo)}</a></li>`).join("");
-  }
-  const yt = inv?.youtube?.competencia || [];
-  $("g-youtube").hidden = !yt.length;
-  $("g-yt-n").textContent = `· ${yt.length} vídeos`;
-  $("g-yt").innerHTML = yt.map((v) => `<li><a href="${esc(v.url)}" target="_blank" rel="noreferrer">${esc(v.titulo)}</a> · ${esc(v.canal)} · ${miles(v.vistas)} vistas</li>`).join("");
 }
 $("g-versiones").addEventListener("change", async (ev) => {
   try { await api("/api/activar", { id: ev.target.value }); await refrescar(); } catch (e) { aviso(e); }
@@ -439,22 +428,7 @@ function pintarTrabajo(t) {
   }
 }
 
-function pintarRegistroFlow(ext) {
-  $("ext-vieja").hidden = !ext.desactualizada;
-  const ev = ext.eventos || [];
-  $("ext-resumen").textContent = ext.conectada
-    ? `· conectada${ext.version ? ` (v${ext.version})` : ""}${ev.length ? ` · último: ${ev[0].tipo} ${ev[0].t}` : ""}`
-    : "· sin conexión: abre Google Flow con la extensión cargada";
-  $("ext-eventos").innerHTML = ev.length
-    ? ev.map((e) => `<li class="${esc(e.tipo)}"><span>${esc(e.t)}</span><b>${esc(e.tipo)}</b><span>${esc(e.detalle)}</span></li>`).join("")
-    : `<li><span></span><b></b><span>Aún nada. En Flow pulsa «Copiar prompt», pega y genera.</span></li>`;
-  if (ev.some((e) => e.tipo === "error" || e.tipo === "rechazada")) $("ext-registro").open = true;
-}
-function pintarAvisos(avisos) {
-  $("avisos").hidden = !avisos.length;
-  $("avisos").innerHTML = avisos.map((a) =>
-    `<div><b>Difícil de filmar:</b> «${esc(a.frase)}» — ${esc(a.problema)}<br><span class="meta">Sugerencia: ${esc(a.sugerencia)}</span></div>`).join("");
-}
+function pintarExtension(ext) { $("ext-vieja").hidden = !(ext.conectada && ext.desactualizada); }
 function portada(e) {
   // La toma elegida si ya hay clip; si no, negro.
   const toma = e.elegida !== null ? e.tomas[e.elegida] : null;
@@ -485,16 +459,13 @@ function pintarEscenas({ escenas, activa }) {
       </div>`).join("");
     const estadoTxt = e.elegida !== null ? "Clip listo" : e.orden === activa ? "Genera esta en Flow" : "Pendiente";
     const tipo = e.tipo_clip === "imagen" ? "imagen" : "video";
-    const tono = e.tono_voz ? `Voz ${TONO[e.tono_voz] || e.tono_voz}${e.ritmo_voz && e.ritmo_voz !== "normal" ? `, ${e.ritmo_voz === "rapido" ? "rápida" : "lenta"}` : ""}` : "";
     return `
       <article class="escena ${e.orden === activa ? "activa" : ""} ${e.elegida !== null ? "lista-ok" : ""}">
         <div class="portada">${portada(e)}
           <span class="portada-num">Escena ${e.orden}</span><span class="portada-estado">${estadoTxt}</span></div>
         <div class="escena-cuerpo">
-          ${e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}</b><span>${esc(e.motivo_tipo || "")}</span></div>` : ""}
+          ${e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}</b></div>` : ""}
           <p class="voz-txt">«${esc(e.texto_voz)}»</p>
-          ${tono ? `<span class="tono-voz">${esc(tono)}</span>` : ""}
-          <details class="prompt-plegado"><summary>Prompt para Flow</summary><pre class="prompt">${esc(e.prompt_flow)}</pre></details>
           ${e.tomas.length > 1 ? `<div class="tomas">${tomas}</div>` : ""}
           <div class="acciones">
             <button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>
@@ -553,10 +524,8 @@ function pintarVoz({ voz, proveedor, opciones }) {
   if (voz) {
     const src = `${urlMedio(voz.archivo)}?v=${encodeURIComponent(voz.generada || "")}`;
     if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
-    $("v-info").textContent = `· ${voz.duracion.toFixed(1)} s · ${voz.voz_nombre ? `voz ${voz.voz_nombre}` : opciones[voz.proveedor] || voz.proveedor}${voz.dirigida ? " · interpretada escena a escena" : ""}`;
   } else {
     audio.removeAttribute("src"); audio.dataset.src = "";
-    $("v-info").textContent = "· se graba sola al crear las escenas";
   }
 }
 // Probar voces: hasta 3 marcadas → muestras → «Usar esta voz».
@@ -636,7 +605,6 @@ function pintarRender({ p }) {
   if (!p.escenas.length) motivos.push("Esperando las escenas.");
   if (!p.voz) motivos.push("Falta la voz.");
   if (faltan.length) motivos.push(`Faltan clips de Flow en ${faltan.length === p.escenas.length ? "todas las escenas" : `las escenas ${faltan.join(", ")}`}.`);
-  $("r-falta").textContent = motivos.join(" ") || (p.final ? `Renderizado ${p.final.renderizado}. Vuelve a renderizar si cambias tomas o subtítulos.` : "Todo listo para montar.");
   $("r-boton").disabled = motivos.length > 0 || p.trabajo.ocupado;
   porQue("r-boton", p.trabajo.ocupado ? "Espera a que termine lo que está en marcha." : faltan.length ? "Necesitas un clip de Flow en cada escena." : motivos[0]);
   $("r-final").hidden = !p.final;
@@ -660,9 +628,6 @@ function pintarMiniaturas({ p, plataformas }) {
   $("m-generar").disabled = sinClips || p.trabajo.ocupado;
   porQue("m-generar", p.trabajo.ocupado ? "Espera a que termine lo que está en marcha." : sinClips ? "Necesitas al menos un clip de Flow." : "");
   $("m-generar").firstChild.textContent = m ? "Volver a generar " : "Generar miniaturas ";
-  $("m-info").textContent = sinClips
-    ? "Las miniaturas salen de tus clips: cuando tengas tomas de Flow, Gemini elige el mejor fotograma y escribe el texto."
-    : "Miniaturas, vídeo y textos listos para cada plataforma.";
   $("m-cuerpo").hidden = !m;
   if (!m) return;
   const v = encodeURIComponent(m.version || "");
@@ -689,9 +654,7 @@ function pintarPaquete({ p }) {
   $("pq-preparar").disabled = !p.final || p.trabajo.ocupado;
   porQue("pq-preparar", p.trabajo.ocupado ? "Espera a que termine lo que está en marcha." : !p.final ? "Primero renderiza el vídeo en Render." : "");
   $("pq-preparar").firstChild.textContent = pq ? "Volver a preparar " : "Preparar los 3 formatos ";
-  $("pq-info").textContent = !p.final ? "Al renderizar el vídeo completo, los 3 formatos se preparan solos."
-    : p.entregas_error ? `No se pudieron preparar los recortes: ${p.entregas_error}. Pulsa «Volver a preparar».`
-    : pq ? `Listo: ${pq.piezas.length} piezas en tu carpeta «3 Entregas».` : "Vídeo completo, Reels (el mejor momento) y Shorts (los mejores recortes), subtitulados y con sus textos.";
+  $("pq-info").textContent = p.entregas_error ? `Error: ${p.entregas_error}` : pq ? `${pq.piezas.length} piezas listas` : "";
   $("pq-carpeta").hidden = !pq;
   $("pq-piezas").innerHTML = (pq?.piezas || []).map((z) => `
     <article class="pieza ${z.clave === "completo" ? "ancha" : ""}">
@@ -768,10 +731,6 @@ $("m-subir").addEventListener("change", async (ev) => {
 function pintarTextos(p) {
   $("pub-titulo").textContent = p.titulo;
   $("pub-desc").textContent = [p.descripcion, (p.hashtags || []).join(" ")].filter(Boolean).join("\n\n");
-  const b = p.biblia || {};
-  $("pub-biblia").innerHTML = b.escenario_en ? `
-    <p><b>Escenario:</b> ${esc(b.escenario_en)}</p><p><b>Luz:</b> ${esc(b.luz_en)}</p><p><b>Paleta:</b> ${esc(b.paleta_en)}</p>
-    ${(b.personajes || []).map((x) => `<p><b>${esc(x.nombre)}:</b> ${esc(x.aspecto_en)}</p>`).join("")}` : "";
 }
 document.addEventListener("click", async (ev) => {
   const id = ev.target.dataset?.copiar;
@@ -846,11 +805,9 @@ function pintarTendencias(t) {
   $("td-trabajo").hidden = !t.ocupado; $("td-fase").textContent = t.fase ? `${t.fase}…` : "";
   $("td-actualizar").disabled = t.ocupado;
   $("td-error").hidden = !t.error; $("td-error").textContent = t.error ? `No se pudieron actualizar: ${t.error}` : "";
-  $("td-nicho").textContent = c.nicho ? ""
-    : `Escribe el nicho de ${c.nombre || "este canal"} en Ajustes → Canales (por ejemplo «historia y ciencia curiosa»): las ideas se ajustan mucho mejor.`;
+  $("td-nicho").hidden = !!c.nicho;
   const d = t.datos;
-  $("td-fecha").textContent = d ? `Actualizado ${fecha(d.fecha)}${t.caducado ? " · tiene más de un día: conviene actualizar" : ""}`
-    : "Todavía no hay tendencias para este canal: pulsa «Actualizar tendencias» (tarda unos 30 segundos, gratis).";
+  $("td-fecha").textContent = d ? fecha(d.fecha) : "";
   $("td-cuerpo").hidden = !d;
   if (!d) return;
   const m = d.metricas, i = d.informe;
@@ -866,15 +823,15 @@ function pintarTendencias(t) {
     .map(([k, v]) => `<div><b>${k}</b><p>${esc(v)}</p></div>`).join("");
   $("td-ideas").innerHTML = i.ideas.map((x) => `
     <div class="td-idea"><small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"}</small>
-      <b>${esc(x.idea)}</b><p>${esc(x.por_que)}</p>
+      <b>${esc(x.idea)}</b>
       <button class="boton" type="button" data-idea="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear este vídeo <svg width="14" height="14"><use href="#i-flecha"/></svg></button></div>`).join("");
   $("td-nichos").innerHTML = i.nichos.map((n) => `
-    <div class="td-nicho"><b>${esc(n.nombre)}</b><p>${esc(n.por_que)}</p>
+    <div class="td-nicho"><b>${esc(n.nombre)}</b>
       <ul>${n.ideas.map((x) => `<li><button class="enlace" type="button" data-idea="${esc(x)}" data-formato="corto">${esc(x)}</button></li>`).join("")}</ul></div>`).join("");
   $("td-consejos").innerHTML = i.consejos.map((x) => `<li>${esc(x)}</li>`).join("");
   $("td-evitar").innerHTML = i.evitar.map((x) => `<li>${esc(x)}</li>`).join("");
-  $("td-rapidos").innerHTML = d.rapidos.map((v) => `<li><a href="${esc(v.url)}" target="_blank" rel="noreferrer">${esc(v.titulo)}</a> · ${esc(v.canal)} · ${miles(v.vistas_hora)} vistas/hora · ${minSeg(v.segundos)}</li>`).join("");
 }
+$("td-nicho").addEventListener("click", () => { $("abrir-ajustes").click(); });
 $("td-actualizar").addEventListener("click", async () => {
   try { await api("/api/tendencias", {}); await cargarTendencias(); } catch (e) { aviso(e); }
 });
@@ -918,8 +875,7 @@ async function refrescar() {
   if (vistaActual() === "tendencias") cargarTendencias();
   if (!p || !p.guion_aprobado) return;
   siCambia("cabecera", { p: { ...p, trabajo: null } }, () => pintarCabecera(p));
-  siCambia("registro-flow", d.extension, pintarRegistroFlow);
-  siCambia("avisos", p.avisos || [], pintarAvisos);
+  siCambia("extension", [d.extension.conectada, d.extension.desactualizada], () => pintarExtension(d.extension));
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
   siCambia("voces", { id: p.id, voces: o.voces_gemini, actual: p.voz_nombre || o.voz_por_defecto, muestras: p.muestras_voz,
@@ -929,10 +885,7 @@ async function refrescar() {
   siCambia("render", { p }, pintarRender);
   siCambia("miniaturas", { p, plataformas: o.plataformas }, pintarMiniaturas);
   siCambia("paquete", { id: p.id, e: p.entregas, f: p.final, o: p.trabajo.ocupado, err: p.entregas_error }, () => pintarPaquete({ p }));
-  $("carpeta-ruta").textContent = p.carpeta || "se crea al aprobar el guion";
-  const corto = (p.titulo || p.tema || "").replace(/[<>:"/\\|?*]/g, "").slice(0, 60).trim();
-  $("carpeta-como").textContent = `Descarga cada clip de Flow y déjalo en «1 Clips de Flow · ${corto}» como «${corto} - escena 01.mp4». Entra solo.`;
-  siCambia("textos", { id: p.id, t: p.titulo, d: p.descripcion, b: p.biblia }, () => pintarTextos(p));
+  siCambia("textos", { id: p.id, t: p.titulo, d: p.descripcion, h: p.hashtags }, () => pintarTextos(p));
 }
 
 refrescar().catch(aviso);

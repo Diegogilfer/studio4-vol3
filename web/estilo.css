@@ -567,7 +567,7 @@ main::before {   /* retícula finísima, solo se intuye */
   --video-txt: color-mix(in oklab, var(--accent) 80%, black); --imagen-txt: color-mix(in oklab, var(--accent-2) 80%, black);
 }
 /* --- Base oscura */
-html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"], html[data-tema="bosque"], html[data-tema="oro"] {
+html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"], html[data-tema="bosque"], html[data-tema="oro"], html[data-tema="vino"] {
   color-scheme: dark;
   --fg: #eef1f6; --fg-muted: rgb(226 228 236 / .76); --fg-faint: #7a8194;
   --line: rgb(255 255 255 / .09); --line-strong: rgb(255 255 255 / .16);
@@ -832,3 +832,145 @@ select.campo option { background: var(--bg-panel, #fff); color: #161827; }
 .td-listas ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; line-height: 1.55; }
 .td-rapidos { margin-top: 22px; }
 @media (max-width: 900px) { .td-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); } .td-formato, .td-nichos { grid-template-columns: 1fr; } }
+
+/* ======================================================================= PLANTILLAS
+ * Cada tema es un diseño completo: forma (esquinas, bordes), superficie (cristal o sólida), sombras, tipografía y
+ * fondo. Los botones, su orden y lo que hacen son los mismos en todos: solo cambia el estilo. */
+:root {
+  --r-tarjeta: 30px; --r-caja: 20px; --r-control: 999px; --r-campo: 14px; --r-mini: 12px;
+  --b-ancho: 1px; --desenfoque: 28px; --luces: 1; --rejilla-op: 1;
+  --sombra-boton: none; --sombra-primario: 0 10px 30px -10px color-mix(in oklab, var(--accent) 80%, transparent);
+}
+html .tarjeta, html .hero, html .hero-fondo { border-radius: var(--r-tarjeta); }
+html .tarjeta, html .hero { border-width: var(--b-ancho);
+  backdrop-filter: blur(var(--desenfoque)) saturate(180%); -webkit-backdrop-filter: blur(var(--desenfoque)) saturate(180%); }
+html .escena, html .producciones button, html .formato, html .estilos button, html .pestanas a, html .pieza, html .muestra,
+html .td-cifras > div, html .td-formato > div, html .td-idea, html .td-nicho, html .ajustes-render > div, html .canal-ficha,
+html .vista-subs, html .estado-sec, html .a-trabajo, html .temas button, html .caja-viva, html .voz-op, html .copiable {
+  border-radius: var(--r-caja); border-width: var(--b-ancho); }
+html .boton, html .primario, html .pildora, html .redondo, html .chips button, html .a-pasos li, html .oir, html .canal-campo {
+  border-radius: var(--r-control); }
+html .campo, html .segmentos, html .guion-texto, html .prompt { border-radius: var(--r-campo); }
+html .segmentos label, html .toma, html .escena .toma, html .muestras button { border-radius: var(--r-mini); }
+html .boton { box-shadow: var(--sombra-boton); }
+html .primario { box-shadow: var(--sombra-primario); }
+html body::before { opacity: var(--luces); }
+html main::before { opacity: var(--rejilla-op); }
+
+/* --- Océano · Nube sólida: superficies blancas opacas, sin cristal, botones rectangulares suaves */
+html[data-tema="oceano"] {
+  --r-tarjeta: 22px; --r-caja: 16px; --r-control: 12px; --r-campo: 12px; --r-mini: 10px; --desenfoque: 0px; --luces: .35;
+  --cristal: rgb(255 255 255 / .94); --cristal-borde: rgb(37 99 235 / .10); --cristal-brillo: inset 0 0 0 0 transparent;
+  --cristal-sombra: 0 24px 50px -30px rgb(30 64 175 / .35), 0 2px 6px rgb(30 64 175 / .06);
+  --caja: #f5f9fd; --caja-borde: rgb(37 99 235 / .10); --caja-sombra: none; --control: #fff;
+}
+/* --- Atardecer · Burbuja: todo muy redondo, mullido y con sombras de color */
+html[data-tema="atardecer"] {
+  --r-tarjeta: 44px; --r-caja: 30px; --r-campo: 22px; --r-mini: 18px; --desenfoque: 36px;
+  --cristal-sombra: 0 40px 80px -36px rgb(225 29 72 / .35), 0 10px 24px -14px rgb(194 65 12 / .2);
+  --caja-sombra: 0 16px 34px -22px rgb(225 29 72 / .35); --sombra-boton: 0 8px 18px -12px rgb(225 29 72 / .45);
+}
+html[data-tema="atardecer"] h1, html[data-tema="atardecer"] h2, html[data-tema="atardecer"] .titulo-prod { font-weight: 800; letter-spacing: -0.02em; }
+/* --- Arena · Editorial: serif, esquinas rectas, filetes finos, sin brillos ni cristal */
+html[data-tema="arena"] {
+  --r-tarjeta: 4px; --r-caja: 2px; --r-control: 2px; --r-campo: 2px; --r-mini: 2px; --desenfoque: 0px; --luces: 0; --rejilla-op: 0;
+  --fondo: #f3eee5; --cristal: #fbf8f2; --cristal-borde: rgb(60 40 20 / .22); --cristal-brillo: inset 0 0 0 0 transparent;
+  --cristal-sombra: none; --caja: #f6f1e8; --caja-borde: rgb(60 40 20 / .16); --caja-sombra: none;
+  --control: transparent; --control-borde: rgb(60 40 20 / .35); --sombra-primario: none;
+}
+html[data-tema="arena"] h1, html[data-tema="arena"] h2, html[data-tema="arena"] h3, html[data-tema="arena"] .titulo-prod,
+html[data-tema="arena"] .pregunta b, html[data-tema="arena"] .pregunta-txt, html[data-tema="arena"] .td-resumen {
+  font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif; font-weight: 400; letter-spacing: 0; }
+html[data-tema="arena"] .boton, html[data-tema="arena"] .primario, html[data-tema="arena"] .paso-de {
+  text-transform: uppercase; letter-spacing: .1em; font-size: 11.5px; font-weight: 600; }
+/* --- Orquídea · Pastel: bordes gruesos de color suave, sin sombras */
+html[data-tema="rosa"] {
+  --r-tarjeta: 26px; --r-caja: 18px; --r-control: 14px; --r-campo: 14px; --b-ancho: 2px; --desenfoque: 12px;
+  --cristal-borde: rgb(192 38 211 / .18); --caja-borde: rgb(192 38 211 / .16); --caja-sombra: none;
+  --cristal-sombra: none; --control-borde: rgb(192 38 211 / .25); --sombra-primario: none;
+}
+html[data-tema="rosa"] .boton, html[data-tema="rosa"] .primario { border-width: 2px; }
+/* --- Menta · Minimal: plano, sin bordes ni sombras, mucho aire */
+html[data-tema="menta"] {
+  --accent: #0f766e; --accent-2: #15803d; --fondo: #eef6f2;
+  --luz1: transparent; --luz2: transparent; --luz3: transparent; --luz4: transparent; --luces: 0; --rejilla-op: 0;
+  --r-tarjeta: 16px; --r-caja: 12px; --r-control: 10px; --r-campo: 10px; --r-mini: 8px; --b-ancho: 0px; --desenfoque: 0px;
+  --cristal: rgb(255 255 255 / .75); --cristal-brillo: inset 0 0 0 0 transparent; --cristal-sombra: none;
+  --caja: rgb(15 118 110 / .05); --caja-sombra: none; --control: rgb(15 118 110 / .07); --control-borde: transparent; --sombra-primario: none;
+}
+html[data-tema="menta"] .boton, html[data-tema="menta"] .pildora, html[data-tema="menta"] .campo { border-color: transparent; }
+/* --- Hielo · Ventanas: acrílico ligero, esquinas pequeñas, Segoe UI */
+html[data-tema="hielo"] {
+  --accent: #0067c0; --accent-2: #0f766e;
+  --fondo: linear-gradient(160deg, #eef2f7 0%, #e3eaf3 55%, #edf1f6 100%);
+  --luz1: rgb(147 197 253 / .45); --luz2: rgb(199 215 234 / .5); --luz3: rgb(219 231 245 / .5); --luz4: rgb(186 230 253 / .4);
+  --r-tarjeta: 10px; --r-caja: 8px; --r-control: 6px; --r-campo: 4px; --r-mini: 4px; --desenfoque: 18px;
+  --cristal: rgb(249 251 253 / .78); --cristal-borde: rgb(0 0 0 / .08); --cristal-brillo: inset 0 1px 0 rgb(255 255 255 / .9);
+  --cristal-sombra: 0 16px 36px -20px rgb(0 0 0 / .25); --caja: rgb(255 255 255 / .7); --caja-borde: rgb(0 0 0 / .07);
+  --caja-sombra: 0 1px 2px rgb(0 0 0 / .06); --sombra-primario: 0 1px 2px rgb(0 0 0 / .2);
+  --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+/* --- Cómic · Viñeta: contornos negros gruesos y sombras duras desplazadas */
+html[data-tema="comic"] {
+  --accent: #ff5a36; --accent-2: #2f6bff; --accent-fg: #fff; --fg: #111; --fg-muted: #333; --line: rgb(0 0 0 / .25);
+  --fondo: #fff1b8; --luz1: transparent; --luz2: transparent; --luz3: transparent; --luz4: transparent; --luces: 0;
+  --rejilla: rgb(0 0 0 / .06);
+  --r-tarjeta: 10px; --r-caja: 8px; --r-control: 8px; --r-campo: 6px; --r-mini: 4px; --b-ancho: 2.5px; --desenfoque: 0px;
+  --cristal: #fffaf0; --cristal-borde: #111; --cristal-brillo: inset 0 0 0 0 transparent; --cristal-sombra: 8px 8px 0 #111;
+  --caja: #fff; --caja-borde: #111; --caja-sombra: 4px 4px 0 #111; --control: #fff; --control-borde: #111; --campo: #fff;
+  --sombra-boton: 3px 3px 0 #111; --sombra-primario: 3px 3px 0 #111;
+}
+html[data-tema="comic"] .boton, html[data-tema="comic"] .primario, html[data-tema="comic"] .pildora, html[data-tema="comic"] .campo { border: 2px solid #111; }
+html[data-tema="comic"] .boton, html[data-tema="comic"] .primario { text-transform: uppercase; font-weight: 800; letter-spacing: .03em; }
+html[data-tema="comic"] h1, html[data-tema="comic"] h2, html[data-tema="comic"] .titulo-prod, html[data-tema="comic"] .pregunta b {
+  font-family: "Arial Black", Impact, var(--sans); font-weight: 900; letter-spacing: -0.01em; }
+html[data-tema="comic"] .escena:hover { transform: translate(-2px, -2px); box-shadow: 6px 6px 0 #111; }
+/* --- Grafito · Estudio: oscuro sólido y sobrio, sin cristal */
+html[data-tema="grafito"] {
+  --r-tarjeta: 16px; --r-caja: 12px; --r-control: 10px; --r-campo: 10px; --r-mini: 8px; --desenfoque: 0px; --luces: .3;
+  --cristal: #11121a; --cristal-borde: rgb(255 255 255 / .07); --cristal-sombra: 0 20px 40px -24px rgb(0 0 0 / .9);
+  --caja: #181a24; --caja-borde: rgb(255 255 255 / .06); --sombra-primario: none;
+}
+/* --- Medianoche · Neón: bordes de luz y títulos estrechos en mayúsculas */
+html[data-tema="medianoche"] {
+  --r-tarjeta: 12px; --r-caja: 10px; --r-control: 8px; --r-campo: 6px; --r-mini: 6px; --desenfoque: 10px;
+  --cristal-borde: color-mix(in oklab, var(--accent) 45%, transparent);
+  --cristal-sombra: 0 0 0 1px color-mix(in oklab, var(--accent) 20%, transparent), 0 0 40px -10px color-mix(in oklab, var(--accent) 45%, transparent);
+  --caja-borde: color-mix(in oklab, var(--accent-2) 30%, transparent);
+  --caja-sombra: 0 0 18px -8px color-mix(in oklab, var(--accent-2) 50%, transparent);
+  --sombra-primario: 0 0 22px -4px var(--accent); --sombra-boton: 0 0 12px -6px var(--accent-2);
+}
+html[data-tema="medianoche"] h1, html[data-tema="medianoche"] h2, html[data-tema="medianoche"] .titulo-prod, html[data-tema="medianoche"] .paso-de {
+  font-family: Bahnschrift, "DIN Alternate", var(--sans); text-transform: uppercase; letter-spacing: .04em; }
+html[data-tema="medianoche"] .boton, html[data-tema="medianoche"] .primario { text-transform: uppercase; letter-spacing: .08em; font-size: 12px; }
+/* --- Bosque · Terminal: monoespaciada, esquinas rectas, líneas finas verdes */
+html[data-tema="bosque"] {
+  --sans: "Geist Mono Variable", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --fondo: #050b08; --luces: 0; --rejilla-op: 1; --rejilla: rgb(16 185 129 / .05);
+  --r-tarjeta: 2px; --r-caja: 2px; --r-control: 2px; --r-campo: 0px; --r-mini: 0px; --desenfoque: 0px;
+  --cristal: #07120d; --cristal-borde: rgb(16 185 129 / .35); --cristal-brillo: inset 0 0 0 0 transparent; --cristal-sombra: none;
+  --caja: #0a1a12; --caja-borde: rgb(16 185 129 / .22); --caja-sombra: none; --control-borde: rgb(16 185 129 / .4);
+  --sombra-primario: none; --accent-fg: #03140c;
+}
+html[data-tema="bosque"] .hero h1 em { font-style: normal; }
+/* --- Carbón y oro · Lujo: serif, filetes dorados finos, mayúsculas espaciadas */
+html[data-tema="oro"] {
+  --r-tarjeta: 0px; --r-caja: 0px; --r-control: 0px; --r-campo: 0px; --r-mini: 0px; --desenfoque: 6px; --luces: .5;
+  --cristal: rgb(18 15 10 / .82); --cristal-borde: rgb(245 158 11 / .35); --cristal-brillo: inset 0 0 0 0 transparent;
+  --caja: rgb(245 158 11 / .04); --caja-borde: rgb(245 158 11 / .22); --caja-sombra: none; --sombra-primario: none;
+}
+html[data-tema="oro"] h1, html[data-tema="oro"] h2, html[data-tema="oro"] h3, html[data-tema="oro"] .titulo-prod, html[data-tema="oro"] .pregunta b {
+  font-family: "Palatino Linotype", Palatino, Georgia, serif; font-weight: 400; letter-spacing: .01em; }
+html[data-tema="oro"] .boton, html[data-tema="oro"] .primario, html[data-tema="oro"] .paso-de, html[data-tema="oro"] .nav a {
+  text-transform: uppercase; letter-spacing: .14em; font-size: 11.5px; }
+/* --- Vino · Revista: oscuro cálido, titulares grandes y condensados */
+html[data-tema="vino"] {
+  --accent: #f43f5e; --accent-2: #fbbf24;
+  --fondo: radial-gradient(120% 90% at 50% -10%, #2a0f1c 0%, #1a0b12 55%, #0d0509 100%);
+  --luz1: rgb(244 63 94 / .3); --luz2: rgb(251 191 36 / .15); --luz3: rgb(127 29 29 / .35); --luz4: rgb(244 63 94 / .15);
+  --r-tarjeta: 6px; --r-caja: 4px; --r-control: 4px; --r-campo: 4px; --r-mini: 2px; --desenfoque: 14px;
+  --cristal: rgb(26 11 18 / .72); --cristal-borde: rgb(244 63 94 / .2); --caja-borde: rgb(255 255 255 / .08);
+}
+html[data-tema="vino"] h1, html[data-tema="vino"] h2, html[data-tema="vino"] .titulo-prod, html[data-tema="vino"] .pregunta b {
+  font-family: Bahnschrift, "Arial Narrow", var(--sans); font-weight: 700; text-transform: uppercase; letter-spacing: -0.01em; }
+html[data-tema="vino"] .hero h1 { font-size: clamp(34px, 6vw, 64px); }

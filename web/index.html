@@ -65,7 +65,6 @@
 
       <!-- Paso 1 · ¿De qué trata? -->
       <div class="paso" data-paso="1">
-        <div class="pista">Cuanto más concreta la idea, mejor sale el guion: un nombre, un lugar o un hecho. Si ya tienes el texto, elige «Tengo mi guion».</div>
         <div class="pregunta"><b>¿De qué trata el vídeo?</b>
           <div class="segmentos" role="tablist" aria-label="Cómo empezar">
             <label><input type="radio" name="modo" value="idea" checked>Tengo una idea</label>
@@ -73,8 +72,8 @@
           </div>
         </div>
         <div class="caja-viva">
-          <textarea id="a-idea" rows="3" placeholder="Cuéntalo como se lo contarías a tu equipo. Ej.: por qué los pulpos tienen tres corazones y sangre azul"></textarea>
-          <textarea id="a-guion" rows="8" hidden placeholder="Pega tu guion completo (solo lo que dice la voz). Se respeta tal cual."></textarea>
+          <textarea id="a-idea" rows="3" placeholder="Ej.: por qué los pulpos tienen tres corazones…"></textarea>
+          <textarea id="a-guion" rows="8" hidden placeholder="Pega tu guion…"></textarea>
         </div>
         <div class="solo-idea opciones">
           <div><p class="meta">Tono</p><div class="chips" data-grupo="tono">
@@ -84,20 +83,18 @@
             <button data-v="público general" class="si">Público general</button><button data-v="curiosos de la ciencia y la historia">Curiosos</button>
             <button data-v="jóvenes de 16 a 25 años">Jóvenes</button><button data-v="niños y familias">Familias</button><button data-v="gente que ya sabe del tema">Expertos</button></div></div>
         </div>
-        <p class="meta" id="a-yt-nota"></p>
         <div class="acciones-paso"><button class="primario" data-ir="2">Siguiente <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
 
       <!-- Paso 2 · ¿Dónde se publica? -->
       <div class="paso" data-paso="2" hidden>
-        <div class="pista">El corto sirve para Shorts y Reels a la vez. El largo es para YouTube y lleva su propio guion.</div>
-        <div class="pregunta"><b>¿Dónde se va a publicar?</b><span class="meta solo-idea">Puedes marcar los dos: se investiga una vez y se escriben dos guiones.</span></div>
+        <div class="pregunta"><b>¿Dónde se va a publicar?</b></div>
         <div class="formatos solo-idea">
           <label class="formato"><input type="checkbox" id="a-corto" checked>
-            <span class="formato-cab"><i class="marco-916"></i><b>Corto</b><span class="meta">Shorts y Reels · el mismo vídeo vertical con dos portadas</span></span>
+            <span class="formato-cab"><i class="marco-916"></i><b>Corto</b><span class="meta">Shorts y Reels</span></span>
             <span class="formato-dur"><input type="range" id="a-corto-s" min="20" max="90" step="5" value="50"><em id="a-corto-v">50 s</em></span></label>
           <label class="formato"><input type="checkbox" id="a-largo">
-            <span class="formato-cab"><i class="marco-169"></i><b>Largo</b><span class="meta">YouTube · guion propio, más desarrollo</span></span>
+            <span class="formato-cab"><i class="marco-169"></i><b>Largo</b><span class="meta">YouTube</span></span>
             <span class="formato-dur"><input type="range" id="a-largo-m" min="2" max="15" step="0.5" value="5"><em id="a-largo-v">5 min</em></span>
             <span class="meta" id="a-largo-nota"></span></label>
         </div>
@@ -113,11 +110,9 @@
 
       <!-- Paso 3 · ¿Cómo se ve y suena? -->
       <div class="paso" data-paso="3" hidden>
-        <div class="pista">El estilo se aplica igual a todas las escenas, para que el vídeo no cambie de aspecto. La voz se interpreta escena a escena.</div>
         <div class="pregunta"><b>¿Cómo se ve y cómo suena?</b></div>
         <div class="estilos" id="a-estilos"></div>
-        <div class="fila"><span class="meta">Servicio de voz</span><select id="a-voz" class="campo"></select></div>
-        <p class="meta">Elige la voz: pulsa el botón para escucharla antes de decidir.</p>
+        <div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select></div>
         <div class="voces-lista" id="a-voces"></div>
         <p class="resumen" id="a-resumen"></p>
         <div class="acciones-paso"><button class="boton" data-ir="2">Atrás</button>
@@ -147,9 +142,6 @@
             <button class="boton" id="g-otra" title="Otra versión con la misma investigación">Escribir otra versión</button>
             <span class="meta" id="g-estado" role="status" aria-live="polite"></span>
           </div>
-          <details id="g-investigacion"><summary>Investigación <span class="meta" id="g-fuentes-n"></span></summary>
-            <p class="guion" id="g-dossier"></p><ol id="g-fuentes" class="fuentes"></ol></details>
-          <details id="g-youtube" hidden><summary>Ya en YouTube sobre este tema <span class="meta" id="g-yt-n"></span></summary><ol id="g-yt" class="fuentes"></ol></details>
         </div>
         <div class="acciones-paso"><button class="boton" id="a-otro">Empezar otro vídeo</button></div>
       </div>
@@ -168,19 +160,13 @@
     <div class="guia">
       <div class="guia-cuerpo">
         <span class="paso-de" id="td-canal">Tendencias</span>
-        <h2>Qué se está viendo hoy y qué te conviene</h2>
+        <h2>Tendencias de hoy</h2>
         <p class="meta" id="td-fecha"></p>
-        <div class="guia-cajas">
-          <div><b>De dónde sale</b><p>Lo más visto hoy en YouTube en España, México, Argentina y Colombia, y lo que más crece esta semana en tu nicho.</p></div>
-          <div><b>Qué te da</b><p>Nichos con tirón, ideas listas para crear, la duración y la calidad que funcionan, y consejos para títulos.</p></div>
-          <div><b>Cómo se usa</b><p>Pulsa «Crear este vídeo» en una idea. El guion también tiene en cuenta estas pautas.</p></div>
-        </div>
       </div>
-      <div class="guia-acciones"><button class="primario" id="td-actualizar">Actualizar tendencias <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
+      <div class="guia-acciones"><button class="boton" id="td-nicho" hidden>Definir nicho del canal</button><button class="primario" id="td-actualizar">Actualizar tendencias <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
     </div>
     <div id="td-trabajo" class="trabajo" role="status" aria-live="polite" hidden><div class="trabajo-txt"><span id="td-fase"></span></div><div class="progreso"><div style="width:60%"></div></div></div>
     <p id="td-error" class="error" role="alert" hidden></p>
-    <p class="estado-sec" id="td-nicho"></p>
     <div id="td-cuerpo" hidden>
       <p class="td-resumen" id="td-resumen"></p>
       <div class="td-cifras" id="td-cifras"></div>
@@ -194,14 +180,12 @@
         <div><h3 class="td-titulo">Consejos</h3><ul id="td-consejos"></ul></div>
         <div><h3 class="td-titulo">Mejor evitar</h3><ul id="td-evitar"></ul></div>
       </div>
-      <details class="td-rapidos"><summary>Los vídeos que más rápido crecen hoy</summary><ol id="td-rapidos" class="fuentes"></ol></details>
     </div>
   </section>
 
   <!-- Pestañas de ejecución sin producción lista -->
   <section id="sin-prod" class="tarjeta vacia" hidden>
-    <h2>Aquí aún no hay nada que hacer</h2>
-    <p>Flow, Render y Entregas se activan cuando apruebas un guion. Empieza en Crear o abre una de tus producciones.</p>
+    <h2>Sin producción abierta</h2>
     <a class="primario" href="#crear">Ir a Crear <svg width="16" height="16"><use href="#i-flecha"/></svg></a>
   </section>
 
@@ -235,27 +219,13 @@
           <span class="paso-de">Paso 1 de 3</span>
           <h2>Genera las escenas en Flow <span class="meta" id="e-cuenta"></span></h2>
           <p class="meta" id="reparto"></p>
-          <div class="guia-cajas">
-            <div><b>Qué haces</b><p>Genera cada escena en Flow como se indica (vídeo o imagen), descárgala y déjala en tu carpeta de clips con su número.</p></div>
-            <div><b>Qué pasa</b><p>STUDIO la coloca sola en su escena. Si dejas varias tomas, eliges la mejor con un clic.</p></div>
-            <div><b>Consejo</b><p>Intercala vídeo e imagen como se recomienda: el vídeo respira mejor y gastas menos créditos de Flow.</p></div>
-          </div>
         </div>
-        <div class="guia-acciones"><button class="primario" id="pedir-tipos" hidden title="Gemini decide qué escenas conviene hacer en vídeo y cuáles en imagen">Recomendar vídeo o imagen</button><button class="boton" id="abrir-flow" title="Abre Google Flow en una ventana a la derecha de la pantalla">Abrir Flow al lado ↗</button></div>
+        <div class="guia-acciones"><button class="primario" id="pedir-tipos" hidden title="Gemini decide qué escenas conviene hacer en vídeo y cuáles en imagen">Recomendar vídeo o imagen</button><button class="boton" id="abrir-flow" title="Abre Google Flow en una ventana a la derecha">Abrir Flow</button></div>
       </div>
-      <div class="carpeta-caja">
-        <div><b>Tu carpeta de esta producción</b><span id="carpeta-ruta"></span>
-          <small id="carpeta-como">Descarga cada clip de Flow y déjalo en la carpeta de clips con el nombre del vídeo y su escena. Entra solo.</small></div>
-        <div class="fila" style="margin-top:0"><button class="primario" data-abrir="1 Clips de Flow">Abrir carpeta de clips</button>
-          <button class="boton" data-abrir="">Abrir carpeta</button></div>
-      </div>
-      <p id="ext-vieja" class="error" hidden>La extensión cargada en el navegador es una versión antigua: abre chrome://extensions, pulsa ↻ en «STUDIO #4 · Google Flow» y recarga la pestaña de Flow.</p>
-      <div id="avisos" class="avisos" hidden></div>
+      <div class="fila carpeta-botones"><button class="primario" data-abrir="1 Clips de Flow">Abrir carpeta de clips</button>
+        <button class="boton" data-abrir="">Abrir carpeta</button></div>
+      <p id="ext-vieja" class="error" hidden>Extensión de Flow antigua: recárgala en chrome://extensions.</p>
       <div id="escenas" class="escenas"></div>
-      <details id="ext-registro" class="registro">
-        <summary>Lo que ve la extensión en Flow <span class="meta" id="ext-resumen"></span></summary>
-        <ol id="ext-eventos"></ol>
-      </details>
     </section>
 
     <!-- 2 · Render -->
@@ -264,22 +234,15 @@
         <div class="guia-cuerpo">
           <span class="paso-de">Paso 2 de 3</span>
           <h2>Monta el vídeo</h2>
-          <div class="guia-cajas">
-            <div><b>Qué haces</b><p>Prueba hasta 3 voces y quédate con la mejor; ajusta los subtítulos mirando la vista previa.</p></div>
-            <div><b>Qué pasa</b><p>STUDIO une los clips con la voz, el sonido de Flow y los subtítulos, en tu PC y gratis.</p></div>
-            <div><b>Consejo</b><p>Si cambias una toma o los subtítulos, vuelve a pulsar Renderizar: tarda un par de minutos.</p></div>
-          </div>
         </div>
         <div class="guia-acciones"><button class="primario" id="r-boton">Renderizar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
-      <p class="estado-sec" id="r-falta"></p>
       <div class="ajustes-render">
         <div>
-          <p class="meta">Voz <span id="v-info"></span></p>
+          <p class="meta">Voz</p>
           <audio id="v-audio" controls preload="none"></audio>
           <div class="fila"><select id="v-proveedor" class="campo"></select><button id="v-rehacer" class="boton">Rehacer voz</button></div>
           <div class="probar-voces">
-            <p class="meta">Prueba voces: marca hasta 3, escucha el principio de tu guion con cada una y quédate con la mejor.</p>
             <div class="voces-lista" id="v-lista"></div>
             <div class="fila"><button class="boton" id="v-probar" disabled>Escuchar muestras</button><span class="meta" id="v-cuenta"></span></div>
             <div class="muestras-voz" id="v-muestras"></div>
@@ -299,14 +262,13 @@
         </div>
       </div>
       <div class="vista-subs">
-        <p class="meta">Así se verán (fotograma real de tu vídeo, con los ajustes de arriba)</p>
+        <p class="meta">Vista previa</p>
         <img id="s-vista" alt="Vista previa de los subtítulos">
       </div>
       <div id="r-final" class="final" hidden>
         <video id="r-video" controls preload="metadata"></video>
         <div style="display:grid;gap:10px;align-content:start">
           <a id="r-descargar" class="primario" download>Descargar MP4</a>
-          <p class="meta">Voz, sonido ambiente de Veo bajo la voz y subtítulos, montado en tu PC.</p>
         </div>
       </div>
     </section>
@@ -317,18 +279,12 @@
         <div class="guia-cuerpo">
           <span class="paso-de">Paso 3 de 3</span>
           <h2>Entregas</h2>
-          <div class="guia-cajas">
-            <div><b>Qué haces</b><p>Prepara los 3 formatos y revisa sus títulos y descripciones; elige la miniatura viéndola montada.</p></div>
-            <div><b>Qué pasa</b><p>Se montan el vídeo completo, el Reels (mejor momento) y los Shorts (mejores recortes), subtitulados, en tu carpeta «3 Entregas».</p></div>
-            <div><b>Consejo</b><p>Una miniatura funciona con un sujeto grande y 2-4 palabras que den curiosidad.</p></div>
-          </div>
         </div>
         <div class="guia-acciones"><button class="primario" id="m-generar">Generar miniaturas <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
       </div>
-      <p class="estado-sec" id="m-info"></p>
       <div class="paquete">
         <div class="paquete-cab">
-          <div><b>Paquete para publicar</b><span class="meta" id="pq-info">Vídeo completo, Reels (el mejor momento) y Shorts (los mejores recortes), subtitulados y con sus textos.</span></div>
+          <div><b>Paquete para publicar</b><span class="meta" id="pq-info"></span></div>
           <div class="fila" style="margin-top:0"><button class="primario" id="pq-preparar">Preparar los 3 formatos <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
             <button class="boton" data-abrir="3 Entregas" id="pq-carpeta" hidden>Abrir carpeta de entregas</button></div>
         </div>
@@ -344,14 +300,14 @@
               <input id="m-resalte" class="campo" style="width:150px" maxlength="30" placeholder="Palabra en amarillo">
               <button class="boton" id="m-aplicar">Aplicar</button>
             </div>
-            <p class="meta" style="margin-top:14px">Otros textos, ya montados (clic para usarlo)</p>
+            <p class="meta" style="margin-top:14px">Otros textos</p>
             <div class="alternativas" id="m-alternativas"></div>
           </div>
           <div>
-            <p class="meta">Imagen de fondo <span class="faint">· clic para usar otra</span></p>
+            <p class="meta">Fondo</p>
             <div class="tomas" id="m-candidatos" style="margin-top:6px"></div>
             <div class="fila">
-              <button class="boton" id="m-flow" title="Copia un prompt para generar la imagen en Flow; lo que generes llega aquí">Generar la imagen en Flow</button>
+              <button class="boton" id="m-flow" title="Copia el prompt del fondo para Flow">Fondo en Flow</button>
               <label class="boton">Subir imagen<input type="file" accept="image/*" id="m-subir" hidden></label>
             </div>
           </div>
@@ -360,7 +316,6 @@
       <div class="textos">
         <div class="copiable"><div class="cab"><span class="meta">Título</span><button class="boton" data-copiar="pub-titulo">Copiar</button></div><p id="pub-titulo"></p></div>
         <div class="copiable"><div class="cab"><span class="meta">Descripción y hashtags</span><button class="boton" data-copiar="pub-desc">Copiar</button></div><p id="pub-desc"></p></div>
-        <details><summary>Biblia visual (lo que no cambia entre escenas)</summary><div id="pub-biblia"></div></details>
       </div>
     </section>
   </div>
@@ -371,13 +326,11 @@
     <div class="cabeza" style="margin-bottom:0"><h2>Ajustes</h2><button class="redondo" id="cerrar-ajustes" title="Cerrar" aria-label="Cerrar ajustes">✕</button></div>
     <section class="ajustes-seccion">
       <h3>Canales</h3>
-      <p class="meta">Cada canal tiene sus producciones, su carpeta en Vídeos\STUDIO 4 y sus redes. Nada se mezcla entre canales. Las redes se leen, no se publica nada.</p>
       <div class="canales-lista" id="canales-lista"></div>
       <div class="fila"><button class="boton" id="canal-nuevo" type="button">Añadir canal</button></div>
     </section>
     <section class="ajustes-seccion">
       <h3>Tema</h3>
-      <p class="meta">Elige el fondo y los colores del panel. Se guarda en este navegador.</p>
       <div class="temas" id="temas"></div>
     </section>
   </aside>

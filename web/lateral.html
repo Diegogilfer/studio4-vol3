@@ -15,13 +15,13 @@
 </header>
 
 <main class="l-main">
-  <p id="l-vacio" class="meta" hidden>No hay ninguna producción abierta. Crea una en <a href="/" target="_blank">STUDIO</a>.</p>
+  <p id="l-vacio" class="meta" hidden>Sin producción abierta.</p>
   <div id="l-trabajo" class="trabajo" role="status" aria-live="polite" hidden>
     <div class="trabajo-txt"><span id="l-fase"></span><span id="l-pct"></span></div>
     <div class="progreso"><div id="l-barra"></div></div>
   </div>
   <p id="l-error" class="error" role="alert" hidden></p>
-  <p id="l-vieja" class="error" hidden>Extensión antigua: en chrome://extensions pulsa ↻ y recarga la pestaña de Flow.</p>
+  <p id="l-vieja" class="error" hidden>Extensión de Flow antigua: recárgala en chrome://extensions.</p>
 
   <section id="l-ahora" class="l-ahora" hidden>
     <div class="escena-cab"><b id="l-ahora-tit"></b><span id="l-ahora-est" class="escena-estado"></span></div>
@@ -33,10 +33,8 @@
     </div>
     <div id="l-ref" class="l-ref" hidden>
       <img id="l-ref-img" alt="">
-      <div><button id="l-copiar-ref" class="boton">Copiar imagen inicial</button>
-        <p class="meta">Pégala en Flow (Ctrl+V) en «Fotogramas a vídeo» para que la escena encaje con la anterior.</p></div>
+      <div><button id="l-copiar-ref" class="boton">Copiar imagen inicial</button></div>
     </div>
-    <p class="meta" id="l-nota">Copia, pega en Flow y genera: el clip llegará solo aquí.</p>
   </section>
 
   <section>
@@ -46,11 +44,11 @@
 
   <section class="l-pie">
     <button id="l-render" class="primario">Renderizar vídeo</button>
-    <a class="boton" href="/" target="_blank">Abrir STUDIO completo ↗</a>
+    <a class="boton" href="/" target="_blank">Abrir STUDIO</a>
   </section>
 
   <details id="l-registro" class="registro">
-    <summary>Lo que ve la extensión</summary>
+    <summary>Registro</summary>
     <ol id="l-eventos"></ol>
   </details>
 </main>
