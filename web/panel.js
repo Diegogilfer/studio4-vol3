@@ -568,6 +568,25 @@ function portada(e) {
   return `<div class="sin-portada"></div>`;   // en negro hasta que llegue su clip
 }
 
+// Personajes: un retrato por personaje, generado una vez en Flow y usado como ingrediente en cada escena.
+function pintarFichas(fichas) {
+  $("fichas").hidden = !fichas?.length;
+  $("fichas").innerHTML = fichas?.length ? `<div class="fichas-cab"><b>Personajes</b>
+      <span class="meta">Genera su retrato una vez en Flow y añádelo como ingrediente en cada escena: misma cara, plano distinto.</span></div>
+    <div class="fichas-lista">${fichas.map((f, i) => `<div class="ficha"><b>${esc(f.nombre)}</b>
+      <button class="boton" type="button" data-ficha="${i}">Copiar prompt del retrato</button></div>`).join("")}
+      <button class="boton" type="button" data-afinar="1">Afinar personajes</button></div>` : "";
+}
+$("fichas").addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-afinar]")) {
+    try { await api("/api/personajes/afinar", {}); await refrescar(); } catch (e) { aviso(e); }
+    return;
+  }
+  const b = ev.target.closest("[data-ficha]");
+  if (!b) return;
+  await navigator.clipboard.writeText(estado.produccion.fichas[Number(b.dataset.ficha)].prompt);
+  b.textContent = "Copiado"; setTimeout(() => { b.textContent = "Copiar prompt del retrato"; }, 1500);
+});
 // Vídeo: los segundos de clip a pedir en Flow (los de su voz, entre 4 y 8). Imagen: lo que estará en pantalla.
 const duracionEscena = (e) => (e.tipo_clip === "imagen" ? `${String(e.segundos).replace(".", ",")} s en pantalla`
   : `clip de ${Math.min(8, Math.max(4, Math.ceil(e.segundos)))} s`);
@@ -1080,6 +1099,7 @@ async function refrescar() {
   siCambia("cabecera", { p: { ...p, trabajo: null } }, () => pintarCabecera(p));
   siCambia("extension", [d.extension.conectada, d.extension.desactualizada], () => pintarExtension(d.extension));
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
+  siCambia("fichas", p.fichas || [], pintarFichas);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
   siCambia("voces", { id: p.id, voces: o.voces_gemini, actual: p.voz_nombre || o.voz_por_defecto, muestras: p.muestras_voz,
     marcadas: [...vocesMarcadas] }, (x) => pintarVoces(x));

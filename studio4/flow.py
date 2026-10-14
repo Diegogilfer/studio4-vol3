@@ -206,7 +206,8 @@ def sesion_para_extension() -> dict[str, Any]:
             "escena": activa["orden"], "estado": "esperando", "prompt": activa["prompt_flow"],
             "tipo": activa.get("tipo_clip", "video"), "motivo": activa.get("motivo_tipo", ""),
             "voz": activa["texto_voz"],
-            "referencia": _referencia(pid, previa) if previa else None,
+            # La imagen inicial fuerza el mismo plano: solo cuando la escena sigue a la anterior sin corte.
+            "referencia": _referencia(pid, previa) if previa and activa.get("continua") else None,
             "referencia_de": f"el final de la escena {previa['orden']}" if previa else "",
         },
     }

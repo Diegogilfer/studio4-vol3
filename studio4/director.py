@@ -24,7 +24,8 @@ PALABRAS_MAX_ESCENA = 18   # ~7,5 s de voz: cabe en un clip sin cámara lenta
 
 class Personaje(BaseModel):
     nombre: str = Field(description="Nombre corto en MAYÚSCULAS para referirse a él (ej. 'LEO').")
-    aspecto_en: str = Field(description="Aspecto fijo en inglés: edad, rasgos, pelo, ropa exacta y un detalle distintivo.")
+    aspecto_en: str = Field(description="Ficha visual fija en inglés, 40-70 palabras: edad, origen, rostro, pelo, ojos, "
+                                        "complexión, ropa exacta con colores y materiales y un detalle distintivo. Sin pose ni encuadre.")
 
 
 class Biblia(BaseModel):
@@ -39,7 +40,10 @@ class Escena(BaseModel):
     plano_en: str = Field(description="Tipo de plano en inglés: extreme wide, wide, medium, medium close-up, close-up, macro, aerial, POV...")
     camara_en: str = Field(description="Movimiento de cámara en inglés: slow dolly-in, tracking shot, crane up, orbit, static, handheld push...")
     accion_en: str = Field(description="Qué se VE en inglés: sujeto (nombres de la biblia) + acción visible y concreta + lugar + composición.")
-    personajes: list[str] = Field(default_factory=list, description="Nombres de la biblia que salen en esta escena.")
+    personajes: list[str] = Field(default_factory=list, description="TODOS los nombres de la biblia que se ven en esta escena, "
+                                                                     "aunque sea de espaldas, lejos o solo sus manos.")
+    continua: bool = Field(default=False, description="true SOLO si este plano sigue al anterior sin corte: mismo sitio, mismo "
+                                                      "personaje y la acción continúa. Casi siempre false.")
     texto_pantalla: str = Field(default="", description="2 a 5 palabras impactantes para rotular (puede quedar vacío).")
     tono_voz: str = Field(default="narrativo", description="Cómo se DICE esta escena, según la historia y lo que se ve: "
                                                           "narrativo, intrigante, tenso, emocionante, cinematografico, intimo, "
@@ -75,10 +79,12 @@ REGLAS:
 2. Cada escena: entre 8 y {PALABRAS_MAX_ESCENA} palabras de voz (corta siempre en final de frase o de coma).
 3. Lo que se narra tiene que VERSE: si la voz dice "su radar falla", el plano muestra el radar fallando.
 4. accion_en describe UNA acción continua que se pueda rodar en {SEGUNDOS_CLIP} s, con sujeto, lugar y composición.
-   Usa los nombres de la biblia para los personajes; no repitas su aspecto (se añade solo).
+   Usa los nombres de la biblia para los personajes; no repitas su aspecto (se añade solo). Cada escena con un
+   personaje muestra una postura y una acción distintas a la anterior: nunca «de pie mirando» dos veces seguidas.
 5. Alterna planos (no dos close-ups seguidos) y elige un movimiento de cámara que sume emoción.
 6. Nunca pidas texto, letras, logotipos, subtítulos ni pantallas divididas dentro de la imagen.
-7. La biblia visual define lo que NO cambia entre escenas: escenario, luz, paleta y personajes con ropa exacta.
+7. La biblia visual define lo que NO cambia entre escenas: escenario, luz, paleta y personajes con ficha exacta
+   (identidad y ropa; nunca pose, gesto ni encuadre). Si te dan un REPARTO, cada ficha se traduce al inglés tal cual.
 8. DIRECCIÓN DE VOZ: eres también director de locución. Para cada escena elige tono_voz y ritmo_voz según el
    arco (presentación → tensión → giro → clímax → cierre) y lo que se ve en el plano: misterio = intrigante o
    tenso y lento; revelación o acción = emocionante y rápido; plano épico o clímax = cinematografico; dato
@@ -100,14 +106,20 @@ def _prompt_flow(esc: dict[str, Any], biblia: dict[str, Any], estilo: str, aspec
     Para imagen pide una foto fija (sin movimiento de cámara); para vídeo, un plano de los segundos que dura su voz
     (máximo 8), con la acción repartida en ese tiempo."""
     imagen = esc.get("tipo_clip") == "imagen"
-    looks = {p["nombre"].upper(): p["aspecto_en"].strip().rstrip(".") for p in biblia.get("personajes", [])}
+    looks = {p["nombre"].upper(): _aspecto(p) for p in biblia.get("personajes", [])}
     salen = [n.upper() for n in esc.get("personajes", []) if n.upper() in looks]
+    if not salen:   # Gemini olvidó apuntarlo: si la acción nombra o señala a alguien, va su ficha igualmente
+        accion = f" {esc.get('accion_en', '')} ".lower()
+        salen = [n for n in looks if n.lower() in accion]
+        if not salen and len(looks) == 1 and re.search(r"\b(he|she|him|her|his|man|woman|boy|girl|guy|person|protagonist)\b", accion):
+            salen = list(looks)
     if imagen:
         partes = [f"{esc['plano_en'].strip().capitalize()}. {esc['accion_en'].strip().rstrip('.')}."]
     else:
         partes = [f"{esc['plano_en'].strip().capitalize()}, {esc['camara_en'].strip()}. {esc['accion_en'].strip().rstrip('.')}."]
     if salen:
-        partes.append("Characters: " + "; ".join(f"{n} is {looks[n]}" for n in salen) + ".")
+        partes.append("Characters (keep exactly the same face, hair and clothes in every shot): "
+                      + "; ".join(f"{n} is {looks[n]}" for n in salen) + ".")
     partes.append(f"Setting: {biblia.get('escenario_en', '').strip().rstrip('.')}.")
     partes.append(f"Lighting: {biblia.get('luz_en', '').strip().rstrip('.')}. Palette: {biblia.get('paleta_en', '').strip().rstrip('.')}.")
     partes.append(f"Style: {estilo}.")
@@ -161,6 +173,43 @@ def recomendar_tipos(escenas: list[dict[str, Any]], biblia: dict[str, Any], esti
             e["prompt_flow"] = _prompt_flow(e, biblia, estilo_en, aspecto)
 
 
+def _aspecto(p: dict[str, Any]) -> str:
+    """La ficha sin el nombre repetido delante («GUY: A man…» → «A man…»)."""
+    return re.sub(rf"^\s*{re.escape(p['nombre'])}\s*[:\-–]\s*", "", p["aspecto_en"].strip(), flags=re.I).rstrip(".")
+
+
+class Fichas(BaseModel):
+    personajes: list[Personaje]
+
+
+def afinar_personajes(guion: str, biblia: dict[str, Any], reparto: list[dict[str, str]] | None = None,
+                      produccion: str = "") -> list[dict[str, Any]]:
+    """Rehace solo las fichas de los personajes (más precisas, sin poses ni objetos en la mano) sin tocar las
+    escenas: sirve para producciones que ya están en Flow."""
+    actuales = "\n".join(f"- {p['nombre']}: {p['aspecto_en']}" for p in biblia.get("personajes", []))
+    extra = ("\n\nREPARTO DEL GUIONISTA:\n" + "\n".join(f"- {r['nombre']}: {r['ficha']}" for r in reparto)) if reparto else ""
+    crudo = gemini.generar(
+        f"Personajes actuales (mismos nombres, en mayúsculas):\n{actuales}{extra}\n\n--- GUION ---\n{guion}\n--- FIN ---\n\n"
+        "Reescribe la ficha visual de CADA personaje para que un generador de vídeo lo dibuje idéntico en todas las escenas: "
+        "en inglés, 40-70 palabras, con edad, origen, forma del rostro, pelo (color, largo, peinado), ojos, complexión, ropa "
+        "exacta con colores y materiales, calzado y un detalle distintivo. Prohibido: pose, gesto, encuadre, lugar u objetos "
+        "en la mano (eso cambia en cada escena). No cambies a nadie: precisa lo que ya es.",
+        esquema=Fichas, temperatura=0.3, detalle="afinar personajes", produccion=produccion)
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    nuevas = {p.nombre.upper(): p.aspecto_en for p in Fichas.model_validate_json(m.group(0) if m else crudo).personajes}
+    return [{**p, "aspecto_en": nuevas.get(p["nombre"].upper(), p["aspecto_en"])} for p in biblia.get("personajes", [])]
+
+
+def fichas(biblia: dict[str, Any], estilo: str) -> list[dict[str, str]]:
+    """Un prompt por personaje para generar UNA vez su retrato de referencia en Flow y usarlo como ingrediente
+    en cada escena: Flow mantiene la cara y la ropa sin copiar el plano (a diferencia de la imagen inicial)."""
+    return [{"nombre": p["nombre"].upper(),
+             "prompt": (f"Character reference portrait of {p['nombre'].upper()}: {_aspecto(p)}. "
+                        f"Full body, front view, relaxed neutral stance, plain light grey studio background, soft even light. "
+                        f"Style: {estilo}. Single still photograph. No text, no letters.")}
+            for p in biblia.get("personajes", []) if p.get("nombre") and p.get("aspecto_en")]
+
+
 def poner_duraciones(escenas: list[dict[str, Any]], tiempos: list[dict[str, Any]], biblia: dict[str, Any],
                      estilo_en: str, aspecto: str) -> None:
     """Con la voz ya grabada, cada escena sabe lo que dura de verdad: se apunta y su prompt pide ese tiempo
@@ -176,7 +225,8 @@ def _palabras(texto: str) -> list[str]:
 
 
 def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
-               titulos_existentes: list[str] | None = None, referencias_visuales: list[str] | None = None) -> dict[str, Any]:
+               titulos_existentes: list[str] | None = None, referencias_visuales: list[str] | None = None,
+               reparto: list[dict[str, str]] | None = None) -> dict[str, Any]:
     estilo_en = config.ESTILOS.get(estilo, estilo)
     aspecto = config.FORMATOS[formato]["aspecto"]
     prompt = (
@@ -184,9 +234,13 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
         f"({'sujeto centrado y alto' if aspecto == '9:16' else 'deja aire a los lados'})\n\n"
         f"--- GUION ---\n{guion}\n--- FIN ---"
     )
+    if reparto:
+        prompt += ("\n\nREPARTO FIJO (estos son los personajes: usa su ficha, traducida al inglés sin cambiar nada, en la biblia):\n"
+                   + "\n".join(f"- {r['nombre']}: {r['ficha']}" for r in reparto))
     if referencias_visuales:
-        prompt += ("\n\nFOTOS DE REFERENCIA DEL AUTOR (los personajes, lugares y objetos del vídeo deben parecerse a esto: "
-                   "cópialo en la biblia visual):\n" + "\n".join(f"- Foto {i}: {d}" for i, d in enumerate(referencias_visuales, 1)))
+        prompt += ("\n\nFOTOS DE REFERENCIA DEL AUTOR: copia en la biblia la IDENTIDAD (rostro, pelo, edad, complexión, ropa) "
+                   "de las personas y el aspecto de lugares y objetos. NUNCA copies su pose, gesto ni encuadre: cada escena "
+                   "tiene su propio plano.\n" + "\n".join(f"- Foto {i}: {d}" for i, d in enumerate(referencias_visuales, 1)))
     if titulos_existentes:
         prompt += ("\n\nTÍTULOS QUE YA EXISTEN EN YOUTUBE SOBRE ESTO (el tuyo tiene que ser claramente distinto, "
                    "con otro ángulo o un detalle concreto del guion):\n" + "\n".join(f"- {t}" for t in titulos_existentes[:8]))

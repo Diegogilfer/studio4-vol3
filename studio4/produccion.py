@@ -49,6 +49,12 @@ def cargar(pid: str) -> dict[str, Any]:
         else:
             for e in p["escenas"]:
                 e.setdefault("segundos", round(len(e["texto_voz"].split()) / guion.PALABRAS_POR_SEGUNDO, 1))
+    if p.get("escenas") and p.get("biblia"):
+        aspecto = config.FORMATOS[p["formato"]]["aspecto"]
+        for e in p["escenas"]:
+            if not e.get("prompt_editado") and e.get("plano_en") and e.get("accion_en"):
+                e["prompt_flow"] = director._prompt_flow(e, p["biblia"], p.get("estilo_en", ""), aspecto)
+        p["fichas"] = director.fichas(p["biblia"], p.get("estilo_en", ""))
     return p
 
 
@@ -162,6 +168,7 @@ _QUE_FALLO = {
     "Vídeo o imagen": "No se pudo decidir qué escenas van en vídeo o imagen",
     "Miniaturas": "No se pudieron crear las miniaturas",
     "Imágenes por API": "No se pudieron generar las imágenes",
+    "Personajes": "No se pudieron afinar los personajes",
 }
 
 
@@ -301,7 +308,7 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     for pid in pids:
         v = cargar(pid)["version"]
         modificar(pid, lambda p: p.update(
-            guion=escrito[v]["guion"], ganchos=escrito[v]["ganchos"], autor_guion=escrito["autor"],
+            guion=escrito[v]["guion"], ganchos=escrito[v]["ganchos"], autor_guion=escrito["autor"], reparto=escrito["reparto"],
             titulo=p.get("titulo") or escrito["titulo_provisional"], estado="guion_listo", guion_aprobado=False))
 
 
@@ -334,6 +341,19 @@ def reintentar(pid: str) -> None:
         recomendar_tipos(pid)
     else:
         raise ValueError("Ese paso se relanza desde su propio botón.")
+
+
+def afinar_personajes(pid: str) -> None:
+    """Fichas de personaje más precisas para una producción ya planificada (no toca escenas ni clips)."""
+    p = cargar(pid)
+    if not (p.get("biblia") or {}).get("personajes"):
+        raise ValueError("Esta producción no tiene personajes.")
+
+    def fase():
+        _avisar(pid, "Afinando los personajes", 30)
+        nuevos = director.afinar_personajes(p["guion"], p["biblia"], p.get("reparto"), produccion=pid)
+        modificar(pid, lambda q: q["biblia"].update(personajes=nuevos))
+    _en_fondo(pid, "Personajes", fase)
 
 
 def reescribir_guion(pid: str) -> None:
@@ -388,7 +408,7 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
         competencia = ((q.get("investigacion") or {}).get("youtube") or {}).get("competencia") or []
         plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid,
                                    titulos_existentes=[v["titulo"] for v in competencia],
-                                   referencias_visuales=referencias.visuales(refs))
+                                   referencias_visuales=referencias.visuales(refs), reparto=q.get("reparto") or [])
 
         def aplicar(r):
             r.update(titulo=plan["titulo"], descripcion=plan["descripcion"], hashtags=plan["hashtags"],

@@ -45,10 +45,16 @@ HECHO PARA VÍDEO
 
 CORTO (Shorts y Reels): un solo hilo, tensión constante, sin introducción, cierre con giro o dato que
 reencuadre el inicio, y como mucho UNA frase final de llamada a la acción, natural.
+REPARTO (no se narra): para cada persona o personaje que aparece en la historia, escribe su ficha visual para
+que el vídeo la dibuje SIEMPRE igual: edad aproximada, origen, rostro, pelo (color, largo, peinado), ojos,
+complexión, ropa exacta con colores y materiales, y un detalle distintivo. 40 a 70 palabras cada una, sin
+adjetivos vagos («normal», «guapo»). Si es una persona real, su aspecto real en la época de la historia.
+
 LARGO (YouTube): 4-6 bloques con un mini-gancho al empezar cada bloque, una historia o caso real como hilo,
 contexto, giro y cierre que conecte con el principio; termina invitando a un tema relacionado. Sin títulos.
 
-Devuelve JSON: {{"titulo_provisional": "...", "<versión>": {{"guion": "...", "ganchos": ["...", "...", "..."]}}}}
+Devuelve JSON: {{"titulo_provisional": "...", "reparto": [{{"nombre": "...", "ficha": "..."}}],
+"<versión>": {{"guion": "...", "ganchos": ["...", "...", "..."]}}}}
 donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste)."""
 
 
@@ -107,7 +113,9 @@ def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str
         m = re.search(r"\{.*\}", crudo, re.DOTALL)
         datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
 
-    salida: dict[str, Any] = {"titulo_provisional": str(datos.get("titulo_provisional", "")).strip(), "autor": autor}
+    salida: dict[str, Any] = {"titulo_provisional": str(datos.get("titulo_provisional", "")).strip(), "autor": autor,
+                              "reparto": [{"nombre": str(r.get("nombre", "")).strip()[:40], "ficha": str(r.get("ficha", "")).strip()[:600]}
+                                          for r in datos.get("reparto") or [] if isinstance(r, dict) and r.get("nombre")][:4]}
     for v, seg in versiones.items():
         bloque = datos.get(v) or {}
         texto = _limpiar(str(bloque.get("guion", "")))

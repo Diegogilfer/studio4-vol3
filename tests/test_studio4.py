@@ -357,7 +357,7 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
 
 def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
     [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
-    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None: {
+    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None, reparto=None: {
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
         "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
@@ -738,3 +738,27 @@ def test_duracion_de_cada_escena_en_el_prompt():
     assert "continuous 6-second shot" in escenas[0]["prompt_flow"]
     assert "second" not in escenas[1]["prompt_flow"] and "Single still photograph" in escenas[1]["prompt_flow"]
     assert escenas[2]["prompt_flow"] == "mi prompt"        # el que editaste a mano no se toca
+
+
+# --- Personajes coherentes ------------------------------------------------------------------------------
+def test_personaje_siempre_en_su_prompt_y_ficha_sin_nombre_repetido():
+    biblia = {"personajes": [{"nombre": "GUY", "aspecto_en": "GUY: A man in his 30s, short brown hair, light blue shirt."}],
+              "escenario_en": "Free City", "luz_en": "sunny", "paleta_en": "blue"}
+    olvidado = {"tipo_clip": "video", "plano_en": "wide shot", "camara_en": "tracking", "accion_en": "He walks past a burning car",
+                "personajes": []}
+    prompt = director._prompt_flow(olvidado, biblia, "cine", "16:9")
+    assert "keep exactly the same face" in prompt and "GUY is A man in his 30s" in prompt and "GUY: A man" not in prompt
+    sin_gente = {**olvidado, "accion_en": "A burning car on an empty street"}
+    assert "Characters" not in director._prompt_flow(sin_gente, biblia, "cine", "16:9")
+    f = director.fichas(biblia, "cine")
+    assert f[0]["nombre"] == "GUY" and f[0]["prompt"].startswith("Character reference portrait of GUY: A man in his 30s")
+
+
+def test_imagen_inicial_solo_si_la_escena_continua(aislado, monkeypatch):
+    from studio4 import flow
+    p = _produccion("20261014-100000-npc", escenas=3)
+    monkeypatch.setattr(flow, "_referencia", lambda pid, esc: "/media/x/fin.jpg")
+    produccion.modificar(p["id"], lambda q: q.update(escena_activa=2))
+    assert flow.sesion_para_extension()["siguiente"]["referencia"] is None          # escena nueva: plano libre
+    produccion.modificar(p["id"], lambda q: q["escenas"][1].update(continua=True))
+    assert flow.sesion_para_extension()["siguiente"]["referencia"] == "/media/x/fin.jpg"   # sigue sin corte

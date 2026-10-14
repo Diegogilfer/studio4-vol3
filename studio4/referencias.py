@@ -114,8 +114,9 @@ def soltar_espera(items: list[dict[str, Any]]) -> None:
 
 # --- Estudio con Gemini ---------------------------------------------------------------------------
 FOTO = """Describe esta foto para un guionista y para un generador de imágenes. En español, 3 a 5 frases:
-quién o qué aparece, su aspecto (edad, rasgos, ropa, colores), el lugar y la época, la luz, y el texto legible si
-hay. Solo lo que se ve; no inventes nombres."""
+quién o qué aparece y su IDENTIDAD (edad, rasgos del rostro, pelo, ojos, complexión, ropa con colores), el lugar y
+la época, la luz, y el texto legible si hay. No describas la pose, el gesto ni el encuadre: eso cambia en cada escena.
+Solo lo que se ve; no inventes nombres."""
 DOCUMENTO = """Extrae de este material lo útil para un guion de vídeo de divulgación: hechos, nombres, fechas, cifras
 y citas textuales importantes. En español, en viñetas breves, máximo 15. No añadas nada que no esté en el material."""
 
