@@ -17,7 +17,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (canales, carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, render, subtitulos, tendencias,
+from . import (canales, carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, referencias, render,
+               subtitulos, tendencias,
                visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -182,7 +183,7 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
 
 def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
           segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical",
-          tono: str = "", publico: str = "", voz_nombre: str = "") -> list[str]:
+          tono: str = "", publico: str = "", voz_nombre: str = "", refs: dict[str, Any] | None = None) -> list[str]:
     """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
     Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
     if proveedor_voz not in voz.PROVEEDORES:
@@ -198,9 +199,11 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
                voz_nombre=voz_nombre,
                version="propio", guion=texto, autor_guion="Tú",
                segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO))
+        _guardar_referencias([pid], refs)
         activar(pid)
         return [pid]
 
+    tono = tono or canales.activo().get("tono", "")   # sin elegir: el del canal, o el que pida el tema
     versiones = [v for v in config.VERSIONES if v in versiones]
     if not versiones:
         raise ValueError("Elige al menos una versión: corto o largo.")
@@ -212,12 +215,34 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
                estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando", voz_nombre=voz_nombre,
                tono=tono.strip()[:80], publico=publico.strip()[:80])
         pids.append(pid)
+    _guardar_referencias(pids, refs)
     activar(pids[0])
     _en_fondo(pids, "Investigación y guion", lambda: _investigar_y_escribir(pids, idea, segundos))
     return pids
 
 
+def _guardar_referencias(pids: list[str], refs: dict[str, Any] | None) -> None:
+    if not refs or not (refs["items"] or refs["enlaces"] or refs["datos"]):
+        return
+    for pid in pids:
+        modificar(pid, lambda p: p.update(referencias={**refs, "items": referencias.copiar_a(carpeta(pid), refs["items"])}))
+    referencias.soltar_espera(refs["items"])
+
+
+def _material(pids: list[str]) -> dict[str, Any] | None:
+    """Gemini estudia las referencias una sola vez (corto y largo comparten el resultado)."""
+    r = cargar(pids[0]).get("referencias")
+    if not r or r.get("material") is not None:
+        return r
+    _avisar(pids, "Gemini estudia tus referencias", 5)
+    material = referencias.estudiar(carpeta(pids[0]), r, produccion=pids[0])
+    for pid in pids:
+        modificar(pid, lambda p: p["referencias"].update(material=material))
+    return cargar(pids[0])["referencias"]
+
+
 def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int], dossier: dict | None = None) -> None:
+    refs = _material(pids)
     if dossier is None:
         _avisar(pids, "Gemini investiga el tema", 10)
         dossier = investigacion.investigar(idea, produccion=pids[0])
@@ -234,7 +259,8 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     versiones = {cargar(pid)["version"]: segundos[cargar(pid)["version"]] for pid in pids}
     p0 = cargar(pids[0])
     escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0],
-                             tono=p0.get("tono", ""), publico=p0.get("publico", ""), youtube=dossier.get("youtube"))
+                             tono=p0.get("tono", ""), publico=p0.get("publico", ""), youtube=dossier.get("youtube"),
+                             referencias=referencias.para_guion(refs))
     for pid in pids:
         v = cargar(pid)["version"]
         modificar(pid, lambda p: p.update(
@@ -288,11 +314,13 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
                                       final=None, miniaturas=None, avisos=[]))
 
     def fases():
+        refs = _material([pid])   # con tu propio guion, las referencias se estudian aquí
         _avisar(pid, "Gemini convierte el guion en escenas para Flow", 20)
         q = cargar(pid)
         competencia = ((q.get("investigacion") or {}).get("youtube") or {}).get("competencia") or []
         plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid,
-                                   titulos_existentes=[v["titulo"] for v in competencia])
+                                   titulos_existentes=[v["titulo"] for v in competencia],
+                                   referencias_visuales=referencias.visuales(refs))
 
         def aplicar(r):
             r.update(titulo=plan["titulo"], descripcion=plan["descripcion"], hashtags=plan["hashtags"],

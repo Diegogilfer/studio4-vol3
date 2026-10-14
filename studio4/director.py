@@ -156,7 +156,7 @@ def _palabras(texto: str) -> list[str]:
 
 
 def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
-               titulos_existentes: list[str] | None = None) -> dict[str, Any]:
+               titulos_existentes: list[str] | None = None, referencias_visuales: list[str] | None = None) -> dict[str, Any]:
     estilo_en = config.ESTILOS.get(estilo, estilo)
     aspecto = config.FORMATOS[formato]["aspecto"]
     prompt = (
@@ -164,6 +164,9 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
         f"({'sujeto centrado y alto' if aspecto == '9:16' else 'deja aire a los lados'})\n\n"
         f"--- GUION ---\n{guion}\n--- FIN ---"
     )
+    if referencias_visuales:
+        prompt += ("\n\nFOTOS DE REFERENCIA DEL AUTOR (los personajes, lugares y objetos del vídeo deben parecerse a esto: "
+                   "cópialo en la biblia visual):\n" + "\n".join(f"- Foto {i}: {d}" for i, d in enumerate(referencias_visuales, 1)))
     if titulos_existentes:
         prompt += ("\n\nTÍTULOS QUE YA EXISTEN EN YOUTUBE SOBRE ESTO (el tuyo tiene que ser claramente distinto, "
                    "con otro ángulo o un detalle concreto del guion):\n" + "\n".join(f"- {t}" for t in titulos_existentes[:8]))

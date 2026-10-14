@@ -257,8 +257,10 @@ function pintarResumen() {
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s (Shorts y Reels)`,
        $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
   const voz = $("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "";
-  const partes = propio ? [formatos, ESTILOS[estiloElegido][0], voz]
-    : [formatos, elegido("tono").split(",")[0], elegido("publico"), ESTILOS[estiloElegido][0], voz];
+  const nRefs = refs.items.length + refs.enlaces.length + ($("ref-datos").value.trim() ? 1 : 0);
+  const conRefs = nRefs ? `${nRefs} ${nRefs === 1 ? "referencia" : "referencias"}` : "";
+  const partes = propio ? [formatos, ESTILOS[estiloElegido][0], voz, conRefs]
+    : [formatos, elegido("publico"), ESTILOS[estiloElegido][0], voz, conRefs];
   $("a-resumen").innerHTML = partes.filter(Boolean).map((x) => `<b>${esc(x)}</b>`).join(" · ");
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
@@ -270,17 +272,81 @@ $("a-crear").addEventListener("click", async () => {
     versiones: ["corto", "largo"].filter((v) => $(`a-${v}`).checked),
     segundos: { corto: Number($("a-corto-s").value), largo: Math.round(Number($("a-largo-m").value) * 60) },
     formato: document.querySelector('input[name="formato"]:checked').value,
-    tono: elegido("tono"), publico: elegido("publico"), voz_nombre: vozElegida,
+    publico: elegido("publico"), voz_nombre: vozElegida,
+    referencias: { items: refs.items.map(({ id, tipo, nombre }) => ({ id, tipo, nombre })), enlaces: refs.enlaces, datos: $("ref-datos").value },
   };
   try {
     $("a-crear").disabled = true;
     await api("/api/producciones", datos);
-    $("a-idea").value = ""; $("a-guion").value = "";
+    $("a-idea").value = ""; $("a-guion").value = ""; vaciarRefs();
     empezarOtro = false; paso = 1;
     await refrescar();
   } catch (e) { aviso(e); } finally { $("a-crear").disabled = false; }
 });
 $("a-otro").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); });
+// Referencias del vídeo: fotos, documentos, enlaces (también Google Maps) y datos que no pueden faltar.
+const REF_LIMITE = { foto: 6, documento: 2, enlace: 3 };
+let refs = { items: [], enlaces: [] };   // items: {id, tipo, nombre, vista}
+const esMaps = (u) => /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|(www\.)?google\.[a-z.]+\/maps|maps\.google\.[a-z.]+)\//.test(u);
+function pintarRefs() {
+  const chips = refs.items.map((r, i) => `<div class="ref-chip ${r.tipo}">
+      ${r.tipo === "foto" ? `<img src="${r.vista}" alt="" width="44" height="44">` : `<svg width="20" height="20"><use href="#i-guion"/></svg>`}
+      <span>${esc(r.nombre)}</span><button type="button" class="ref-quitar" data-quitar-item="${i}" aria-label="Quitar ${esc(r.nombre)}">✕</button></div>`)
+    .concat(refs.enlaces.map((u, i) => `<div class="ref-chip de-enlace"><svg width="20" height="20"><use href="#${esMaps(u) ? "i-mapa" : "i-enlace"}"/></svg>
+      <span>${esc(esMaps(u) ? "Google Maps" : new URL(u).hostname.replace(/^www\./, ""))}</span>
+      <button type="button" class="ref-quitar" data-quitar-enlace="${i}" aria-label="Quitar enlace">✕</button></div>`));
+  $("ref-lista").innerHTML = chips.join("");
+  $("ref-lista").hidden = !chips.length;
+}
+async function subirRefs(archivos) {
+  for (const f of archivos) {
+    const tipo = f.type.startsWith("image/") ? "foto" : "documento";
+    if (refs.items.filter((r) => r.tipo === tipo).length >= REF_LIMITE[tipo]) { alertaError(`Como mucho ${REF_LIMITE[tipo]} ${tipo === "foto" ? "fotos" : "documentos"}.`); break; }
+    try {
+      const r = await api("/api/referencias", undefined, { method: "POST", body: f,
+        headers: { "Content-Type": f.type || "application/octet-stream", "X-Nombre": encodeURIComponent(f.name) } });
+      refs.items.push({ ...r, vista: tipo === "foto" ? URL.createObjectURL(f) : "" });
+      pintarRefs();
+    } catch (e) { aviso(e); }
+  }
+}
+function vaciarRefs() {
+  refs.items.forEach((r) => r.vista && URL.revokeObjectURL(r.vista));
+  refs = { items: [], enlaces: [] };
+  $("ref-datos").value = "";
+  pintarRefs();
+}
+function anadirEnlace() {
+  const u = $("ref-url").value.trim();
+  if (!/^https?:\/\/\S+$/.test(u)) return alertaError("Pega un enlace completo (https://…).");
+  if (refs.enlaces.length >= REF_LIMITE.enlace) return alertaError(`Como mucho ${REF_LIMITE.enlace} enlaces.`);
+  if (!refs.enlaces.includes(u)) refs.enlaces.push(u);
+  $("ref-url").value = "";
+  pintarRefs();
+}
+$("ref-fotos").addEventListener("change", (ev) => { subirRefs([...ev.target.files]); ev.target.value = ""; });
+$("ref-docs").addEventListener("change", (ev) => { subirRefs([...ev.target.files]); ev.target.value = ""; });
+$("ref-url-add").addEventListener("click", anadirEnlace);
+$("ref-url").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); anadirEnlace(); } });
+$("ref-lista").addEventListener("click", async (ev) => {
+  const b = ev.target.closest(".ref-quitar");
+  if (!b) return;
+  if (b.dataset.quitarEnlace !== undefined) refs.enlaces.splice(Number(b.dataset.quitarEnlace), 1);
+  else {
+    const [r] = refs.items.splice(Number(b.dataset.quitarItem), 1);
+    if (r.vista) URL.revokeObjectURL(r.vista);
+    api("/api/referencias/borrar", { id: r.id }).catch(() => {});
+  }
+  pintarRefs();
+});
+["dragover", "drop"].forEach((t) => $("referencias").addEventListener(t, (ev) => {
+  ev.preventDefault();
+  $("referencias").classList.toggle("soltando", t === "dragover");
+  if (t === "drop") subirRefs([...ev.dataTransfer.files]);
+}));
+$("referencias").addEventListener("dragleave", () => $("referencias").classList.remove("soltando"));
+pintarRefs();
+
 function nuevoVideo() {
   empezarOtro = true; paso = 1; pintarAsistente();
   $("nuevo-video").scrollIntoView({ behavior: "smooth", block: "start" });

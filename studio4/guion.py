@@ -53,7 +53,7 @@ donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste).
 
 
 def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = "", publico: str = "",
-              youtube: dict[str, Any] | None = None) -> str:
+              youtube: dict[str, Any] | None = None, referencias: str = "") -> str:
     partes = [f"Tema: {idea}"]
     if tono:
         partes.append(f"Tono: {tono}")
@@ -71,6 +71,9 @@ def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = ""
         partes += ["", f"LO QUE FUNCIONA HOY EN YOUTUBE, SHORTS Y REELS (tendencias del {t['fecha']}; úsalo para el ritmo y el gancho, no para cambiar el tema):",
                    f"- Corto: {t['duracion_corto']}", f"- Largo: {t['duracion_largo']}", f"- Títulos: {t['titulos']}"]
         partes += [f"- {c}" for c in t["consejos"]] + [f"- Evita: {e}" for e in t["evitar"]]
+    if referencias:
+        partes += ["", "--- MATERIAL QUE APORTA EL AUTOR (prioritario: úsalo; si choca con la investigación, manda esto) ---",
+                   referencias, "--- FIN DEL MATERIAL ---"]
     partes += ["", "--- DOSSIER DE INVESTIGACIÓN ---", dossier or "(sin investigación: usa solo hechos muy conocidos)",
               "--- FIN DEL DOSSIER ---", "", "Escribe estas versiones:"]
     for v, seg in versiones.items():
@@ -87,9 +90,9 @@ def _limpiar(texto: str) -> str:
 
 
 def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "", tono: str = "",
-             publico: str = "", youtube: dict[str, Any] | None = None) -> dict[str, Any]:
+             publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "") -> dict[str, Any]:
     """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
-    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube)
+    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias)
     if deepseek.disponible():
         datos, autor = deepseek.generar_json(SISTEMA, prompt, detalle="guion", produccion=produccion), "DeepSeek"
     else:

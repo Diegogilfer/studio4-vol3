@@ -283,7 +283,7 @@ summary { cursor: pointer; color: var(--fg-muted); font-size: 13px; }
 .pregunta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .pregunta > b, .pregunta-txt { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
 .acciones-paso { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
-.opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.opciones { display: grid; grid-template-columns: 1fr; gap: 16px; }
 @media (max-width: 800px) { .opciones { grid-template-columns: 1fr; } }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .chips button { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: rgb(238 241 246 / .03);
@@ -1092,3 +1092,25 @@ html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"
   .pc-kpi b { font-size: 32px; }
   .nav a { padding: 0 7px; } .canal-campo { max-width: 104px; }
 }
+
+/* Referencias del vídeo (paso 1) */
+.referencias { display: grid; gap: 12px; padding: 18px; border-radius: var(--r-caja); background: var(--caja);
+  border: var(--b-ancho) dashed var(--line-strong); transition: border-color .2s var(--ease), background .2s var(--ease); }
+.referencias.soltando { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--caja)); }
+.ref-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.ref-cab b { font-size: 15px; }
+.ref-botones { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ref-botones .boton { cursor: pointer; }
+.ref-enlace { display: flex; gap: 8px; flex: 1 1 320px; min-width: 0; }
+.ref-enlace .campo { flex: 1; min-width: 0; height: 36px; }
+.ref-lista { display: flex; gap: 8px; flex-wrap: wrap; }
+.ref-chip { display: flex; align-items: center; gap: 10px; max-width: 260px; padding: 6px 8px 6px 6px; border-radius: var(--r-campo);
+  background: var(--control); border: 1px solid var(--control-borde); }
+.ref-chip img { width: 44px; height: 44px; object-fit: cover; border-radius: calc(var(--r-campo) - 4px); flex: none; }
+.ref-chip svg { flex: none; color: var(--accent); margin-left: 6px; }
+.ref-chip span { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ref-quitar { flex: none; width: 26px; height: 26px; border-radius: 999px; border: 0; background: transparent; color: var(--fg-muted); cursor: pointer; }
+.ref-quitar:hover { background: var(--suave); color: var(--fg); }
+.ref-datos { width: 100%; min-height: 64px; height: auto; padding: 10px 14px; resize: none; font: 14px/1.5 var(--sans); }
+/* Barra: con 6 pestañas, en pantallas medianas solo los iconos (el nombre sale al pasar el ratón). */
+@media (max-width: 1240px) { .nav span { display: none; } .nav a { padding: 0 10px; } }

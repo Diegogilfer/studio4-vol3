@@ -357,7 +357,7 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
 
 def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
     [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
-    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None: {
+    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None: {
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
         "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
@@ -620,3 +620,39 @@ def test_resumen_del_canal_para_el_panel(aislado):
     def falla(_u):
         raise RuntimeError("cuota agotada")
     assert canales.resumen("arigab", falla, [])["error"] == "cuota agotada"   # un canal sin datos no tumba el panel
+
+
+# --- Referencias del autor ------------------------------------------------------------------------
+def test_referencias_suben_se_copian_y_llegan_al_guion(aislado, tmp_path):
+    from studio4 import guion, referencias
+    foto = tmp_path / "subida.bin"
+    foto.write_bytes(bytes([0xFF, 0xD8]) + b" foto falsa")
+    r = referencias.subir(foto, "Abuelo 1945.jpg", "image/jpeg")
+    assert r["tipo"] == "foto" and r["nombre"] == "Abuelo 1945.jpg"
+    with pytest.raises(ValueError):
+        referencias.subir(foto, "virus.exe", "application/x-msdownload")
+    refs = referencias.preparar({"enlaces": ["https://es.wikipedia.org/wiki/Faro", "no-es-enlace"], "datos": " Nació en 1916 "}, [r])
+    assert refs["enlaces"] == ["https://es.wikipedia.org/wiki/Faro"] and refs["datos"] == "Nació en 1916"
+    with pytest.raises(ValueError):
+        referencias.preparar({}, [{"id": "0" * 16, "tipo": "foto", "nombre": "x"}])   # subida que ya no existe
+
+    pids = produccion.crear("", [], "documental", "gemini", guion_propio="Un guion propio con más de diez palabras para probar las referencias.",
+                            refs=refs)
+    p = produccion.cargar(pids[0])
+    assert p["referencias"]["items"][0]["archivo"].startswith("referencias/")
+    assert (produccion.carpeta(pids[0]) / p["referencias"]["items"][0]["archivo"]).exists()
+    assert not list((config.PRODUCCIONES / "_referencias").glob(f"{r['id']}.*"))   # la espera queda limpia
+
+    p["referencias"]["material"] = [{"tipo": "foto", "nombre": "Abuelo", "resumen": "Hombre de 30 años con gafas redondas."},
+                                    {"tipo": "lugar", "nombre": "Bar Pepe", "resumen": "Lugar o negocio del vídeo: Bar Pepe."}]
+    bloque = referencias.para_guion(p["referencias"])
+    assert "DATOS QUE NO PUEDEN FALTAR" in bloque and "Bar Pepe" in bloque
+    assert referencias.visuales(p["referencias"]) == ["Hombre de 30 años con gafas redondas."]
+    assert "MATERIAL QUE APORTA EL AUTOR" in guion._peticion("faros", "", {"corto": 40}, referencias=bloque)
+
+
+def test_enlace_de_google_maps_da_nombre_y_ubicacion():
+    from studio4 import referencias
+    assert referencias.es_maps("https://maps.app.goo.gl/AbC123") and not referencias.es_maps("https://es.wikipedia.org/wiki/Mapa")
+    sitio = referencias.lugar_de_maps("https://www.google.com/maps/place/Moviraider+Sevilla/@37.3891,-5.9845,17z/data=!3m1")
+    assert sitio["nombre"] == "Moviraider Sevilla" and (sitio["lat"], sitio["lng"]) == (37.3891, -5.9845)

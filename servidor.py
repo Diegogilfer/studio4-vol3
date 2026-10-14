@@ -23,7 +23,8 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import canales, carpetas, config, flow, guion, miniaturas, produccion, registro, render, subtitulos, tendencias, voz, youtube  # noqa: E402
+from studio4 import (canales, carpetas, config, flow, guion, miniaturas, produccion, referencias, registro, render, subtitulos,
+                     tendencias, voz, youtube)  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -298,7 +299,10 @@ class Panel(BaseHTTPRequestHandler):
             pids = produccion.crear(idea, list(d.get("versiones") or ["corto"]), d.get("estilo", "cinematografico"),
                                     d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
                                     formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
-                                    publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")))
+                                    publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")),
+                                    refs=referencias.preparar(d.get("referencias"), [
+                                        {"id": str(i.get("id", "")), "tipo": i.get("tipo") if i.get("tipo") in ("foto", "documento") else "documento",
+                                         "nombre": str(i.get("nombre", ""))[:80]} for i in (d.get("referencias") or {}).get("items") or []]))
             return self._json({"ok": True, "ids": pids})
         if ruta == "/api/canales":
             return self._json({"ok": True, "canal": canales.guardar(self._cuerpo_json())})
@@ -307,6 +311,16 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if ruta == "/api/canales/activar":
             return self._json({"ok": True, "canal": canales.activar(str(self._cuerpo_json().get("id", "")))})
+        if ruta == "/api/referencias":   # foto o documento para el vídeo que se va a crear
+            tmp = self._cuerpo_a_temporal()
+            try:
+                return self._json(referencias.subir(tmp, urllib.parse.unquote(self.headers.get("X-Nombre", "")),
+                                                    self.headers.get("Content-Type", "")))
+            finally:
+                tmp.unlink(missing_ok=True)
+        if ruta == "/api/referencias/borrar":
+            referencias.borrar(str(self._cuerpo_json().get("id", "")))
+            return self._json({"ok": True})
         if ruta == "/api/activar":
             pid = str(self._cuerpo_json().get("id", ""))
             canales.activar(produccion.cargar(pid)["canal"])   # abrir una producción abre su canal
@@ -398,6 +412,7 @@ def main() -> None:
         print(f"  ⚠ {falta}")
     if n := produccion.recuperar_trabajos_colgados():
         print(f"  ↺ {n} producción(es) tenían una fase a medias: quedan libres para relanzarla.")
+    referencias.limpiar_espera()
     for resto in config.PRODUCCIONES.glob("studio4_*"):  # subidas que se cortaron
         resto.unlink(missing_ok=True)
     # Vigilante: los clips que dejes en «1 Clips de Flow» de la producción activa entran solos en su escena.
