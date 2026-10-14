@@ -274,11 +274,12 @@ $("a-crear").addEventListener("click", async () => {
     formato: document.querySelector('input[name="formato"]:checked').value,
     publico: elegido("publico"), voz_nombre: vozElegida,
     referencias: { items: refs.items.map(({ id, tipo, nombre }) => ({ id, tipo, nombre })), enlaces: refs.enlaces, datos: $("ref-datos").value },
+    reparto: propio ? repartoDelArchivo : [],
   };
   try {
     $("a-crear").disabled = true;
     await api("/api/producciones", datos);
-    $("a-idea").value = ""; $("a-guion").value = ""; vaciarRefs();
+    $("a-idea").value = ""; $("a-guion").value = ""; $("a-guion-info").textContent = ""; repartoDelArchivo = []; vaciarRefs();
     empezarOtro = false; paso = 1;
     await refrescar();
   } catch (e) { aviso(e); } finally { $("a-crear").disabled = false; }
@@ -298,9 +299,27 @@ function pintarRefs() {
   $("ref-lista").innerHTML = chips.join("");
   $("ref-lista").hidden = !chips.length;
 }
+let repartoDelArchivo = [];   // los personajes que describe tu archivo de guion: fijan su aspecto en Flow
+// Un archivo de guion se lee como si lo hubieras pegado: queda solo la narración en «Tengo mi guion».
+async function cargarGuion(f) {
+  const estadoBtn = $("ref-guion").parentElement;
+  estadoBtn.classList.add("cargando");
+  try {
+    const g = await api("/api/guion/desde-archivo", undefined, { method: "POST", body: f,
+      headers: { "Content-Type": f.type || "text/plain", "X-Nombre": encodeURIComponent(f.name) } });
+    document.querySelector('input[name="modo"][value="propio"]').checked = true;
+    $("a-guion").value = g.guion; $("a-idea").value = g.titulo; repartoDelArchivo = g.reparto || [];
+    if (g.palabras > 400) document.querySelector('input[name="formato"][value="horizontal"]').checked = true;   // más de ~3 min: YouTube
+    pintarAsistente(); crecer($("a-guion"));
+    $("a-guion-info").textContent = `${f.name} · ${g.palabras} palabras · unos ${Math.max(1, Math.round(g.palabras / 2.25 / 60))} min de voz`
+      + (repartoDelArchivo.length ? ` · ${repartoDelArchivo.length} personajes` : "");
+  } catch (e) { aviso(e); } finally { estadoBtn.classList.remove("cargando"); }
+}
 async function subirRefs(archivos) {
   for (const f of archivos) {
     const tipo = f.type.startsWith("image/") ? "foto" : "documento";
+    // Sin idea escrita (o en «Tengo mi guion»), un documento es tu guion, no una referencia.
+    if (tipo === "documento" && (modo() === "propio" || !$("a-idea").value.trim())) { await cargarGuion(f); continue; }
     if (refs.items.filter((r) => r.tipo === tipo).length >= REF_LIMITE[tipo]) { alertaError(`Como mucho ${REF_LIMITE[tipo]} ${tipo === "foto" ? "fotos" : "documentos"}.`); break; }
     try {
       const r = await api("/api/referencias", undefined, { method: "POST", body: f,
@@ -325,6 +344,12 @@ function anadirEnlace() {
   pintarRefs();
 }
 $("ref-fotos").addEventListener("change", (ev) => { subirRefs([...ev.target.files]); ev.target.value = ""; });
+$("ref-guion").addEventListener("change", (ev) => { if (ev.target.files[0]) cargarGuion(ev.target.files[0]); ev.target.value = ""; });
+["dragover", "drop"].forEach((t) => $("a-guion").addEventListener(t, (ev) => {
+  if (!ev.dataTransfer?.types.includes("Files")) return;
+  ev.preventDefault();
+  if (t === "drop" && ev.dataTransfer.files[0]) cargarGuion(ev.dataTransfer.files[0]);
+}));
 $("ref-docs").addEventListener("change", (ev) => { subirRefs([...ev.target.files]); ev.target.value = ""; });
 $("ref-url-add").addEventListener("click", anadirEnlace);
 $("ref-url").addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); anadirEnlace(); } });

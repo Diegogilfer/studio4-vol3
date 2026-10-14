@@ -1215,3 +1215,5 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .ficha { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 16px; border-radius: var(--r-control);
   background: var(--control); border: 1px solid var(--control-borde); }
 .ficha b { font-size: 14px; letter-spacing: .04em; }
+.boton.cargando { opacity: .6; pointer-events: none; }
+.boton.cargando::after { content: "…"; }

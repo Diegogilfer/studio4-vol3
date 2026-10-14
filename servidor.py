@@ -303,6 +303,8 @@ class Panel(BaseHTTPRequestHandler):
                                     d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
                                     formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
                                     publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")),
+                                    reparto=[{"nombre": str(r.get("nombre", ""))[:40], "ficha": str(r.get("ficha", ""))[:600]}
+                                             for r in d.get("reparto") or [] if isinstance(r, dict) and r.get("nombre")],
                                     refs=referencias.preparar(d.get("referencias"), [
                                         {"id": str(i.get("id", "")), "tipo": i.get("tipo") if i.get("tipo") in ("foto", "documento") else "documento",
                                          "nombre": str(i.get("nombre", ""))[:80]} for i in (d.get("referencias") or {}).get("items") or []]))
@@ -319,6 +321,13 @@ class Panel(BaseHTTPRequestHandler):
             try:
                 return self._json(referencias.subir(tmp, urllib.parse.unquote(self.headers.get("X-Nombre", "")),
                                                     self.headers.get("Content-Type", "")))
+            finally:
+                tmp.unlink(missing_ok=True)
+        if ruta == "/api/guion/desde-archivo":   # tu guion en un archivo: se queda solo la narración
+            tmp = self._cuerpo_a_temporal()
+            try:
+                return self._json(referencias.guion_de_archivo(tmp, urllib.parse.unquote(self.headers.get("X-Nombre", "")),
+                                                               self.headers.get("Content-Type", "")))
             finally:
                 tmp.unlink(missing_ok=True)
         if ruta == "/api/referencias/borrar":

@@ -100,12 +100,14 @@
         </div>
         <div class="caja-viva">
           <textarea id="a-idea" rows="3" placeholder="Ej.: por qué los pulpos tienen tres corazones…"></textarea>
-          <textarea id="a-guion" rows="8" hidden placeholder="Pega tu guion…"></textarea>
+          <textarea id="a-guion" rows="8" hidden placeholder="Pega tu guion… o arrastra aquí el archivo (PDF, TXT o MD)"></textarea>
         </div>
+        <p class="meta" id="a-guion-info" role="status" aria-live="polite"></p>
         <div class="referencias" id="referencias">
           <div class="ref-cab"><b>Referencias</b><span class="meta">Opcional · fotos, documentos, artículos, YouTube o Google Maps</span></div>
           <div class="ref-botones">
             <label class="boton"><svg width="16" height="16"><use href="#i-foto"/></svg>Añadir fotos<input type="file" id="ref-fotos" accept="image/jpeg,image/png,image/webp" multiple hidden></label>
+            <label class="boton"><svg width="16" height="16"><use href="#i-guion"/></svg>Cargar guion<input type="file" id="ref-guion" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden></label>
             <label class="boton"><svg width="16" height="16"><use href="#i-guion"/></svg>Añadir documento<input type="file" id="ref-docs" accept=".pdf,.txt,.md,application/pdf,text/plain" multiple hidden></label>
             <div class="ref-enlace"><input id="ref-url" class="campo" type="url" inputmode="url" placeholder="Enlace: artículo, vídeo de YouTube o Google Maps…" autocomplete="off" spellcheck="false" aria-label="Enlace de referencia">
               <button class="boton" id="ref-url-add" type="button"><svg width="16" height="16"><use href="#i-enlace"/></svg>Añadir enlace</button></div>

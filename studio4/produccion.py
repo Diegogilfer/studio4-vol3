@@ -228,7 +228,8 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
 
 def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
           segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical",
-          tono: str = "", publico: str = "", voz_nombre: str = "", refs: dict[str, Any] | None = None) -> list[str]:
+          tono: str = "", publico: str = "", voz_nombre: str = "", refs: dict[str, Any] | None = None,
+          reparto: list[dict[str, str]] | None = None) -> list[str]:
     """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
     Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
     if proveedor_voz not in voz.PROVEEDORES:
@@ -242,7 +243,7 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
         pid = f"{sello}-{_slug(idea or texto[:40])}"
         _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
                voz_nombre=voz_nombre,
-               version="propio", guion=texto, autor_guion="Tú",
+               version="propio", guion=texto, autor_guion="Tú", reparto=list(reparto or [])[:6],
                segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO))
         _guardar_referencias([pid], refs)
         activar(pid)

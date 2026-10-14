@@ -23,6 +23,7 @@ from typing import Any
 import urllib.parse
 
 import requests
+from pydantic import BaseModel, Field
 
 from . import config, gemini
 
@@ -216,6 +217,48 @@ def estudiar(carpeta: Path, refs: dict[str, Any], produccion: str = "") -> list[
         except Exception as e:  # noqa: BLE001
             logger.warning("No pude leer el enlace %s: %s", url, e)
     return material
+
+
+class FichaDelArchivo(BaseModel):
+    nombre: str = Field(description="Nombre del personaje.")
+    ficha: str = Field(description="Su aspecto visual según el documento (edad, ropa, rasgos…), en español; si el documento "
+                                   "no lo dice, lo que se deduce de su papel. 30 a 60 palabras, sin pose.")
+
+
+class GuionDelArchivo(BaseModel):
+    titulo: str = Field(description="Título del vídeo según el documento (máx. 70 caracteres).")
+    guion: str = Field(description="Solo lo que dice la voz en off, literal y completo, en orden.")
+    reparto: list[FichaDelArchivo] = Field(default_factory=list, description="Los personajes que aparecen (máx. 6).")
+
+
+EXTRAER = """Este documento es el guion de un vídeo. Devuelve SOLO lo que dice la voz en off, palabra por palabra y
+completo, en el mismo orden. Quita títulos y encabezados, marcas de formato, números de escena, acotaciones entre
+corchetes o paréntesis ([música], (pausa)), indicaciones de cámara o de montaje y etiquetas como «NARRADOR:» o «VOZ:».
+No resumas, no reescribas, no añadas nada. Si hay varias voces, junta lo que dicen en el orden en que se dice."""
+
+
+def guion_de_archivo(tmp: Path, nombre: str, mime: str, produccion: str = "") -> dict[str, Any]:
+    """Lee un archivo de guion (PDF, TXT o MD) y devuelve {titulo, guion, palabras} con solo la narración."""
+    mime = mime.split(";")[0].strip().lower()
+    es_pdf = mime == "application/pdf" or nombre.lower().endswith(".pdf")
+    if not es_pdf and not (mime.startswith("text/") or nombre.lower().endswith((".txt", ".md"))):
+        raise ValueError("El guion tiene que venir en PDF, TXT o MD.")
+    if tmp.stat().st_size > MAX_DOC:
+        raise ValueError("El archivo es demasiado grande (máx. 20 MB).")
+    if es_pdf:
+        crudo = gemini.generar(EXTRAER, archivos=[(tmp.read_bytes(), "application/pdf")], esquema=GuionDelArchivo,
+                               temperatura=0.1, detalle="guion desde archivo", produccion=produccion)
+    else:
+        texto = tmp.read_text(encoding="utf-8", errors="replace")[:60000]
+        crudo = gemini.generar(f"{EXTRAER}\n\n--- DOCUMENTO ({nombre}) ---\n{texto}", esquema=GuionDelArchivo,
+                               temperatura=0.1, detalle="guion desde archivo", produccion=produccion)
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    d = GuionDelArchivo.model_validate_json(m.group(0) if m else crudo)
+    guion = " ".join(_limpio(d.guion).split())
+    if len(guion.split()) < 30:
+        raise ValueError("No encuentro un guion en ese archivo: ¿es el texto que dice la voz?")
+    reparto = [{"nombre": r.nombre.strip()[:40], "ficha": r.ficha.strip()[:600]} for r in d.reparto if r.nombre.strip()][:6]
+    return {"titulo": d.titulo.strip()[:70] or Path(nombre).stem, "guion": guion, "palabras": len(guion.split()), "reparto": reparto}
 
 
 def para_guion(refs: dict[str, Any] | None) -> str:
