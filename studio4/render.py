@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-from . import config, medios, registro, subtitulos
+from . import config, medios, registro, sonidos, subtitulos
 
 logger = logging.getLogger("studio4.render")
 COLA_FINAL = 0.6  # segundos de imagen tras la última palabra
@@ -79,8 +79,13 @@ def vista_subtitulos(p: dict[str, Any], carpeta: Path, ajustes: dict[str, Any] |
         {"palabra": w, "ini": 0.0, "fin": 0.0} for w in (esc["texto_voz"].split() if esc else ["Así", "se", "verán", "tus", "subtítulos"])]
     muestra = palabras[:6]
     ritmo = [{"palabra": w["palabra"], "ini": 0.6 * (i - 1) - 0.3, "fin": 0.6 * (i - 1) + 0.3} for i, w in enumerate(muestra)]
-    ass = subtitulos.construir(ritmo, trabajo / "vista.ass", ancho, alto, {**(p.get("subtitulos") or {}), **(ajustes or {})},
-                               gancho=esc.get("texto_pantalla", "") if esc else "", segundos_gancho=5)
+    ajustes_vista = {**(p.get("subtitulos") or {}), **(ajustes or {})}
+    if ajustes_vista.get("estilo") == "cine":   # en cine se ve la frase entera, como quedará
+        ritmo = [{"palabra": w["palabra"], "ini": 0.0, "fin": 3.0} for w in palabras[:12]]
+    ejemplo = sonidos.leer(trabajo / "sonidos.json")[:1] or [{"ini": 0.0, "fin": 3.0, "texto": "Música tensa"}]
+    ass = subtitulos.construir(ritmo, trabajo / "vista.ass", ancho, alto, ajustes_vista,
+                               gancho=esc.get("texto_pantalla", "") if esc else "", segundos_gancho=5,
+                               sonidos=[{**ejemplo[0], "ini": 0.0, "fin": 3.0}])
     salida = trabajo / "vista_subtitulos.jpg"
     medios.ffmpeg("-loop", "1", "-i", fondo.name, "-vf", f"ass={ass.name}", "-frames:v", "1", "-q:v", "3", salida.name,
                   cwd=trabajo)
@@ -125,10 +130,16 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     cuerpo = trabajo / "cuerpo.mp4"
     medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(cuerpo))
 
+    total = voz["duracion"] + COLA_FINAL
+    ruidos: list[dict[str, Any]] = []
+    if (p.get("subtitulos") or {}).get("sonidos", subtitulos.POR_DEFECTO["sonidos"]):
+        avisar("Escuchando el sonido para subtitular los ruidos", 86)
+        ruidos = sonidos.detectar(cuerpo, total, produccion=p["id"])
+    sonidos.guardar(trabajo / "sonidos.json", ruidos)   # Reels y Shorts los reutilizan sin volver a escuchar
+
     avisar("Mezclando voz, ambiente y subtítulos", 90)
     ass = subtitulos.construir(voz["palabras"], trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"),
-                               gancho=p["escenas"][0].get("texto_pantalla", ""))
-    total = voz["duracion"] + COLA_FINAL
+                               gancho=p["escenas"][0].get("texto_pantalla", ""), sonidos=ruidos)
     mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
               f"[0:a]volume={config.VOLUMEN_AMBIENTE}[amb];"
               f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
@@ -176,7 +187,9 @@ def recorte(p: dict[str, Any], carpeta: Path, desde: int, hasta: int, destino: P
     largo = fin - ini
     palabras = [{**w, "ini": w["ini"] - ini, "fin": w["fin"] - ini} for w in voz["palabras"]
                 if w["ini"] >= ini - 0.05 and w["ini"] < fin]
-    ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"), gancho=gancho)
+    ruidos = [{**s, "ini": s["ini"] - ini, "fin": min(s["fin"], fin) - ini}
+              for s in sonidos.leer(carpeta / "render" / "sonidos.json") if ini <= s["ini"] < fin - 0.5]
+    ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"), gancho=gancho, sonidos=ruidos)
     mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
               f"[0:a]volume={config.VOLUMEN_AMBIENTE}[amb];"
               f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")

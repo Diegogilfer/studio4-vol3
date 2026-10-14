@@ -696,3 +696,30 @@ def test_deepseek_sin_espacio_reintenta_una_vez_con_mas_margen(aislado, monkeypa
     with pytest.raises(RuntimeError):
         deepseek.generar_json("s", "p")
     assert pedidos == [16000, 32000]   # no repite igual: un reintento con el doble y se rinde
+
+
+# --- Subtítulos de cine y de sonidos ----------------------------------------------------------------
+def test_subtitulos_de_cine_con_sonidos(tmp_path):
+    texto = ("A las ocho y cuarto de la mañana, Yamaguchi vio un destello enorme sobre el cielo de Hiroshima. "
+             "Después, silencio.").split()
+    pal = [{"palabra": w, "ini": i * 0.4, "fin": i * 0.4 + 0.35} for i, w in enumerate(texto)]
+    ass = subtitulos.construir(pal, tmp_path / "c.ass", 1920, 1080, {"estilo": "cine"},
+                               sonidos=[{"ini": 2.0, "fin": 4.0, "texto": "Explosión lejana"}]).read_text(encoding="utf-8")
+    dialogos = [l.split(",0,0,0,,", 1)[1] for l in ass.splitlines() if l.startswith("Dialogue: 0")]
+    assert dialogos[0].endswith("Hiroshima.") and r"\N" in dialogos[0]      # frase entera en dos líneas, sin palabra suelta
+    assert dialogos[1] == "Después, silencio." and r"\c" not in ass           # sin resaltes de color en cine
+    assert "Sonido,,0,0,0,,[Explosión lejana]" in ass and ",-1,0,0,100" in ass.split("Style: Sonido")[1][:80]
+    sin = subtitulos.construir(pal, tmp_path / "s.ass", 1920, 1080, {"estilo": "cine", "sonidos": False},
+                               sonidos=[{"ini": 2.0, "fin": 4.0, "texto": "Explosión"}]).read_text(encoding="utf-8")
+    assert "[Explosión]" not in sin
+
+
+def test_sonidos_se_colocan_en_su_arranque_real_y_no_se_pisan():
+    from studio4 import sonidos
+    tramos = sonidos._tramos_con_sonido([(0.0, 3.01), (4.21, 7.01)], 12.0)
+    assert tramos == [(3.01, 4.21), (7.01, 12.0)]
+    ajustados = sonidos.ajustar([{"ini": 0.0, "fin": 3.0, "texto": "Viento"}, {"ini": 9.5, "fin": 10, "texto": "Pitido"}], tramos)
+    assert [s["ini"] for s in ajustados] == [3.01, 7.01]
+    limpios = sonidos.limpiar([{"ini": 5, "fin": 5.1, "texto": "golpe."}, {"ini": 5.5, "fin": 9, "texto": "Eco"},
+                               {"ini": 7, "fin": 20, "texto": "[Música]"}, {"ini": 11.9, "fin": 13, "texto": "Tarde"}], 12.0)
+    assert limpios == [{"ini": 5.0, "fin": 6.2, "texto": "Golpe"}, {"ini": 7.0, "fin": 11.0, "texto": "Música"}]

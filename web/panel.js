@@ -696,7 +696,10 @@ $("v-rehacer").addEventListener("click", async () => {
 // Colores de resalte de cada paleta (los mismos que usa el render, en CSS).
 const COLOR_PALETA = { amarillo: "#ffe500", cian: "#00e1ff", rosa: "#ff20b0", verde: "#7fff00", blanco: "#ffffff" };
 function pintarSubtitulos({ subtitulos: s, paletas }) {
-  $("s-activos").checked = s.activos; $("s-gancho").checked = s.gancho;
+  $("s-activos").checked = s.activos; $("s-gancho").checked = s.gancho; $("s-sonidos").checked = s.sonidos !== false;
+  const estiloSubs = s.estilo || "viral";
+  document.querySelector(`input[name="s-est"][value="${estiloSubs}"]`).checked = true;
+  $("s-paletas").hidden = estiloSubs === "cine";   // en cine el texto es blanco: no hay color de resalte
   $("s-paletas").innerHTML = Object.entries(paletas).map(([k, nombre]) => `
     <button type="button" data-paleta="${k}" class="${k === s.paleta ? "si" : ""}" title="${esc(nombre)}">
       <span><span style="color:#fff">ASÍ SE </span><span style="color:${COLOR_PALETA[k] || "#fff"}">VEN</span></span><small>${esc(nombre)}</small></button>`).join("");
@@ -723,6 +726,8 @@ $("s-paletas").addEventListener("click", (ev) => {
   if (b) guardarSubtitulos({ paleta: b.dataset.paleta });
 });
 $("s-activos").addEventListener("change", () => guardarSubtitulos({ activos: $("s-activos").checked }));
+$("s-sonidos").addEventListener("change", () => guardarSubtitulos({ sonidos: $("s-sonidos").checked }));
+$("s-estilo").addEventListener("change", (ev) => guardarSubtitulos({ estilo: ev.target.value }));
 $("s-gancho").addEventListener("change", () => guardarSubtitulos({ gancho: $("s-gancho").checked }));
 $("s-posicion").addEventListener("change", (ev) => guardarSubtitulos({ posicion: ev.target.value }));
 $("s-tamano").addEventListener("change", (ev) => guardarSubtitulos({ tamano: ev.target.value }));

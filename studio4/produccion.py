@@ -630,4 +630,8 @@ def editar_escena(pid: str, orden: int, datos: dict[str, Any]) -> dict[str, Any]
 
 def ajustar_subtitulos(pid: str, ajustes: dict[str, Any]) -> dict[str, Any]:
     validos = {k: v for k, v in ajustes.items() if k in subtitulos.POR_DEFECTO}
+    if validos.get("estilo", "viral") not in subtitulos.ESTILOS:
+        raise ValueError("Estilo de subtítulos desconocido.")
+    if "sonidos" in validos:
+        validos["sonidos"] = bool(validos["sonidos"])
     return modificar(pid, lambda p: p["subtitulos"].update(validos))
