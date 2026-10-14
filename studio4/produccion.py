@@ -89,10 +89,24 @@ def listar(canal: str | None = None) -> list[dict[str, Any]]:
             p = json.loads(f.read_text(encoding="utf-8"))
             salida.append({"id": p["id"], "tema": p["tema"], "titulo": p.get("titulo", ""), "estado": p["estado"],
                            "creado": p["creado"], "formato": p["formato"], "version": p.get("version", ""),
-                           "familia": p.get("familia", ""), "canal": p.get("canal") or primero})
+                           "familia": p.get("familia", ""), "canal": p.get("canal") or primero,
+                           "portada": _portada(p), "escenas": len(p.get("escenas", [])),
+                           "con_clip": sum(e.get("elegida") is not None for e in p.get("escenas", []))})
         except (OSError, ValueError, KeyError):
             continue
     return [x for x in salida if canal is None or x["canal"] == canal]
+
+
+def _portada(p: dict[str, Any]) -> str:
+    """Una imagen para la tarjeta de la producción: su miniatura elegida o la primera toma en imagen."""
+    m = p.get("miniaturas") or {}
+    if m.get("candidatos"):
+        return m["candidatos"][m.get("elegido", 0)]["archivo"]
+    for e in p.get("escenas", []):
+        for t in e.get("tomas", []):
+            if t.get("tipo") == "imagen":
+                return t["archivo"]
+    return ""
 
 
 def recuperar_trabajos_colgados() -> int:

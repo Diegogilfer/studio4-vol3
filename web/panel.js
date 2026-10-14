@@ -30,7 +30,7 @@ function llenarSelect(sel, opciones, valor) {
   if (sel.dataset.f !== html) { sel.innerHTML = html; sel.dataset.f = html; }
   if (valor !== undefined) sel.value = valor;
 }
-const urlMedio = (archivo) => `/media/${estado.produccion.id}/${archivo}`;
+const urlMedio = (archivo, pid = estado.produccion.id) => `/media/${pid}/${archivo}`;
 const miles = (n) => Number(n || 0).toLocaleString("es-ES");
 const FECHA = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const fecha = (iso) => { const d = new Date(String(iso).replace(" ", "T")); return isNaN(d) ? String(iso || "").slice(0, 16) : FECHA.format(d).replace(".", ""); };   // «13 oct, 00:19»
@@ -209,10 +209,6 @@ function pintarAsistente() {
   const p = estado?.produccion;
   // Con un guion aprobado, la caja se pliega a una línea: lo importante pasa a ser la ejecución.
   // El asistente se ve siempre completo; una línea discreta permite volver a la producción en curso.
-  const enCurso = !!(p && p.guion_aprobado);
-  $("crear").classList.remove("plegada");
-  $("a-compacta").classList.toggle("en-curso", enCurso);
-  if (enCurso) $("a-compacta-txt").textContent = `En curso: «${p.titulo || p.tema}»`;
   const enGuion = p && !p.guion_aprobado && !empezarOtro;
   const visible = enGuion ? 4 : paso;
   document.querySelectorAll(".paso").forEach((el) => { el.hidden = Number(el.dataset.paso) !== visible; });
@@ -285,7 +281,12 @@ $("a-crear").addEventListener("click", async () => {
   } catch (e) { aviso(e); } finally { $("a-crear").disabled = false; }
 });
 $("a-otro").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); });
-$("a-nuevo").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); $("a-idea").focus(); });
+function nuevoVideo() {
+  empezarOtro = true; paso = 1; pintarAsistente();
+  $("nuevo-video").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("a-idea").focus({ preventScroll: true });
+}
+$("ir-crear").addEventListener("click", nuevoVideo);
 
 // Pestañas: cada parte del estudio es su propia vista (#crear, #flow, #render, #entregas).
 const VISTAS = ["crear", "tendencias", "flow", "render", "entregas"];
@@ -381,17 +382,58 @@ $("p-reabrir").addEventListener("click", async () => {
   catch (e) { aviso(e); }
 });
 
+// Presentación: sello del canal, mosaico de producciones y el motor en cinco pasos.
 function pintarLista(lista) {
   const activa = estado.produccion?.id;
-  $("lista").innerHTML = lista.length ? lista.map((p) => `
-    <button type="button" data-id="${esc(p.id)}" class="${p.id === activa ? "activa" : ""}">
-      <b>${esc(p.titulo || p.tema)}</b><small>${p.version ? `${esc(VERSION[p.version] || p.version)} · ` : ""}${esc(fecha(p.creado))} · ${esc(ESTADOS[p.estado] || p.estado)}</small>
-    </button>`).join("") : `<span class="meta faint">Todavía no hay ninguna.</span>`;
+  const canalNombre = estado.canal?.nombre || "";
+  $("sello").textContent = [canalNombre, `${lista.length} ${lista.length === 1 ? "vídeo" : "vídeos"}`, "3 formatos"].filter(Boolean).join(" · ");
+  $("lista").innerHTML = lista.slice(0, 7).map((p, i) => {
+    const fondo = p.portada ? `style="background-image:url('${urlMedio(p.portada, p.id)}')"` : "";
+    const estadoTxt = p.estado === "rodando" && p.escenas ? `${p.con_clip}/${p.escenas} clips` : ESTADOS[p.estado] || p.estado;
+    return `<button type="button" data-id="${esc(p.id)}" class="pieza-mosaico m${i} ${p.portada ? "con-foto" : ""} ${p.id === activa ? "activa" : ""}" ${fondo}>
+      <span class="sello">${esc(VERSION[p.version] || p.version || "Vídeo")} · ${esc(estadoTxt)}</span>
+      <b class="display">${esc(p.titulo || p.tema)}</b>
+      <small>${esc(fecha(p.creado))}</small></button>`;
+  }).join("") + `<button type="button" class="pieza-mosaico nuevo" data-nuevo="1"><svg width="22" height="22"><use href="#i-crear"/></svg><b>Nuevo vídeo</b></button>`;
 }
 $("lista").addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-nuevo]")) return nuevoVideo();
   const b = ev.target.closest("[data-id]");
   if (!b) return;
   try { await api("/api/activar", { id: b.dataset.id }); empezarOtro = false; await refrescar(); } catch (e) { aviso(e); }
+});
+const MOTOR = [
+  ["idea", "i-crear", "Idea", "La escribes o eliges una tendencia"],
+  ["guion", "i-guion", "Guion", "Se investiga, se escribe y lo apruebas"],
+  ["flow", "i-escenas", "Flow", "Generas cada escena, vídeo o imagen"],
+  ["render", "i-render", "Render", "Voz, sonido y subtítulos en tu PC"],
+  ["entregas", "i-entregas", "Entregas", "Vídeo completo, Reels y Shorts"],
+];
+function pintarMotor(p) {
+  const fase = !p ? "idea" : !p.guion_aprobado ? "guion" : pasoActual(p);
+  const orden = MOTOR.map(([k]) => k);
+  const listos = p ? p.escenas.filter((e) => e.elegida !== null).length : 0;
+  const chip = {
+    idea: p ? "Hecho" : "Empieza aquí",
+    guion: !p ? "Pendiente" : p.guion_aprobado ? "Aprobado" : p.guion ? "Por revisar" : "Escribiendo",
+    flow: p?.escenas.length ? `${listos}/${p.escenas.length} clips` : "Pendiente",
+    render: p?.final ? "Hecho" : "Pendiente",
+    entregas: p?.entregas ? `${p.entregas.piezas.length} piezas` : "3 formatos",
+  };
+  $("motor").innerHTML = MOTOR.map(([k, icono, titulo, txt], i) => {
+    const estadoPaso = orden.indexOf(k) < orden.indexOf(fase) ? "hecho" : k === fase ? "ahora" : "";
+    return `<button type="button" class="motor-paso ${estadoPaso}" data-motor="${k}">
+      <span class="motor-cab"><svg width="20" height="20"><use href="#${icono}"/></svg><small>0${i + 1}</small></span>
+      <b class="display">${titulo}</b><span class="motor-txt">${txt}</span><span class="sello">${esc(chip[k])}</span></button>`;
+  }).join("");
+}
+$("motor").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-motor]");
+  if (!b) return;
+  const k = b.dataset.motor;
+  if (k === "idea") return nuevoVideo();
+  if (k === "guion") { empezarOtro = false; pintarAsistente(); return $("nuevo-video").scrollIntoView({ behavior: "smooth" }); }
+  location.hash = `#${k}`;
 });
 
 // ============================================================== Ejecución (guion aprobado)
@@ -752,7 +794,6 @@ let canalActual = "";
 function pintarSelectorCanal({ cs, a }) {
   $("canal").innerHTML = cs.map((c) => `<option value="${esc(c.id)}" ${c.id === a ? "selected" : ""}>${esc(c.nombre)}</option>`).join("");
   const nombre = cs.find((c) => c.id === a)?.nombre || "";
-  $("lista-titulo").textContent = nombre ? `Producciones de ${nombre}` : "Tus producciones";
   if (canalActual && canalActual !== a) { empezarOtro = false; paso = 1; cargarYoutube(); }
   canalActual = a;
 }
@@ -859,7 +900,9 @@ async function refrescar() {
   $("aviso-salud").hidden = !o.salud.length;
   $("aviso-salud").textContent = o.salud.join(" ");
   pintarFlow(d);
-  siCambia("lista", { lista, activa: d.produccion?.id }, () => pintarLista(lista));
+  siCambia("lista", { lista, activa: d.produccion?.id, c: d.canal?.nombre }, () => pintarLista(lista));
+  siCambia("motor", d.produccion && { a: d.produccion.guion_aprobado, g: !!d.produccion.guion, e: d.produccion.escenas,
+    v: !!d.produccion.voz, f: !!d.produccion.final, p: d.produccion.entregas?.piezas?.length }, () => pintarMotor(d.produccion));
 
   const p = d.produccion;
   siCambia("asistente", { id: p?.id, aprobado: p?.guion_aprobado, empezarOtro, paso }, pintarAsistente);
@@ -868,8 +911,9 @@ async function refrescar() {
     siCambia("progreso-guion", { e: p.estado, t: p.trabajo, g: !!p.guion }, () => pintarProgresoGuion(p));
     siCambia("guion", { id: p.id, g: p.guion, ga: p.ganchos, ia: p.ia_detectada, o: p.trabajo.ocupado, h: p.hermanas, i: !!p.investigacion }, () => pintarGuion({ p }));
   }
-  if (!firmas.vistaInicial) {   // al abrir el panel con una producción en marcha, se va directo a su paso
+  if (!firmas.vistaInicial) {   // al abrir, el navegador salta al ancla (#crear…): la vista empieza arriba
     firmas.vistaInicial = 1;
+    requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   }
   mostrarVista();
   if (vistaActual() === "tendencias") cargarTendencias();
