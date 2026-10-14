@@ -131,6 +131,7 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(cuerpo))
 
     total = voz["duracion"] + COLA_FINAL
+    ambiente = 0.0 if p.get("version") == "importado" else config.VOLUMEN_AMBIENTE
     ruidos: list[dict[str, Any]] = []
     if (p.get("subtitulos") or {}).get("sonidos", subtitulos.POR_DEFECTO["sonidos"]):
         avisar("Escuchando el sonido para subtitular los ruidos", 86)
@@ -141,7 +142,7 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     ass = subtitulos.construir(voz["palabras"], trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"),
                                gancho=p["escenas"][0].get("texto_pantalla", ""), sonidos=ruidos)
     mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
-              f"[0:a]volume={config.VOLUMEN_AMBIENTE}[amb];"
+              f"[0:a]volume={ambiente}[amb];"
               f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
     final = carpeta / "final.mp4"
     # El filtro ass lee la ruta relativa a la carpeta de trabajo: evita escapar «C:\» en Windows.
@@ -187,11 +188,12 @@ def recorte(p: dict[str, Any], carpeta: Path, desde: int, hasta: int, destino: P
     largo = fin - ini
     palabras = [{**w, "ini": w["ini"] - ini, "fin": w["fin"] - ini} for w in voz["palabras"]
                 if w["ini"] >= ini - 0.05 and w["ini"] < fin]
+    ambiente = 0.0 if p.get("version") == "importado" else config.VOLUMEN_AMBIENTE
     ruidos = [{**s, "ini": s["ini"] - ini, "fin": min(s["fin"], fin) - ini}
               for s in sonidos.leer(carpeta / "render" / "sonidos.json") if ini <= s["ini"] < fin - 0.5]
     ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"), gancho=gancho, sonidos=ruidos)
     mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
-              f"[0:a]volume={config.VOLUMEN_AMBIENTE}[amb];"
+              f"[0:a]volume={ambiente}[amb];"
               f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
     destino.parent.mkdir(parents=True, exist_ok=True)
     medios.ffmpeg(

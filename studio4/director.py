@@ -6,6 +6,7 @@ cada prompt: así Veo ve la misma descripción en todas las escenas y la secuenc
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import re
@@ -32,7 +33,8 @@ class Biblia(BaseModel):
     escenario_en: str = Field(description="Mundo, época y lugar común de la historia, en inglés.")
     luz_en: str = Field(description="Esquema de luz constante, en inglés.")
     paleta_en: str = Field(description="Paleta dominante (3-4 colores), en inglés.")
-    personajes: list[Personaje] = Field(default_factory=list, description="0 a 3 personajes recurrentes.")
+    personajes: list[Personaje] = Field(default_factory=list, description="Todos los personajes que se ven (máx. 8). "
+                                                                         "Si hay REPARTO, todos los del reparto, con su ficha.")
 
 
 class Escena(BaseModel):
@@ -190,14 +192,32 @@ def afinar_personajes(guion: str, biblia: dict[str, Any], reparto: list[dict[str
     extra = ("\n\nREPARTO DEL GUIONISTA:\n" + "\n".join(f"- {r['nombre']}: {r['ficha']}" for r in reparto)) if reparto else ""
     crudo = gemini.generar(
         f"Personajes actuales (mismos nombres, en mayúsculas):\n{actuales}{extra}\n\n--- GUION ---\n{guion}\n--- FIN ---\n\n"
-        "Reescribe la ficha visual de CADA personaje para que un generador de vídeo lo dibuje idéntico en todas las escenas: "
-        "en inglés, 40-70 palabras, con edad, origen, forma del rostro, pelo (color, largo, peinado), ojos, complexión, ropa "
-        "exacta con colores y materiales, calzado y un detalle distintivo. Prohibido: pose, gesto, encuadre, lugar u objetos "
-        "en la mano (eso cambia en cada escena). No cambies a nadie: precisa lo que ya es.",
+        "Reescribe la ficha visual de CADA personaje para que un generador de vídeo lo dibuje idéntico en todas las escenas, "
+        f"{FICHA_VISUAL} No cambies a nadie: precisa lo que ya es.",
         esquema=Fichas, temperatura=0.3, detalle="afinar personajes", produccion=produccion)
     m = re.search(r"\{.*\}", crudo, re.DOTALL)
     nuevas = {p.nombre.upper(): p.aspecto_en for p in Fichas.model_validate_json(m.group(0) if m else crudo).personajes}
     return [{**p, "aspecto_en": nuevas.get(p["nombre"].upper(), p["aspecto_en"])} for p in biblia.get("personajes", [])]
+
+
+FICHA_VISUAL = ("en inglés, 40-70 palabras, SOLO aspecto: edad, origen, forma del rostro, pelo (color, largo, peinado), ojos, "
+                "complexión, ropa exacta con colores y materiales, calzado y un detalle distintivo. Si el texto no da un rasgo, "
+                "decídelo tú de forma concreta y coherente con el personaje. Prohibido: carácter o personalidad, pose, gesto, "
+                "lugar u objetos en la mano.")
+
+
+def personajes_de_reparto(reparto: list[dict[str, str]], guion: str = "", produccion: str = "") -> list[dict[str, Any]]:
+    """La biblia de personajes sale del reparto del guion, completa (todos, no solo los del principio), con una
+    ficha visual concreta por personaje. Así el vídeo entero usa las mismas caras."""
+    lista = "\n".join(f"- {r['nombre']}: {r['ficha']}" for r in reparto)
+    crudo = gemini.generar(
+        f"REPARTO:\n{lista}\n\n--- GUION (contexto) ---\n{guion[:12000]}\n--- FIN ---\n\n"
+        f"Escribe la ficha visual de CADA personaje del reparto, uno por uno y con su nombre corto en MAYÚSCULAS "
+        f"(una palabra si se puede, p. ej. «MILLIE»): {FICHA_VISUAL}",
+        esquema=Fichas, temperatura=0.3, detalle="fichas del reparto", produccion=produccion)
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    return [{"nombre": p.nombre.strip().upper(), "aspecto_en": p.aspecto_en.strip()}
+            for p in Fichas.model_validate_json(m.group(0) if m else crudo).personajes if p.nombre.strip()][:8]
 
 
 def fichas(biblia: dict[str, Any], estilo: str) -> list[dict[str, str]]:
@@ -224,6 +244,52 @@ def _palabras(texto: str) -> list[str]:
     return re.findall(r"\w+", texto.lower())
 
 
+TRAMO_PALABRAS = 200   # guiones más largos se planifican por tramos: Gemini no se salta escenas
+
+
+class PlanTramo(BaseModel):
+    escenas: list[Escena]
+    avisos: list[Aviso] = Field(default_factory=list)
+
+
+def tramos(guion: str, n: int = TRAMO_PALABRAS) -> list[str]:
+    """Trozos de unas `n` palabras que acaban en final de frase."""
+    frases = re.split(r"(?<=[.!?…])\s+", guion.strip())
+    salida, actual = [], []
+    for f in frases:
+        actual.append(f)
+        if sum(len(x.split()) for x in actual) >= n:
+            salida.append(" ".join(actual))
+            actual = []
+    if actual:
+        if salida and sum(len(x.split()) for x in actual) < n // 3:
+            salida[-1] += " " + " ".join(actual)   # un resto corto se une al último tramo
+        else:
+            salida.append(" ".join(actual))
+    return salida
+
+
+def _plan_tramo(base: str, guion: str, tramo: str, k: int, total: int, biblia: dict[str, Any], previa: dict[str, Any] | None,
+                produccion: str) -> dict[str, Any]:
+    """Escenas de un tramo con la biblia ya fijada (mismos personajes y mundo en todo el vídeo)."""
+    prompt = (f"{base}\n\nBIBLIA FIJA (no la cambies; usa estos nombres de personaje):\n{json.dumps(biblia, ensure_ascii=False)}\n\n"
+              f"--- GUION COMPLETO (solo contexto) ---\n{guion}\n--- FIN ---\n\n"
+              f"Ahora reparte en escenas SOLO el TRAMO {k} de {total}, palabra por palabra (aquí «el guion» es este tramo):\n"
+              f"--- TRAMO ---\n{tramo}\n--- FIN DEL TRAMO ---")
+    if previa:
+        prompt += f"\n\nLa escena anterior era: «{previa['texto_voz']}» ({previa.get('plano_en', '')}): no repitas su plano."
+    for intento in range(2):
+        crudo = gemini.generar(prompt, sistema=SISTEMA, esquema=PlanTramo, temperatura=0.4,
+                               detalle=f"plan de escenas · tramo {k}/{total}", produccion=produccion)
+        m = re.search(r"\{.*\}", crudo, re.DOTALL)
+        parte = PlanTramo.model_validate_json(m.group(0) if m else crudo).model_dump()
+        cubiertas = len(_palabras(" ".join(e["texto_voz"] for e in parte["escenas"])))
+        if parte["escenas"] and cubiertas >= 0.9 * len(_palabras(tramo)):
+            return parte
+        logger.warning("Tramo %d: las escenas cubren %d de %d palabras; lo pido otra vez.", k, cubiertas, len(_palabras(tramo)))
+    return parte
+
+
 def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
                titulos_existentes: list[str] | None = None, referencias_visuales: list[str] | None = None,
                reparto: list[dict[str, str]] | None = None) -> dict[str, Any]:
@@ -234,9 +300,10 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
         f"({'sujeto centrado y alto' if aspecto == '9:16' else 'deja aire a los lados'})\n\n"
         f"--- GUION ---\n{guion}\n--- FIN ---"
     )
-    if reparto:
-        prompt += ("\n\nREPARTO FIJO (estos son los personajes: usa su ficha, traducida al inglés sin cambiar nada, en la biblia):\n"
-                   + "\n".join(f"- {r['nombre']}: {r['ficha']}" for r in reparto))
+    fijos = personajes_de_reparto(reparto, guion, produccion) if reparto else []
+    if fijos:
+        prompt += ("\n\nPERSONAJES FIJOS (copia esta lista tal cual en biblia.personajes y usa estos nombres en las escenas):\n"
+                   + "\n".join(f"- {p['nombre']}: {p['aspecto_en']}" for p in fijos))
     if referencias_visuales:
         prompt += ("\n\nFOTOS DE REFERENCIA DEL AUTOR: copia en la biblia la IDENTIDAD (rostro, pelo, edad, complexión, ropa) "
                    "de las personas y el aspecto de lugares y objetos. NUNCA copies su pose, gesto ni encuadre: cada escena "
@@ -244,10 +311,26 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
     if titulos_existentes:
         prompt += ("\n\nTÍTULOS QUE YA EXISTEN EN YOUTUBE SOBRE ESTO (el tuyo tiene que ser claramente distinto, "
                    "con otro ángulo o un detalle concreto del guion):\n" + "\n".join(f"- {t}" for t in titulos_existentes[:8]))
-    crudo = gemini.generar(prompt, sistema=SISTEMA, esquema=Plan, temperatura=0.4, detalle="plan de escenas",
+    partes = tramos(guion)
+    if len(partes) > 1:   # guion largo: el primer tramo fija título y biblia; los demás la respetan
+        prompt = prompt.replace(f"--- GUION ---\n{guion}\n--- FIN ---",
+                                f"--- GUION COMPLETO (contexto para título y biblia) ---\n{guion}\n--- FIN ---\n\n"
+                                f"Reparte en escenas SOLO el TRAMO 1 de {len(partes)} (aquí «el guion» es este tramo):\n"
+                                f"--- TRAMO ---\n{partes[0]}\n--- FIN DEL TRAMO ---")
+    crudo = gemini.generar(prompt, sistema=SISTEMA, esquema=Plan, temperatura=0.4,
+                           detalle="plan de escenas" + (f" · tramo 1/{len(partes)}" if len(partes) > 1 else ""),
                            produccion=produccion)
     match = re.search(r"\{.*\}", crudo, re.DOTALL)
     plan = Plan.model_validate_json(match.group(0) if match else crudo).model_dump()
+    if fijos:   # el reparto manda: todos los personajes, con su ficha exacta, aunque Gemini haya omitido alguno
+        plan["biblia"]["personajes"] = fijos
+    base = (f"ESTILO VISUAL: {estilo_en}\nFORMATO: {aspecto} "
+            f"({'sujeto centrado y alto' if aspecto == '9:16' else 'deja aire a los lados'})")
+    for k, tramo in enumerate(partes[1:], start=2):
+        parte = _plan_tramo(base, guion, tramo, k, len(partes), plan["biblia"],
+                            plan["escenas"][-1] if plan["escenas"] else None, produccion)
+        plan["escenas"] += parte["escenas"]
+        plan["avisos"] += parte.get("avisos", [])
 
     if not plan["escenas"]:
         raise RuntimeError("Gemini no devolvió escenas.")

@@ -96,7 +96,18 @@
           <div class="segmentos" role="tablist" aria-label="Cómo empezar">
             <label><input type="radio" name="modo" value="idea" checked>Tengo una idea</label>
             <label><input type="radio" name="modo" value="propio">Tengo mi guion</label>
+            <label><input type="radio" name="modo" value="video">Tengo un vídeo</label>
           </div>
+        </div>
+        <div class="solo-video importar" hidden>
+          <div class="importar-fila">
+            <input id="v-url" class="campo" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+              placeholder="Enlace del vídeo (YouTube, Instagram, TikTok…)" aria-label="Enlace del vídeo">
+            <label class="boton"><svg width="16" height="16"><use href="#i-entregas"/></svg>Subir archivo<input type="file" id="v-archivo" accept="video/*" hidden></label>
+          </div>
+          <p class="meta" id="v-info" role="status" aria-live="polite"></p>
+          <label class="check"><input type="checkbox" id="v-derechos"> El vídeo es mío o tengo derechos para reutilizarlo</label>
+          <div class="acciones-paso"><button class="primario" id="v-importar" type="button">Importar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
         </div>
         <div class="caja-viva">
           <textarea id="a-idea" rows="3" placeholder="Ej.: por qué los pulpos tienen tres corazones…"></textarea>

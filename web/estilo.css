@@ -1217,3 +1217,12 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .ficha b { font-size: 14px; letter-spacing: .04em; }
 .boton.cargando { opacity: .6; pointer-events: none; }
 .boton.cargando::after { content: "…"; }
+/* Crear › Tengo un vídeo */
+#crear[data-modo="video"] :is(.caja-viva, #a-guion-info, #referencias, .a-pasos, .paso[data-paso="1"] > .acciones-paso) { display: none; }
+.importar { display: grid; gap: 12px; }
+.importar-fila { display: flex; gap: 10px; flex-wrap: wrap; }
+.importar-fila .campo { flex: 1 1 320px; height: 48px; font-size: 15px; }
+.importar-fila .boton { height: 48px; cursor: pointer; }
+.importar .acciones-paso { justify-content: flex-end; }
+/* Escena de un vídeo importado: su texto se corrige aquí */
+.texto-escena { width: 100%; height: auto; min-height: 76px; padding: 10px 14px; resize: none; font: 14px/1.5 var(--sans); }

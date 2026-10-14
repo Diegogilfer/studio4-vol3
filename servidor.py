@@ -323,6 +323,20 @@ class Panel(BaseHTTPRequestHandler):
                                                     self.headers.get("Content-Type", "")))
             finally:
                 tmp.unlink(missing_ok=True)
+        if ruta == "/api/importar":   # un vídeo ya hecho, por enlace (solo tuyo o con derechos)
+            d = self._cuerpo_json()
+            if not d.get("derechos"):
+                raise Error(400, "Confirma que el vídeo es tuyo o que tienes derechos para reutilizarlo.")
+            return self._json({"ok": True, "id": produccion.importar_video(url=str(d.get("url", "")).strip())})
+        if ruta == "/api/importar/archivo":
+            if (query.get("derechos") or [""])[0] != "1":
+                raise Error(400, "Confirma que el vídeo es tuyo o que tienes derechos para reutilizarlo.")
+            tmp = self._cuerpo_a_temporal()
+            try:
+                return self._json({"ok": True, "id": produccion.importar_video(
+                    archivo=tmp, nombre=urllib.parse.unquote(self.headers.get("X-Nombre", "")))})
+            finally:
+                tmp.unlink(missing_ok=True)
         if ruta == "/api/guion/desde-archivo":   # tu guion en un archivo: se queda solo la narración
             tmp = self._cuerpo_a_temporal()
             try:

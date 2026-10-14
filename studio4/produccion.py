@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (canales, carpetas, config, director, entregas, guion, investigacion, miniaturas, referencias, render,
+from . import (canales, carpetas, config, director, entregas, guion, importar, investigacion, miniaturas, referencias, render,
                subtitulos, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -169,6 +169,7 @@ _QUE_FALLO = {
     "Miniaturas": "No se pudieron crear las miniaturas",
     "Imágenes por API": "No se pudieron generar las imágenes",
     "Personajes": "No se pudieron afinar los personajes",
+    "Importar vídeo": "No se pudo importar el vídeo",
 }
 
 
@@ -265,6 +266,33 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
     activar(pids[0])
     _en_fondo(pids, "Investigación y guion", lambda: _investigar_y_escribir(pids, idea, segundos))
     return pids
+
+
+def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "") -> str:
+    """Un vídeo ya hecho (enlace o archivo) pasa a ser una producción: escenas con su texto y su trozo de vídeo,
+    lista para revisar, renderizar con subtítulos y sacar los 3 formatos."""
+    if not url and not archivo:
+        raise ValueError("Pega el enlace del vídeo o sube el archivo.")
+    titulo = nombre.rsplit(".", 1)[0] if nombre else "Vídeo importado"
+    pid = f"{time.strftime('%Y%m%d-%H%M%S')}-importado-{_slug(titulo if not url else 'video')}"
+    _nueva(pid, tema=titulo, version="importado", estado="importando", guion_aprobado=True, autor_guion="Vídeo original",
+           subtitulos={**subtitulos.POR_DEFECTO, "sonidos": False}, origen={"url": url, "archivo": nombre})
+    if archivo:
+        importar.subida_a_origen(archivo, carpeta(pid))
+    activar(pid)
+
+    def fase():
+        datos = {}
+        if url:
+            _avisar(pid, "Leyendo el enlace", 3)
+            datos = importar.descargar(url, carpeta(pid), lambda f: _avisar(pid, f, 8))
+        campos = importar.preparar(carpeta(pid), lambda f, n: _avisar(pid, f, n))
+        modificar(pid, lambda q: q.update(**campos, estado="rodando", titulo=datos.get("titulo") or q["tema"],
+                                          tema=datos.get("titulo") or q["tema"],
+                                          origen={**q["origen"], **{k: datos[k] for k in ("canal",) if k in datos}}))
+        preparar_carpeta(pid)
+    _en_fondo(pid, "Importar vídeo", fase)
+    return pid
 
 
 def _guardar_referencias(pids: list[str], refs: dict[str, Any] | None) -> None:
@@ -645,7 +673,14 @@ def editar_escena(pid: str, orden: int, datos: dict[str, Any]) -> dict[str, Any]
             esc["texto_pantalla"] = str(datos["texto_pantalla"]).strip()[:60]
         if "texto_voz" in datos and str(datos["texto_voz"]).strip() != esc["texto_voz"]:
             esc["texto_voz"] = " ".join(str(datos["texto_voz"]).split())
-            p["voz"] = None  # la locución ya no corresponde: hay que rehacerla
+            if p.get("version") == "importado" and p.get("voz"):
+                # Vídeo importado: el audio es el original; solo cambian los subtítulos de esa escena.
+                t = p["voz"]["escenas"][orden - 1]
+                p["voz"]["palabras"] = importar.retemporizar(p["voz"]["palabras"], t["ini"], t["fin"], esc["texto_voz"])
+                p["guion"] = " ".join(e["texto_voz"] for e in p["escenas"])
+                p["final"] = None
+            else:
+                p["voz"] = None  # la locución ya no corresponde: hay que rehacerla
         if "elegida" in datos:
             i = int(datos["elegida"])
             if not 0 <= i < len(esc["tomas"]):

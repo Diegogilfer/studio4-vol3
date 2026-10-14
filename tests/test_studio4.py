@@ -762,3 +762,24 @@ def test_imagen_inicial_solo_si_la_escena_continua(aislado, monkeypatch):
     assert flow.sesion_para_extension()["siguiente"]["referencia"] is None          # escena nueva: plano libre
     produccion.modificar(p["id"], lambda q: q["escenas"][1].update(continua=True))
     assert flow.sesion_para_extension()["siguiente"]["referencia"] == "/media/x/fin.jpg"   # sigue sin corte
+
+
+# --- Importar un vídeo ya hecho -----------------------------------------------------------------------
+def test_importar_corta_escenas_en_frases_y_corrige_texto(aislado):
+    from studio4 import importar
+    texto = "Hola a todos. Hoy vamos a ver cómo se hace un faro, paso a paso, desde los cimientos hasta la luz. Empezamos ya."
+    palabras = [{"palabra": w, "ini": i * 0.5, "fin": i * 0.5 + 0.4} for i, w in enumerate(texto.split())]
+    tramos = importar.escenas(palabras, cortes=[], total=12.0)
+    assert tramos[0]["ini"] == 0.0 and tramos[-1]["fin"] == 12.0
+    assert all(a["fin"] == b["ini"] for a, b in zip(tramos, tramos[1:]))            # sin huecos entre escenas
+    assert all(t["palabras"][-1]["palabra"].endswith((".", ",")) for t in tramos[:-1])  # cortan en frase o coma
+    assert sum(len(t["palabras"]) for t in tramos) == len(palabras)
+    nuevas = importar.retemporizar(palabras, tramos[0]["ini"], tramos[0]["fin"], "Hola a todas.")
+    assert [w["palabra"] for w in nuevas[:3]] == ["Hola", "a", "todas."] and nuevas[3] == tramos[1]["palabras"][0]   # el resto, intacto
+
+    p = _produccion("20261014-100000-importado-faro", escenas=2, version="importado",
+                    voz={"archivo": "voz.wav", "duracion": 3.0, "escenas": [{"ini": 0, "fin": 1.5}, {"ini": 1.5, "fin": 3.0}],
+                         "palabras": [{"palabra": "frase", "ini": 0.1, "fin": 0.5}, {"palabra": "dos", "ini": 1.6, "fin": 2.0}]})
+    produccion.editar_escena(p["id"], 1, {"texto_voz": "frase corregida"})
+    q = produccion.cargar(p["id"])
+    assert q["voz"] is not None and [w["palabra"] for w in q["voz"]["palabras"]] == ["frase", "corregida", "dos"]

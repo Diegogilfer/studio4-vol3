@@ -217,9 +217,11 @@ function pintarAsistente() {
     li.className = n < visible ? "hecho" : n === visible ? "ahora" : "";
   });
   const propio = modo() === "propio";
+  $("crear").dataset.modo = modo();   // «Tengo un vídeo» esconde por CSS la idea, las referencias y los pasos
   $("a-idea").hidden = propio; $("a-guion").hidden = !propio;
-  document.querySelectorAll(".solo-idea").forEach((el) => { el.hidden = propio; });
+  document.querySelectorAll(".solo-idea").forEach((el) => { el.hidden = modo() !== "idea"; });
   document.querySelectorAll(".solo-propio").forEach((el) => { el.hidden = !propio; });
+  document.querySelectorAll(".solo-video").forEach((el) => { el.hidden = modo() !== "video"; });
   $("a-crear-txt").textContent = propio ? "Usar mi guion" : "Investigar y escribir";
   if (visible === 3) pintarResumen();
 }
@@ -372,6 +374,32 @@ $("ref-lista").addEventListener("click", async (ev) => {
 $("referencias").addEventListener("dragleave", () => $("referencias").classList.remove("soltando"));
 pintarRefs();
 
+// Tengo un vídeo: se importa por enlace o archivo y sale como producción con sus escenas, lista para Render.
+let videoSubido = null;
+$("v-archivo").addEventListener("change", (ev) => {
+  videoSubido = ev.target.files[0] || null;
+  $("v-info").textContent = videoSubido ? `${videoSubido.name} · ${(videoSubido.size / 1048576).toFixed(0)} MB` : "";
+  if (videoSubido) $("v-url").value = "";
+});
+$("v-url").addEventListener("input", () => { if ($("v-url").value) { videoSubido = null; $("v-info").textContent = ""; } });
+$("v-importar").addEventListener("click", async () => {
+  if (!$("v-derechos").checked) return alertaError("Marca que el vídeo es tuyo o que tienes derechos para reutilizarlo.");
+  const url = $("v-url").value.trim();
+  if (!videoSubido && !/^https?:\/\/\S+$/.test(url)) return alertaError("Pega el enlace del vídeo o sube el archivo.");
+  $("v-importar").disabled = true;
+  try {
+    if (videoSubido) {
+      await api("/api/importar/archivo?derechos=1", undefined, { method: "POST", body: videoSubido,
+        headers: { "Content-Type": videoSubido.type || "video/mp4", "X-Nombre": encodeURIComponent(videoSubido.name) } });
+    } else {
+      await api("/api/importar", { url, derechos: true });
+    }
+    $("v-url").value = ""; videoSubido = null; $("v-info").textContent = ""; $("v-derechos").checked = false;
+    empezarOtro = false;
+    await refrescar();
+    location.hash = "#flow";
+  } catch (e) { aviso(e); } finally { $("v-importar").disabled = false; }
+});
 function nuevoVideo() {
   empezarOtro = true; paso = 1; pintarAsistente();
   location.hash = "#crear";
@@ -616,6 +644,9 @@ $("fichas").addEventListener("click", async (ev) => {
 const duracionEscena = (e) => (e.tipo_clip === "imagen" ? `${String(e.segundos).replace(".", ",")} s en pantalla`
   : `clip de ${Math.min(8, Math.max(4, Math.ceil(e.segundos)))} s`);
 function pintarEscenas({ escenas, activa }) {
+  const importado = estado.produccion.version === "importado";
+  document.querySelector("#flow-sec h2").firstChild.textContent = importado ? "Revisa las escenas " : "Genera las escenas en Flow ";
+  $("abrir-flow").hidden = importado;
   const sinTipo = escenas.length && escenas.some((e) => !e.tipo_clip);
   $("pedir-tipos").hidden = !sinTipo;
   const videos = escenas.filter((e) => e.tipo_clip === "video").length;
@@ -639,12 +670,14 @@ function pintarEscenas({ escenas, activa }) {
         <div class="portada">${portada(e)}
           <span class="portada-num">Escena ${e.orden}</span><span class="portada-estado">${estadoTxt}</span></div>
         <div class="escena-cuerpo">
-          ${e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}${e.segundos ? ` · ${duracionEscena(e)}` : ""}</b>${
+          ${importado ? "" : e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}${e.segundos ? ` · ${duracionEscena(e)}` : ""}</b>${
             tipo === "video" && e.segundos > 8 ? `<span>La voz dura ${String(e.segundos).replace(".", ",")} s: el clip irá un poco a cámara lenta</span>` : ""}</div>` : ""}
-          <p class="voz-txt">«${esc(e.texto_voz)}»</p>
+          ${importado ? `<textarea class="campo texto-escena" rows="3" data-texto-escena="${e.orden}" aria-label="Texto de la escena ${e.orden}">${esc(e.texto_voz)}</textarea>`
+            : `<p class="voz-txt">«${esc(e.texto_voz)}»</p>`}
           ${e.tomas.length > 1 ? `<div class="tomas">${tomas}</div>` : ""}
           <div class="acciones">
-            <button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>
+            ${importado ? `<button class="boton" data-guardar-texto="${e.orden}">Guardar texto</button>`
+              : `<button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>`}
             <label class="boton">Subir clip<input type="file" accept="video/*,image/*" data-subir="${e.orden}"></label>
           </div>
         </div>
@@ -655,7 +688,11 @@ $("escenas").addEventListener("click", async (ev) => {
   const t = ev.target;
   const p = estado.produccion;
   try {
-    if (t.dataset.copiarPrompt) {
+    if (t.dataset.guardarTexto) {   // vídeo importado: corregir lo que dicen los subtítulos de esta escena
+      const n = Number(t.dataset.guardarTexto);
+      await api("/api/escena", { orden: n, texto_voz: document.querySelector(`[data-texto-escena="${n}"]`).value });
+      t.textContent = "Guardado"; setTimeout(() => { t.textContent = "Guardar texto"; }, 1500);
+    } else if (t.dataset.copiarPrompt) {
       const n = Number(t.dataset.copiarPrompt);
       await navigator.clipboard.writeText(p.escenas[n - 1].prompt_flow);
       t.textContent = "Copiado";

@@ -25,7 +25,7 @@ RAIZ_USUARIO = Path(os.getenv("STUDIO4_CARPETA", str(Path.home() / "Videos" / "S
 CLIPS, GUION, ENTREGAS = "1 Clips de Flow", "2 Guion y escenas", "3 Entregas"
 EXTENSIONES = {".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
-VERSION = {"corto": "Corto", "largo": "Largo", "propio": "Guion propio"}
+VERSION = {"corto": "Corto", "largo": "Largo", "propio": "Guion propio", "importado": "Importado"}
 
 LEEME = """«{titulo}» · clips de Google Flow
 
