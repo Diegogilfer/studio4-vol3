@@ -62,20 +62,20 @@ const ESTILOS = {
 // ============================================================== Ajustes: tema de color (se guarda en este navegador)
 // [id, nombre, plantilla, colores de la muestra, radio de la muestra]
 const TEMAS = [
-  ["cristal", "Cristal", "Cristal flotante", ["#ece6fb", "#a78bfa", "#5eead4", "#f9a8d4"], 16],
-  ["oceano", "Océano", "Nube sólida", ["#e3f2fb", "#7dd3fc", "#5eead4", "#a5b4fc"], 10],
+  ["cristal", "Cristal", "Nube de cristal", ["#ece6fb", "#a78bfa", "#5eead4", "#f9a8d4"], 18],
+  ["oceano", "Océano", "Nube sólida", ["#e3f2fb", "#7dd3fc", "#5eead4", "#a5b4fc"], 16],
   ["atardecer", "Atardecer", "Burbuja", ["#fbe9ee", "#fdba74", "#f9a8d4", "#c4b5fd"], 22],
-  ["arena", "Arena", "Editorial", ["#efe8dc", "#d6c4a5", "#c9d6c2", "#e7d3b0"], 2],
-  ["rosa", "Orquídea", "Pastel", ["#f5e9fb", "#f9a8d4", "#d8b4fe", "#c7d2fe"], 12],
-  ["menta", "Menta", "Minimal", ["#eef6f2", "#99d8c0", "#cfe8df", "#b9e3d3"], 8],
-  ["hielo", "Hielo", "Ventanas", ["#eaf0f7", "#93c5fd", "#c7d7ea", "#dbe7f5"], 6],
-  ["comic", "Cómic", "Viñeta", ["#fff1b8", "#ff5a36", "#2f6bff", "#111111"], 4],
-  ["grafito", "Grafito", "Estudio", ["#0a0b10", "#4f46e5", "#0d9488", "#8b5cf6"], 8],
-  ["medianoche", "Medianoche", "Neón", ["#0a1026", "#3b82f6", "#6366f1", "#06b6d4"], 6],
-  ["aurora", "Aurora", "Cristal oscuro", ["#2c1470", "#a855f7", "#2dd4bf", "#f472b6"], 16],
-  ["bosque", "Bosque", "Terminal", ["#07120d", "#10b981", "#65a30d", "#0d9488"], 0],
-  ["oro", "Carbón y oro", "Lujo", ["#0f0d09", "#f59e0b", "#b45309", "#fde68a"], 0],
-  ["vino", "Vino", "Revista", ["#1a0b12", "#f43f5e", "#fbbf24", "#7f1d1d"], 4],
+  ["arena", "Arena", "Papel cálido", ["#efe8dc", "#d6c4a5", "#c9d6c2", "#e7d3b0"], 14],
+  ["rosa", "Orquídea", "Pastel", ["#f5e9fb", "#f9a8d4", "#d8b4fe", "#c7d2fe"], 18],
+  ["menta", "Menta", "Minimal", ["#eef6f2", "#99d8c0", "#cfe8df", "#b9e3d3"], 16],
+  ["hielo", "Hielo", "Ventanas", ["#eaf0f7", "#93c5fd", "#c7d7ea", "#dbe7f5"], 12],
+  ["comic", "Cómic", "Viñeta", ["#fff1b8", "#ff5a36", "#2f6bff", "#111111"], 14],
+  ["grafito", "Grafito", "Estudio", ["#0a0b10", "#4f46e5", "#0d9488", "#8b5cf6"], 16],
+  ["medianoche", "Medianoche", "Neón", ["#0a1026", "#3b82f6", "#6366f1", "#06b6d4"], 14],
+  ["aurora", "Aurora", "Nube oscura", ["#2c1470", "#a855f7", "#2dd4bf", "#f472b6"], 18],
+  ["bosque", "Bosque", "Musgo", ["#07120d", "#10b981", "#65a30d", "#0d9488"], 14],
+  ["oro", "Carbón y oro", "Ámbar", ["#0f0d09", "#f59e0b", "#b45309", "#fde68a"], 14],
+  ["vino", "Vino", "Terciopelo", ["#1a0b12", "#f43f5e", "#fbbf24", "#7f1d1d"], 14],
 ];
 function aplicarTema(t) {
   document.documentElement.dataset.tema = t;

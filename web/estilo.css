@@ -1114,3 +1114,75 @@ html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"
 .ref-datos { width: 100%; min-height: 64px; height: auto; padding: 10px 14px; resize: none; font: 14px/1.5 var(--sans); }
 /* Barra: con 6 pestañas, en pantallas medianas solo los iconos (el nombre sale al pasar el ratón). */
 @media (max-width: 1240px) { .nav span { display: none; } .nav a { padding: 0 10px; } }
+
+/* ======================================================================= NUBE (2026-10-13)
+ * Dos familias en todo el proyecto: Geist (textos y botones) e Instrument Serif (titulares grandes).
+ * Todo redondeado y blando, con sombras difusas y animaciones lentas. Va al final: manda sobre lo anterior. */
+
+/* --- Tipografía única: las plantillas ya no cambian la letra */
+:root, html[data-tema] {
+  --sans: "Geist Variable", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --mono: var(--sans);
+  --display: "Instrument Serif", Georgia, serif;
+  --calma: cubic-bezier(.22, .61, .36, 1);
+}
+html[data-tema] :is(h1, h2, h3, .titulo-prod, .pregunta b, .pregunta-txt, .td-resumen):not(.display) {
+  font-family: var(--sans); text-transform: none; letter-spacing: -0.01em; font-weight: 600; }
+html[data-tema] .display { font-family: var(--display); font-weight: 400; text-transform: none; letter-spacing: -0.012em; }
+html[data-tema] :is(.boton, .primario, .nav a) { text-transform: none; letter-spacing: normal; font-size: 13.5px; font-weight: 500; }
+html[data-tema] .primario { font-weight: 600; }
+html[data-tema] .paso-de { font-family: var(--sans); letter-spacing: .12em; }
+.sello { font-family: var(--sans); font-weight: 600; letter-spacing: .12em; }
+.prompt { font-family: var(--sans); }
+html[data-tema="bosque"] .hero h1 em { font-style: italic; }
+
+/* --- Forma: redonda en todas las plantillas (se distinguen por color, superficie y sombra) */
+:root { --r-tarjeta: 34px; --r-caja: 24px; --r-control: 999px; --r-campo: 18px; --r-mini: 14px; }
+html[data-tema="oceano"]     { --r-tarjeta: 30px; --r-caja: 22px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="atardecer"]  { --r-tarjeta: 44px; --r-caja: 30px; --r-campo: 22px; --r-mini: 18px; }
+html[data-tema="arena"]      { --r-tarjeta: 28px; --r-caja: 20px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px;
+  --cristal-sombra: 0 26px 50px -34px rgb(60 40 20 / .35); --caja-sombra: 0 10px 24px -20px rgb(60 40 20 / .3); }
+html[data-tema="rosa"]       { --r-tarjeta: 34px; --r-caja: 24px; --r-control: 999px; --r-campo: 18px; --r-mini: 14px; }
+html[data-tema="menta"]      { --r-tarjeta: 30px; --r-caja: 22px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="hielo"]      { --r-tarjeta: 24px; --r-caja: 18px; --r-control: 14px; --r-campo: 12px; --r-mini: 10px; }
+html[data-tema="comic"]      { --r-tarjeta: 28px; --r-caja: 20px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="grafito"]    { --r-tarjeta: 30px; --r-caja: 22px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="medianoche"] { --r-tarjeta: 28px; --r-caja: 20px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="bosque"]     { --r-tarjeta: 28px; --r-caja: 20px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="oro"]        { --r-tarjeta: 28px; --r-caja: 20px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="vino"]       { --r-tarjeta: 28px; --r-caja: 20px; --r-control: 999px; --r-campo: 16px; --r-mini: 12px; }
+html[data-tema="comic"] :is(.boton, .primario) { text-transform: none; font-weight: 700; }
+
+/* --- Superficies de nube en los paneles de edición: blandas, con luz arriba y sombra muy difusa */
+html .tarjeta, html .hero, html .pc-canal {
+  box-shadow: var(--cristal-brillo), 0 40px 80px -48px color-mix(in oklab, var(--accent) 40%, transparent), var(--cristal-sombra); }
+html :is(.escena, .ajustes-render > div, .vista-subs, .pieza, .canal-ficha, .referencias, .td-idea, .td-nicho, .td-formato > div,
+  .td-cifras > div, .pc-kpi, .pc-red, .motor-paso, .pieza-mosaico, .muestra, .voz-op, .formato, .estilos button, .copiable, .paquete) {
+  background-image: linear-gradient(180deg, color-mix(in oklab, #fff 7%, transparent), transparent 60%); }
+html :is(.ajustes-render > div, .vista-subs, .canal-ficha, .referencias) { padding: 24px; }
+html :is(.escena, .ajustes-render > div, .pieza, .motor-paso, .pc-kpi, .pc-red, .td-idea, .pieza-mosaico) {
+  box-shadow: var(--caja-sombra), 0 22px 40px -32px color-mix(in oklab, var(--accent) 45%, transparent); }
+html :is(.guion-texto, .campo, .ref-datos) { box-shadow: inset 0 2px 6px -2px rgb(0 0 0 / .08); }
+html .caja-viva { border-radius: var(--r-tarjeta); }
+
+/* --- Movimiento tranquilo: todo entra y reacciona despacio, sin saltos */
+html :is(.boton, .primario, .cta, .cta-sec, .escena, .pieza-mosaico, .motor-paso, .pc-red, .td-idea, .toma, .voz-op, .formato,
+  .estilos button, .chips button, .pestanas a, .nav a, .ref-chip, .temas button) {
+  transition-property: transform, box-shadow, background-color, border-color, color, opacity;
+  transition-duration: .6s; transition-timing-function: var(--calma); }
+html :is(.escena, .pieza-mosaico, .motor-paso, .td-idea, .pc-red):hover { transform: translateY(-4px); }
+html :is(.boton, .primario, .cta, .cta-sec):hover { transform: translateY(-2px); }
+html :is(.boton, .primario, .cta, .cta-sec):active { transform: translateY(0) scale(.98); transition-duration: .2s; }
+@keyframes flotar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes aparecer { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+html .motor-paso.ahora:hover, html .pieza-mosaico.activa:hover { animation-play-state: paused; }
+html :is(.entrar, .paso, #tendencias, #canales, #flow-sec, #render-sec, #entregas-sec, .presentacion, .mosaico, .motor) {
+  animation: aparecer .9s var(--calma) both; }
+html :is(.escena, .motor-paso, .pieza-mosaico, .td-idea, .pc-canal) { animation: aparecer .9s var(--calma) both; }
+html :is(.escena, .motor-paso, .pieza-mosaico, .td-idea):nth-child(2) { animation-delay: .06s; }
+html :is(.escena, .motor-paso, .pieza-mosaico, .td-idea):nth-child(3) { animation-delay: .12s; }
+html :is(.escena, .motor-paso, .pieza-mosaico, .td-idea):nth-child(4) { animation-delay: .18s; }
+html :is(.escena, .motor-paso, .pieza-mosaico, .td-idea):nth-child(n+5) { animation-delay: .24s; }
+html .motor-paso.ahora, html .pieza-mosaico.activa { animation: aparecer .9s var(--calma) both, flotar 7s ease-in-out .9s infinite; }
+html .ajustes-panel { animation-duration: .7s; animation-timing-function: var(--calma); }
+html .progreso div { transition: width 1.2s var(--calma); }
