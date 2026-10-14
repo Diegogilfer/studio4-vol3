@@ -583,3 +583,27 @@ def test_carpeta_va_dentro_de_su_canal_y_se_mueve_la_vieja(aislado):
     base = carpetas.preparar(p)
     assert base == carpetas.RAIZ_USUARIO / "ARIGAB" / "2026-10-12 · Faro"
     assert (base / "1 Clips de Flow · Faro" / "Faro - escena 01.mp4").exists() and not vieja.exists()
+
+
+# --- Tendencias -----------------------------------------------------------------------------------
+def test_tendencias_cifras_y_pautas_para_el_guion(aislado):
+    from studio4 import guion, tendencias
+    assert tendencias._segundos("PT1H2M3S") == 3723 and tendencias._segundos("PT45S") == 45 and tendencias._segundos("P1D") == 86400
+    videos = [{"id": str(i), "titulo": t, "canal": "c", "categoria": "27", "etiquetas": ["Historia", "misterio"],
+               "segundos": s, "hd": hd, "vistas": 1000, "vistas_hora": vh, "horas": 10, "origen": "x", "url": ""}
+              for i, (t, s, hd, vh) in enumerate([("¿Por qué 3 corazones?", 40, True, 900), ("El faro", 50, True, 800),
+                                                   ("DOCUMENTAL ENTERO", 3000, False, 10), ("Un mapa", 300, True, 50)])]
+    m = tendencias.metricas(videos)
+    assert m["total"] == 4 and m["hd"] == 75 and m["duraciones"]["Hasta 1 min"] == 50 and m["duraciones"]["Más de 20 min"] == 25
+    assert m["titulos"]["con_pregunta"] == 25 and m["etiquetas"][0] in ("historia", "misterio")
+    assert tendencias.metricas([]) == {"total": 0}
+    assert tendencias.para_guion("fourlevel") == {}          # sin informe guardado no consulta nada
+    informe = {"resumen": "r", "nichos": [], "ideas": [], "duracion_corto": "30 a 45 s", "duracion_largo": "8 a 12 min",
+               "calidad": "1080p", "titulos": "con números", "consejos": ["gancho en 2 s"], "evitar": ["saludos largos"]}
+    archivo = tendencias._archivo("fourlevel")
+    archivo.parent.mkdir(parents=True)
+    archivo.write_text(json.dumps({"fecha": "2026-10-01 10:00:00", "informe": informe, "metricas": m, "rapidos": []}), encoding="utf-8")
+    t = tendencias.para_guion("fourlevel")
+    texto = guion._peticion("faros", "dossier", {"corto": 40}, youtube={"tendencias": t})
+    assert "2026-10-01" in texto and "30 a 45 s" in texto and "gancho en 2 s" in texto and "Evita: saludos largos" in texto
+    assert tendencias.estado("fourlevel")["caducado"] is True

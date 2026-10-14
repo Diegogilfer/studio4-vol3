@@ -66,6 +66,11 @@ def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = ""
     if (yt.get("tu_canal") or {}).get("mas_vistos"):
         partes += ["", f"LOS VÍDEOS QUE MEJOR FUNCIONAN EN EL CANAL «{yt['tu_canal']['nombre']}» (su público responde a este tono y estos temas):"]
         partes += [f"- «{v['titulo']}» ({v['vistas']:,} vistas)".replace(",", ".") for v in yt["tu_canal"]["mas_vistos"][:8]]
+    if yt.get("tendencias"):
+        t = yt["tendencias"]
+        partes += ["", f"LO QUE FUNCIONA HOY EN YOUTUBE, SHORTS Y REELS (tendencias del {t['fecha']}; úsalo para el ritmo y el gancho, no para cambiar el tema):",
+                   f"- Corto: {t['duracion_corto']}", f"- Largo: {t['duracion_largo']}", f"- Títulos: {t['titulos']}"]
+        partes += [f"- {c}" for c in t["consejos"]] + [f"- Evita: {e}" for e in t["evitar"]]
     partes += ["", "--- DOSSIER DE INVESTIGACIÓN ---", dossier or "(sin investigación: usa solo hechos muy conocidos)",
               "--- FIN DEL DOSSIER ---", "", "Escribe estas versiones:"]
     for v, seg in versiones.items():

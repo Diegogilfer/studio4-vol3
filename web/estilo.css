@@ -805,3 +805,30 @@ select.campo option { background: var(--bg-panel, #fff); color: #161827; }
 @media (max-width: 640px) { .canal-campo { max-width: 120px; padding: 0 10px; } }
 /* Móvil: Flow solo se usa en el ordenador; su píldora deja sitio al selector de canal. */
 @media (max-width: 640px) { #flow-boton { display: none; } }
+/* Tendencias */
+.canal-ficha label.ancho { grid-column: 1 / -1; }
+.td-resumen { font-size: 17px; line-height: 1.6; margin-bottom: 18px; color: var(--fg); }
+.td-titulo { font-size: 16px; margin: 24px 0 12px; }
+.td-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.td-cifras > div, .td-formato > div, .td-idea, .td-nicho { padding: 16px; border-radius: 20px; background: var(--caja); border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.td-cifras small, .td-idea small { display: block; font-size: 12.5px; color: var(--fg-muted); }
+.td-cifras b { display: block; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; margin-top: 4px; }
+.td-duraciones { grid-column: 1 / -1; }
+.td-duraciones ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.td-duraciones li { display: grid; grid-template-columns: 110px minmax(0, 1fr) 48px; gap: 12px; align-items: center; font-size: 13.5px; }
+.td-duraciones i { height: 10px; border-radius: 999px; background: linear-gradient(90deg, var(--accent) var(--v), color-mix(in oklab, var(--fg) 8%, transparent) var(--v)); }
+.td-duraciones b { font-size: 13.5px; margin: 0; text-align: right; }
+.td-formato, .td-nichos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.td-formato b, .td-nicho > b { display: block; font-size: 14px; margin-bottom: 4px; color: var(--accent-2); }
+.td-formato p, .td-nicho p, .td-idea p { font-size: 14px; line-height: 1.55; color: var(--fg); }
+.td-ideas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.td-idea { display: grid; gap: 8px; align-content: start; }
+.td-idea b { font-size: 16px; line-height: 1.35; }
+.td-idea .boton { justify-self: start; }
+.td-nicho ul { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.enlace { all: unset; cursor: pointer; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font-size: 14px; }
+.enlace:hover { color: var(--fg); }
+.enlace:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.td-listas ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; line-height: 1.55; }
+.td-rapidos { margin-top: 22px; }
+@media (max-width: 900px) { .td-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); } .td-formato, .td-nichos { grid-template-columns: 1fr; } }

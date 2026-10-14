@@ -288,15 +288,17 @@ $("a-otro").addEventListener("click", () => { empezarOtro = true; paso = 1; pint
 $("a-nuevo").addEventListener("click", () => { empezarOtro = true; paso = 1; pintarAsistente(); $("a-idea").focus(); });
 
 // Pestañas: cada parte del estudio es su propia vista (#crear, #flow, #render, #entregas).
-const VISTAS = ["crear", "flow", "render", "entregas"];
+const VISTAS = ["crear", "tendencias", "flow", "render", "entregas"];
 const vistaActual = () => (VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "crear");
 function mostrarVista() {
   const v = vistaActual();
   const p = estado?.produccion;
   const lista = !!(p && p.guion_aprobado);
+  const fuera = v === "crear" || v === "tendencias";   // vistas que no dependen de una producción
   $("crear").hidden = v !== "crear";
-  $("prod").hidden = v === "crear" || !lista;
-  $("sin-prod").hidden = v === "crear" || lista;
+  $("tendencias").hidden = v !== "tendencias";
+  $("prod").hidden = fuera || !lista;
+  $("sin-prod").hidden = fuera || lista;
   for (const id of ["flow", "render", "entregas"]) $(`${id}-sec`).hidden = v !== id;
   document.querySelectorAll(".nav a").forEach((a) => a.classList.toggle("activo", a.getAttribute("href") === `#${v}`));
   document.querySelectorAll("#pasos a").forEach((a) => a.classList.toggle("abierta", a.dataset.p === v));
@@ -802,6 +804,7 @@ function fichaCanal(c, redes) {
   const id = c.id || "nuevo";
   return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
     <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
+    <label class="ancho"><span>Nicho (de qué trata el canal)</span><input class="campo" name="nicho" value="${esc(c.nicho || "")}" placeholder="historia y ciencia curiosa…" autocomplete="off"></label>
     ${Object.keys(redes).map((r) => `<label><span>${esc(REDES[r]?.[0] || redes[r])}</span>
       <input class="campo" name="${r}" value="${esc(c.redes?.[r] || "")}" placeholder="${esc(REDES[r]?.[1] || "@usuario")}…" autocomplete="off" spellcheck="false" id="red-${esc(id)}-${r}"></label>`).join("")}
     <div class="fila"><button class="primario" type="submit">${c.id ? "Guardar canal" : "Crear canal"}</button><span class="meta" role="status" aria-live="polite"></span></div>
@@ -818,7 +821,7 @@ $("canales-lista").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const f = ev.target;
   const datos = Object.fromEntries(new FormData(f));
-  const cuerpo = { nombre: datos.nombre, redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
+  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
   if (f.dataset.canal) cuerpo.id = f.dataset.canal;
   try {
     await api("/api/canales", cuerpo);
@@ -829,6 +832,64 @@ $("canales-lista").addEventListener("submit", async (ev) => {
 });
 $("canal-nuevo").addEventListener("click", () => pintarCanalesAjustes(true));
 $("abrir-ajustes").addEventListener("click", () => pintarCanalesAjustes());
+
+// ============================================================== Tendencias
+const minSeg = (s) => (s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} min` : `${s} s`);
+async function cargarTendencias() {
+  let t;
+  try { t = await api("/api/tendencias"); } catch (e) { return aviso(e); }
+  siCambia("tendencias", { t, c: estado?.canal }, () => pintarTendencias(t));
+}
+function pintarTendencias(t) {
+  const c = estado?.canal || {};
+  $("td-canal").textContent = `Tendencias · ${c.nombre || ""}`;
+  $("td-trabajo").hidden = !t.ocupado; $("td-fase").textContent = t.fase ? `${t.fase}…` : "";
+  $("td-actualizar").disabled = t.ocupado;
+  $("td-error").hidden = !t.error; $("td-error").textContent = t.error ? `No se pudieron actualizar: ${t.error}` : "";
+  $("td-nicho").textContent = c.nicho ? ""
+    : `Escribe el nicho de ${c.nombre || "este canal"} en Ajustes → Canales (por ejemplo «historia y ciencia curiosa»): las ideas se ajustan mucho mejor.`;
+  const d = t.datos;
+  $("td-fecha").textContent = d ? `Actualizado ${fecha(d.fecha)}${t.caducado ? " · tiene más de un día: conviene actualizar" : ""}`
+    : "Todavía no hay tendencias para este canal: pulsa «Actualizar tendencias» (tarda unos 30 segundos, gratis).";
+  $("td-cuerpo").hidden = !d;
+  if (!d) return;
+  const m = d.metricas, i = d.informe;
+  $("td-resumen").textContent = i.resumen;
+  const barras = Object.entries(m.duraciones).map(([k, v]) => `<li><span>${esc(k)}</span><i style="--v:${v}%"></i><b>${v} %</b></li>`).join("");
+  $("td-cifras").innerHTML = `
+    <div><small>Vídeos analizados</small><b>${miles(m.total)}</b></div>
+    <div><small>En HD</small><b>${m.hd} %</b></div>
+    <div><small>Duración de los que más crecen</small><b>${minSeg(m.duracion_mas_rapidos)}</b></div>
+    <div><small>Largo medio del título</small><b>${m.titulos.largo_medio} letras</b></div>
+    <div class="td-duraciones"><small>Duración de lo más visto</small><ul>${barras}</ul></div>`;
+  $("td-formato").innerHTML = [["Vídeo corto", i.duracion_corto], ["Vídeo largo", i.duracion_largo], ["Calidad", i.calidad], ["Títulos", i.titulos]]
+    .map(([k, v]) => `<div><b>${k}</b><p>${esc(v)}</p></div>`).join("");
+  $("td-ideas").innerHTML = i.ideas.map((x) => `
+    <div class="td-idea"><small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"}</small>
+      <b>${esc(x.idea)}</b><p>${esc(x.por_que)}</p>
+      <button class="boton" type="button" data-idea="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear este vídeo <svg width="14" height="14"><use href="#i-flecha"/></svg></button></div>`).join("");
+  $("td-nichos").innerHTML = i.nichos.map((n) => `
+    <div class="td-nicho"><b>${esc(n.nombre)}</b><p>${esc(n.por_que)}</p>
+      <ul>${n.ideas.map((x) => `<li><button class="enlace" type="button" data-idea="${esc(x)}" data-formato="corto">${esc(x)}</button></li>`).join("")}</ul></div>`).join("");
+  $("td-consejos").innerHTML = i.consejos.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("td-evitar").innerHTML = i.evitar.map((x) => `<li>${esc(x)}</li>`).join("");
+  $("td-rapidos").innerHTML = d.rapidos.map((v) => `<li><a href="${esc(v.url)}" target="_blank" rel="noreferrer">${esc(v.titulo)}</a> · ${esc(v.canal)} · ${miles(v.vistas_hora)} vistas/hora · ${minSeg(v.segundos)}</li>`).join("");
+}
+$("td-actualizar").addEventListener("click", async () => {
+  try { await api("/api/tendencias", {}); await cargarTendencias(); } catch (e) { aviso(e); }
+});
+$("tendencias").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-idea]");
+  if (!b) return;
+  // La idea pasa a Crear: modo idea, el formato que se recomienda y el asistente en el paso 1.
+  document.querySelector('input[name="modo"][value="idea"]').checked = true;
+  $("a-idea").value = b.dataset.idea; crecer($("a-idea"));
+  $("a-corto").checked = b.dataset.formato === "corto"; $("a-largo").checked = b.dataset.formato === "largo";
+  empezarOtro = true; paso = 1;
+  location.hash = "#crear";
+  pintarAsistente();
+  $("a-idea").focus();
+});
 
 // ============================================================== Ciclo
 async function refrescar() {
@@ -854,6 +915,7 @@ async function refrescar() {
     firmas.vistaInicial = 1;
   }
   mostrarVista();
+  if (vistaActual() === "tendencias") cargarTendencias();
   if (!p || !p.guion_aprobado) return;
   siCambia("cabecera", { p: { ...p, trabajo: null } }, () => pintarCabecera(p));
   siCambia("registro-flow", d.extension, pintarRegistroFlow);

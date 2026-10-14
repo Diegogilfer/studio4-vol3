@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import canales, carpetas, config, flow, guion, miniaturas, produccion, registro, render, subtitulos, voz, youtube  # noqa: E402
+from studio4 import canales, carpetas, config, flow, guion, miniaturas, produccion, registro, render, subtitulos, tendencias, voz, youtube  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -199,6 +199,8 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(self._estado())
         if ruta == "/api/producciones":
             return self._json(produccion.listar(canales.activo()["id"]))
+        if ruta == "/api/tendencias":
+            return self._json(tendencias.estado(canales.activo()["id"]))
         if ruta == "/api/canales":
             return self._json({"canales": canales.listar(), "activo": canales.activo()["id"], "redes": canales.REDES})
         if ruta == "/api/voz/oir":   # frase de presentación de una voz (se graba una vez y se guarda)
@@ -296,6 +298,9 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"ok": True, "ids": pids})
         if ruta == "/api/canales":
             return self._json({"ok": True, "canal": canales.guardar(self._cuerpo_json())})
+        if ruta == "/api/tendencias":
+            tendencias.lanzar(canales.activo()["id"])
+            return self._json({"ok": True})
         if ruta == "/api/canales/activar":
             return self._json({"ok": True, "canal": canales.activar(str(self._cuerpo_json().get("id", "")))})
         if ruta == "/api/activar":

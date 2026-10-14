@@ -17,7 +17,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (canales, carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, render, subtitulos,
+from . import (canales, carpetas, config, deepseek, director, entregas, guion, investigacion, miniaturas, render, subtitulos, tendencias,
                visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -211,6 +211,8 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
         _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
         usuario = canales.de_produccion(cargar(pids[0]))["redes"].get("youtube") or config.YOUTUBE_CANAL
         dossier["youtube"] = youtube.contexto_para_guion(idea, usuario)
+    if t := tendencias.para_guion(cargar(pids[0])["canal"]):   # pautas del día del canal, si ya se pidieron
+        dossier.setdefault("youtube", {})["tendencias"] = t
     for pid in pids:
         modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
     autor = "DeepSeek" if deepseek.disponible() else "Gemini"
