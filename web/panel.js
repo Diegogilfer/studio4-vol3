@@ -568,6 +568,9 @@ function portada(e) {
   return `<div class="sin-portada"></div>`;   // en negro hasta que llegue su clip
 }
 
+// Vídeo: los segundos de clip a pedir en Flow (los de su voz, entre 4 y 8). Imagen: lo que estará en pantalla.
+const duracionEscena = (e) => (e.tipo_clip === "imagen" ? `${String(e.segundos).replace(".", ",")} s en pantalla`
+  : `clip de ${Math.min(8, Math.max(4, Math.ceil(e.segundos)))} s`);
 function pintarEscenas({ escenas, activa }) {
   const sinTipo = escenas.length && escenas.some((e) => !e.tipo_clip);
   $("pedir-tipos").hidden = !sinTipo;
@@ -592,7 +595,8 @@ function pintarEscenas({ escenas, activa }) {
         <div class="portada">${portada(e)}
           <span class="portada-num">Escena ${e.orden}</span><span class="portada-estado">${estadoTxt}</span></div>
         <div class="escena-cuerpo">
-          ${e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}</b></div>` : ""}
+          ${e.tipo_clip ? `<div class="hacer-como ${tipo}"><b>Hazla en Flow como ${tipo === "imagen" ? "imagen" : "vídeo"}${e.segundos ? ` · ${duracionEscena(e)}` : ""}</b>${
+            tipo === "video" && e.segundos > 8 ? `<span>La voz dura ${String(e.segundos).replace(".", ",")} s: el clip irá un poco a cámara lenta</span>` : ""}</div>` : ""}
           <p class="voz-txt">«${esc(e.texto_voz)}»</p>
           ${e.tomas.length > 1 ? `<div class="tomas">${tomas}</div>` : ""}
           <div class="acciones">

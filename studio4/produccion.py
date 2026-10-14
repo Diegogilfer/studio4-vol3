@@ -41,6 +41,14 @@ def cargar(pid: str) -> dict[str, Any]:
                          ("avisos", []), ("autor_guion", "")):
         p.setdefault(campo, vacio)
     p.setdefault("canal", canales.listar()[0]["id"])   # las de antes de los canales son del primero
+    if p.get("escenas") and any("segundos" not in e for e in p["escenas"]):   # de antes de las duraciones por escena
+        tiempos = (p.get("voz") or {}).get("escenas") or []
+        if len(tiempos) == len(p["escenas"]):
+            director.poner_duraciones(p["escenas"], tiempos, p.get("biblia") or {}, p.get("estilo_en", ""),
+                                      config.FORMATOS[p["formato"]]["aspecto"])
+        else:
+            for e in p["escenas"]:
+                e.setdefault("segundos", round(len(e["texto_voz"].split()) / guion.PALABRAS_POR_SEGUNDO, 1))
     return p
 
 
@@ -411,7 +419,11 @@ def _generar_voz(pid: str) -> None:
         _avisar(pid, f"{voz.PROVEEDORES[p['proveedor_voz']]} falló; uso {voz.PROVEEDORES[otra]}", 75)
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones,
                               voz_nombre=p.get("voz_nombre"))
-    modificar(pid, lambda q: q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")}))
+    def con_voz(q):
+        q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")})
+        director.poner_duraciones(q["escenas"], tiempos["escenas"], q.get("biblia") or {}, q.get("estilo_en", ""),
+                                  config.FORMATOS[q["formato"]]["aspecto"])
+    modificar(pid, con_voz)
 
 
 def muestras_voz(pid: str, voces: list[str]) -> None:
@@ -607,6 +619,7 @@ def editar_escena(pid: str, orden: int, datos: dict[str, Any]) -> dict[str, Any]
         esc = p["escenas"][orden - 1]
         if "prompt_flow" in datos:
             esc["prompt_flow"] = str(datos["prompt_flow"]).strip()
+            esc["prompt_editado"] = True   # tu versión manda: ya no se reescribe sola
         if "texto_pantalla" in datos:
             esc["texto_pantalla"] = str(datos["texto_pantalla"]).strip()[:60]
         if "texto_voz" in datos and str(datos["texto_voz"]).strip() != esc["texto_voz"]:

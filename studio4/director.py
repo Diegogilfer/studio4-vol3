@@ -7,12 +7,14 @@ cada prompt: así Veo ve la misma descripción en todas las escenas y la secuenc
 from __future__ import annotations
 
 import logging
+import math
 import re
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from . import config, gemini
+from .guion import PALABRAS_POR_SEGUNDO
 
 logger = logging.getLogger("studio4.director")
 
@@ -88,9 +90,15 @@ REGLAS:
    con una sugerencia de reescritura. El guion lo ha aprobado una persona."""
 
 
+def duracion_clip(segundos: float) -> int:
+    """Segundos de clip a pedir en Flow para un trozo de voz: lo que dura, redondeado arriba, entre 4 y 8."""
+    return min(config.SEGUNDOS_CLIP, max(4, math.ceil(segundos or 0)))
+
+
 def _prompt_flow(esc: dict[str, Any], biblia: dict[str, Any], estilo: str, aspecto: str) -> str:
     """Prompt autosuficiente para pegar en Flow: plano + acción + biblia completa + estilo.
-    Para imagen pide una foto fija (sin movimiento de cámara); para vídeo, un plano de 8 s con su movimiento."""
+    Para imagen pide una foto fija (sin movimiento de cámara); para vídeo, un plano de los segundos que dura su voz
+    (máximo 8), con la acción repartida en ese tiempo."""
     imagen = esc.get("tipo_clip") == "imagen"
     looks = {p["nombre"].upper(): p["aspecto_en"].strip().rstrip(".") for p in biblia.get("personajes", [])}
     salen = [n.upper() for n in esc.get("personajes", []) if n.upper() in looks]
@@ -106,6 +114,8 @@ def _prompt_flow(esc: dict[str, Any], biblia: dict[str, Any], estilo: str, aspec
     if imagen:
         partes.append(f"Single still photograph, frozen moment, aspect ratio {aspecto}. No text, no letters.")
     else:
+        n = duracion_clip(esc.get("segundos") or config.SEGUNDOS_CLIP)
+        partes.append(f"Duration: one continuous {n}-second shot; the action fills the whole {n} seconds.")
         partes.append(f"Aspect ratio {aspecto}. Ambient sound effects only: no dialogue, no voice-over, no music. No on-screen text.")
     return " ".join(partes)
 
@@ -151,6 +161,16 @@ def recomendar_tipos(escenas: list[dict[str, Any]], biblia: dict[str, Any], esti
             e["prompt_flow"] = _prompt_flow(e, biblia, estilo_en, aspecto)
 
 
+def poner_duraciones(escenas: list[dict[str, Any]], tiempos: list[dict[str, Any]], biblia: dict[str, Any],
+                     estilo_en: str, aspecto: str) -> None:
+    """Con la voz ya grabada, cada escena sabe lo que dura de verdad: se apunta y su prompt pide ese tiempo
+    (salvo que lo hayas editado a mano)."""
+    for e, t in zip(escenas, tiempos):
+        e["segundos"] = round(t["fin"] - t["ini"], 1)
+        if not e.get("prompt_editado") and e.get("plano_en") and e.get("accion_en"):
+            e["prompt_flow"] = _prompt_flow(e, biblia, estilo_en, aspecto)
+
+
 def _palabras(texto: str) -> list[str]:
     return re.findall(r"\w+", texto.lower())
 
@@ -184,6 +204,7 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
     _intercalar(plan["escenas"])
     for i, esc in enumerate(plan["escenas"], start=1):
         esc["orden"] = i
+        esc["segundos"] = round(len(esc["texto_voz"].split()) / PALABRAS_POR_SEGUNDO, 1)   # se afina al grabar la voz
         esc["prompt_flow"] = _prompt_flow(esc, plan["biblia"], estilo_en, aspecto)
         n = len(esc["texto_voz"].split())
         if n > PALABRAS_MAX_ESCENA + 4:

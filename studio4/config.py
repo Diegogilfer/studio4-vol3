@@ -79,6 +79,7 @@ FORMATOS = {
 }
 FPS = 30
 VOLUMEN_AMBIENTE = float(os.getenv("STUDIO4_VOLUMEN_AMBIENTE", "0.15"))  # sonido de Veo bajo la voz; 0 = sin él
+SEGUNDOS_CLIP = 8       # lo más largo que genera Flow (Veo) por clip
 CAMARA_LENTA_MAX = 1.5  # si la voz dura más que el clip, se ralentiza hasta aquí y luego se congela el final
 
 # Estilos visuales que el director inyecta en cada prompt de Flow (siempre en inglés para Veo).

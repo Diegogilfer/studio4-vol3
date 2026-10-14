@@ -723,3 +723,18 @@ def test_sonidos_se_colocan_en_su_arranque_real_y_no_se_pisan():
     limpios = sonidos.limpiar([{"ini": 5, "fin": 5.1, "texto": "golpe."}, {"ini": 5.5, "fin": 9, "texto": "Eco"},
                                {"ini": 7, "fin": 20, "texto": "[Música]"}, {"ini": 11.9, "fin": 13, "texto": "Tarde"}], 12.0)
     assert limpios == [{"ini": 5.0, "fin": 6.2, "texto": "Golpe"}, {"ini": 7.0, "fin": 11.0, "texto": "Música"}]
+
+
+# --- Duración de cada escena en Flow ---------------------------------------------------------------
+def test_duracion_de_cada_escena_en_el_prompt():
+    assert [director.duracion_clip(s) for s in (2.0, 5.4, 7.9, 11.7)] == [4, 6, 8, 8]
+    biblia = {"personajes": [], "escenario_en": "Hiroshima, 1945", "luz_en": "dawn", "paleta_en": "amber"}
+    escenas = [{"orden": 1, "tipo_clip": "video", "plano_en": "wide shot", "camara_en": "slow push-in", "accion_en": "a flash"},
+               {"orden": 2, "tipo_clip": "imagen", "plano_en": "portrait", "camara_en": "", "accion_en": "a man"},
+               {"orden": 3, "tipo_clip": "video", "plano_en": "close-up", "camara_en": "static", "accion_en": "hands",
+                "prompt_flow": "mi prompt", "prompt_editado": True}]
+    director.poner_duraciones(escenas, [{"ini": 0, "fin": 5.4}, {"ini": 5.4, "fin": 11.3}, {"ini": 11.3, "fin": 15}], biblia, "cine", "16:9")
+    assert [e["segundos"] for e in escenas] == [5.4, 5.9, 3.7]
+    assert "continuous 6-second shot" in escenas[0]["prompt_flow"]
+    assert "second" not in escenas[1]["prompt_flow"] and "Single still photograph" in escenas[1]["prompt_flow"]
+    assert escenas[2]["prompt_flow"] == "mi prompt"        # el que editaste a mano no se toca
