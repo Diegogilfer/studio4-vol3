@@ -347,6 +347,9 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/referencias/borrar":
             referencias.borrar(str(self._cuerpo_json().get("id", "")))
             return self._json({"ok": True})
+        if ruta == "/api/producciones/eliminar":
+            produccion.eliminar(str(self._cuerpo_json().get("id", "")))
+            return self._json({"ok": True})
         if ruta == "/api/activar":
             pid = str(self._cuerpo_json().get("id", ""))
             canales.activar(produccion.cargar(pid)["canal"])   # abrir una producción abre su canal

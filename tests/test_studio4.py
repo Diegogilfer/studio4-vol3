@@ -783,3 +783,17 @@ def test_importar_corta_escenas_en_frases_y_corrige_texto(aislado):
     produccion.editar_escena(p["id"], 1, {"texto_voz": "frase corregida"})
     q = produccion.cargar(p["id"])
     assert q["voz"] is not None and [w["palabra"] for w in q["voz"]["palabras"]] == ["frase", "corregida", "dos"]
+
+
+# --- Eliminar una producción: queda desvinculada de todo ---------------------------------------------------
+def test_eliminar_produccion_la_desvincula(aislado):
+    vieja = _produccion("20261014-080000-vieja", escenas=2)
+    nueva = _produccion("20261014-090000-nueva", escenas=2)
+    produccion.activar(vieja["id"])
+    produccion.eliminar(vieja["id"])
+    assert [x["id"] for x in produccion.listar()] == ["20261014-090000-nueva"]     # ya no se ve
+    assert produccion.activa() == "20261014-090000-nueva"                          # ni queda abierta
+    assert (config.PRODUCCIONES / "_papelera" / vieja["id"] / "proyecto.json").exists()   # recuperable a mano
+    produccion.modificar(nueva["id"], lambda q: q["trabajo"].update(ocupado=True))
+    with pytest.raises(ValueError):
+        produccion.eliminar(nueva["id"])   # trabajando: no se elimina

@@ -1226,3 +1226,13 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .importar .acciones-paso { justify-content: flex-end; }
 /* Escena de un vídeo importado: su texto se corrige aquí */
 .texto-escena { width: 100%; height: auto; min-height: 76px; padding: 10px 14px; resize: none; font: 14px/1.5 var(--sans); }
+/* Mosaico: abrir la producción o eliminarla */
+.pieza-mosaico .abrir-pieza { all: unset; position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end;
+  align-items: flex-start; gap: 8px; padding: 18px; cursor: pointer; border-radius: inherit; }
+.pieza-mosaico .abrir-pieza:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.pieza-mosaico.m0 .abrir-pieza b.display { font-size: clamp(30px, 3vw, 40px); }
+.quitar-pieza { position: absolute; top: 10px; right: 10px; z-index: 2; width: 30px; height: 30px; border-radius: 999px; border: 0;
+  background: rgb(0 0 0 / .55); color: #fff; cursor: pointer; opacity: 0; transition: opacity .4s var(--calma), background .4s var(--calma); }
+.pieza-mosaico:hover .quitar-pieza, .pieza-mosaico:focus-within .quitar-pieza { opacity: 1; }
+.quitar-pieza:hover { background: var(--danger, #dc2626); }
+@media (hover: none) { .quitar-pieza { opacity: .85; } }

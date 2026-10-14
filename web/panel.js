@@ -514,14 +514,27 @@ function pintarLista(lista) {
   $("lista").innerHTML = lista.slice(0, 7).map((p, i) => {
     const fondo = p.portada ? `style="background-image:url('${urlMedio(p.portada, p.id)}')"` : "";
     const estadoTxt = p.estado === "rodando" && p.escenas ? `${p.con_clip}/${p.escenas} clips` : ESTADOS[p.estado] || p.estado;
-    return `<button type="button" data-id="${esc(p.id)}" class="pieza-mosaico m${i} ${p.portada ? "con-foto" : ""} ${p.id === activa ? "activa" : ""}" ${fondo}>
-      <span class="sello">${esc(VERSION[p.version] || p.version || "Vídeo")} · ${esc(estadoTxt)}</span>
-      <b class="display">${esc(p.titulo || p.tema)}</b>
-      <small>${esc(fecha(p.creado))}</small></button>`;
+    return `<div class="pieza-mosaico m${i} ${p.portada ? "con-foto" : ""} ${p.id === activa ? "activa" : ""}" ${fondo}>
+      <button type="button" class="abrir-pieza" data-id="${esc(p.id)}">
+        <span class="sello">${esc(VERSION[p.version] || p.version || "Vídeo")} · ${esc(estadoTxt)}</span>
+        <b class="display">${esc(p.titulo || p.tema)}</b>
+        <small>${esc(fecha(p.creado))}</small></button>
+      <button type="button" class="quitar-pieza" data-eliminar="${esc(p.id)}" data-titulo="${esc(p.titulo || p.tema)}"
+        aria-label="Eliminar «${esc(p.titulo || p.tema)}»" title="Eliminar">✕</button></div>`;
   }).join("") + `<button type="button" class="pieza-mosaico nuevo" data-nuevo="1"><svg width="22" height="22"><use href="#i-crear"/></svg><b>Nuevo vídeo</b></button>`;
 }
 $("lista").addEventListener("click", async (ev) => {
   if (ev.target.closest("[data-nuevo]")) return nuevoVideo();
+  const x = ev.target.closest("[data-eliminar]");
+  if (x) {
+    if (!confirm(`¿Eliminar «${x.dataset.titulo}»? Sale del estudio y deja de recibir clips. Tus archivos en Vídeos\\STUDIO 4 no se tocan.`)) return;
+    try {
+      await api("/api/producciones/eliminar", { id: x.dataset.eliminar });
+      empezarOtro = false; paso = 1;
+      await refrescar();
+    } catch (e) { aviso(e); }
+    return;
+  }
   const b = ev.target.closest("[data-id]");
   if (!b) return;
   try {
@@ -595,8 +608,10 @@ function pintarTrabajo(t) {
   $("t-pct").textContent = t.ocupado ? `${t.progreso || 0}%` : "";
   $("t-barra").style.width = `${t.progreso || 0}%`;
   // Un trabajo que falló se queda a la vista, con su botón para reintentarlo, hasta que salga bien.
+  const p = estado?.produccion;
+  const enCrear = p && !p.guion_aprobado && !empezarOtro;   // en Crear, solo los del guion que estás revisando
   for (const id of ["t-error", "aviso-panel"]) {
-    $(id).hidden = !t.error;
+    $(id).hidden = !t.error || (id === "aviso-panel" && !enCrear);
     $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${!t.ocupado
       ? `<button class="boton" type="button" data-reintentar="1"><svg width="14" height="14"><use href="#i-renovar"/></svg>Reintentar</button>` : ""}` : "";
   }

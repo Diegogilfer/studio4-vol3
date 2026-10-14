@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import threading
 import time
 import unicodedata
@@ -341,6 +342,26 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
             titulo=p.get("titulo") or escrito["titulo_provisional"], estado="guion_listo", guion_aprobado=False))
 
 
+def eliminar(pid: str) -> None:
+    """Quita una producción del estudio: deja de estar abierta, de verse y de recibir clips de Flow o de la carpeta.
+    Sus datos van a producciones/_papelera (por si fue sin querer); tus archivos en Vídeos\\STUDIO 4 no se tocan."""
+    p = cargar(pid)
+    if p["trabajo"].get("ocupado"):
+        raise ValueError("Esta producción está trabajando: espera a que termine para eliminarla.")
+    with _lock:
+        papelera = config.PRODUCCIONES / "_papelera"
+        papelera.mkdir(exist_ok=True)
+        destino = papelera / pid
+        if destino.exists():
+            shutil.rmtree(destino)
+        shutil.move(str(carpeta(pid)), str(destino))
+        try:
+            if _ACTIVA.read_text(encoding="utf-8").strip() == pid:
+                _ACTIVA.unlink()   # sin abierta: el panel abre la siguiente del canal o empieza de cero
+        except OSError:
+            pass
+
+
 def reintentar(pid: str) -> None:
     """Vuelve a lanzar el último trabajo que falló, con lo que ya se tenía (no repite lo que salió bien)."""
     p = cargar(pid)
@@ -356,6 +377,8 @@ def reintentar(pid: str) -> None:
                 and not cargar(x["id"]).get("guion")] or [pid]
         segundos = {cargar(x)["version"]: cargar(x)["segundos"] for x in pids}
         _en_fondo(pids, nombre, lambda: _investigar_y_escribir(pids, p["tema"], segundos, dossier=p.get("investigacion")))
+    elif nombre == "Escenas y voz" and p.get("escenas"):
+        _en_fondo(pid, "Voz", lambda: _generar_voz(pid))   # las escenas ya estaban: falta solo la voz
     elif nombre == "Escenas y voz":
         aprobar_guion(pid)
     elif nombre == "Voz":
