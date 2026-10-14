@@ -284,6 +284,9 @@ class Panel(BaseHTTPRequestHandler):
         self._solo_panel()
         if ruta == "/api/flow/renovar":
             return self._json({"ok": True, "codigo": config.renovar_token_flow()})
+        if ruta == "/api/extension/abrir":   # la carpeta de la extensión buena, para cargarla en Chrome
+            os.startfile(str(config.RAIZ / "extension-flow"))  # noqa: S606 - abre el Explorador en tu propio PC
+            return self._json({"ok": True})
         if ruta == "/api/youtube/canal":
             return self._json({"ok": True, "canal": youtube.guardar_canal(str(self._cuerpo_json().get("canal", "")))})
         if ruta == "/api/youtube/desconectar":

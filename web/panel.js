@@ -556,6 +556,7 @@ document.addEventListener("click", async (ev) => {
 });
 
 function pintarExtension(ext) { $("ext-vieja").hidden = !(ext.conectada && ext.desactualizada); }
+$("ext-abrir").addEventListener("click", () => api("/api/extension/abrir", {}).catch(aviso));
 function portada(e) {
   // La toma elegida si ya hay clip; si no, negro.
   const toma = e.elegida !== null ? e.tomas[e.elegida] : null;

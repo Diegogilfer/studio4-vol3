@@ -265,7 +265,13 @@
       </div>
       <div class="fila carpeta-botones"><button class="primario" data-abrir="1 Clips de Flow">Abrir carpeta de clips</button>
         <button class="boton" data-abrir="">Abrir carpeta</button></div>
-      <p id="ext-vieja" class="error" hidden>Extensión de Flow antigua: recárgala en chrome://extensions.</p>
+      <div id="ext-vieja" class="error ext-vieja" role="alert" hidden>
+        <b>Chrome está usando una extensión de Flow antigua.</b>
+        <ol><li>En chrome://extensions, quita «STUDIO #4 · Recoger de Google Flow».</li>
+          <li>Pulsa «Cargar descomprimida» y elige la carpeta que abre este botón.</li>
+          <li>Empareja otra vez con «Flow: conectar».</li></ol>
+        <button class="boton" type="button" id="ext-abrir">Abrir la carpeta de la extensión nueva</button>
+      </div>
       <div id="escenas" class="escenas"></div>
     </section>
 
