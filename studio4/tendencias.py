@@ -81,6 +81,46 @@ def _del_nicho(nicho: str) -> list[dict[str, Any]]:
     return [_video(x, f"Nicho · {nicho}") for x in v.get("items", [])]
 
 
+def _filtro_canal(usuario: str) -> dict[str, str]:
+    return {"id": usuario} if usuario.startswith("UC") else {"forHandle": usuario}
+
+
+def del_referente(usuario: str) -> dict[str, Any]:
+    """Un canal que te inspira: sus datos y sus ~25 vídeos más recientes con vistas por hora (3 unidades de cupo)."""
+    d = youtube._get("channels", part="snippet,statistics,contentDetails", **_filtro_canal(usuario))
+    if not d.get("items"):
+        raise ValueError(f"No encuentro el canal {usuario} en YouTube.")
+    ch = d["items"][0]
+    subidas = ch["contentDetails"]["relatedPlaylists"]["uploads"]
+    try:
+        ids = [i["contentDetails"]["videoId"] for i in
+               youtube._get("playlistItems", part="contentDetails", playlistId=subidas, maxResults=25).get("items", [])]
+    except RuntimeError:
+        ids = []
+    nombre = ch["snippet"]["title"]
+    videos = [_video(v, f"Referente · {nombre}") for v in youtube._get(
+        "videos", part="snippet,contentDetails,statistics", id=",".join(ids)).get("items", [])] if ids else []
+    return {"canal": nombre, "usuario": usuario, "suscriptores": int(ch["statistics"].get("subscriberCount", 0)),
+            "videos": sorted(videos, key=lambda v: -v["vistas_hora"])}
+
+
+def parecidos(canal: dict[str, Any], n: int = 8) -> list[dict[str, Any]]:
+    """Canales de YouTube en español del mismo nicho, de más a menos suscriptores (101 unidades de cupo)."""
+    tema = canal.get("nicho") or canal["nombre"]
+    d = youtube._get("search", part="snippet", q=tema, type="channel", maxResults=25, relevanceLanguage="es")
+    ids = [i["snippet"]["channelId"] for i in d.get("items", [])]
+    if not ids:
+        return []
+    datos = youtube._get("channels", part="snippet,statistics", id=",".join(ids)).get("items", [])
+    propios = {canal["redes"].get("youtube", "").lower()}
+    salida = [{"canal": c["snippet"]["title"], "usuario": c["snippet"].get("customUrl") or c["id"],
+               "suscriptores": int(c["statistics"].get("subscriberCount", 0)), "videos": int(c["statistics"].get("videoCount", 0)),
+               "foto": c["snippet"]["thumbnails"].get("default", {}).get("url", "")}
+              for c in datos if (c["snippet"].get("customUrl") or "").lower() not in propios]
+    registro.apuntar("YouTube (lectura)", f"canales parecidos a {canal['nombre']}", unidad="consultas")
+    return sorted(salida, key=lambda c: -c["suscriptores"])[:n]
+
+
 def recoger(nicho: str = "", avisar=lambda _f: None) -> list[dict[str, Any]]:
     vistos: dict[str, dict[str, Any]] = {}
     for region in REGIONES:
@@ -144,6 +184,14 @@ class Idea(BaseModel):
     por_que: str
 
 
+class Formula(BaseModel):
+    canal: str = Field(description="Nombre del canal de referencia.")
+    formula: str = Field(description="Qué repite en sus vídeos que más crecen: tipo de tema, duración, gancho y cómo titula. "
+                                     "2 o 3 frases concretas.")
+    ideas: list[Idea] = Field(description="2 o 3 ideas ORIGINALES para el canal del autor con esa misma fórmula "
+                                          "(nunca sus títulos ni sus temas exactos).")
+
+
 class Informe(BaseModel):
     resumen: str = Field(description="3 o 4 frases: qué se está viendo hoy y qué significa para este canal.")
     nichos: list[Nicho] = Field(description="3 a 5 nichos con tirón que encajan con el canal.")
@@ -154,6 +202,7 @@ class Informe(BaseModel):
     titulos: str = Field(description="Cómo titular hoy: patrones que funcionan, con ejemplo.")
     consejos: list[str] = Field(description="5 a 7 consejos prácticos y concretos.")
     evitar: list[str] = Field(description="2 a 4 cosas que hoy no funcionan o saturan.")
+    formulas: list[Formula] = Field(default_factory=list, description="Una por cada canal de referencia (si los hay).")
 
 
 SISTEMA = """Eres estratega de contenido para canales de YouTube, Shorts, Reels y TikTok en español.
@@ -170,7 +219,8 @@ def _temas_del_canal(cid: str) -> list[str]:
     return list(dict.fromkeys(x["titulo"] or x["tema"] for x in produccion.listar(cid)))[:10]
 
 
-def _texto_para_gemini(canal: dict[str, Any], m: dict[str, Any], videos: list[dict[str, Any]]) -> str:
+def _texto_para_gemini(canal: dict[str, Any], m: dict[str, Any], videos: list[dict[str, Any]],
+                       referentes: list[dict[str, Any]] | None = None) -> str:
     rapidos = sorted(videos, key=lambda v: -v["vistas_hora"])[:40]
     temas = _temas_del_canal(canal["id"])
     lineas = [f"CANAL: {canal['nombre']}" + (f" · nicho: {canal.get('nicho')}" if canal.get("nicho") else "")
@@ -181,6 +231,13 @@ def _texto_para_gemini(canal: dict[str, Any], m: dict[str, Any], videos: list[di
               "", "LOS QUE MÁS RÁPIDO CRECEN (vistas por hora · duración · origen · título):"]
     lineas += [f"- {v['vistas_hora']:,}/h · {v['segundos'] // 60}:{v['segundos'] % 60:02d} · {v['origen']} · «{v['titulo']}»"
                .replace(",", ".") for v in rapidos]
+    for r in referentes or []:
+        lineas += ["", f"CANAL DE REFERENCIA «{r['canal']}» ({r['suscriptores']:,} suscriptores) · sus vídeos recientes que más crecen:".replace(",", ".")]
+        lineas += [f"- {v['vistas_hora']:,}/h · {v['segundos'] // 60}:{v['segundos'] % 60:02d} · «{v['titulo']}»".replace(",", ".")
+                   for v in r["videos"][:12]]
+    if referentes:
+        lineas += ["", "Para cada canal de referencia, explica su FÓRMULA y propone ideas originales para este canal con esa "
+                       "fórmula: se replica la manera (duración, gancho, ritmo, forma de titular), nunca el contenido."]
     return "\n".join(lineas)
 
 
@@ -203,12 +260,22 @@ def actualizar(cid: str) -> dict[str, Any]:
     if not videos:
         raise RuntimeError("YouTube no devolvió vídeos populares: revisa la clave de YouTube.")
     m = metricas(videos)
+    referentes = []
+    for usuario in canal.get("referentes") or []:
+        avisar(f"Mirando a tu referente {usuario}")
+        try:
+            referentes.append(del_referente(usuario))
+        except Exception as e:  # noqa: BLE001 - un referente que no se encuentra no frena el informe
+            logger.warning("Referente %s: %s", usuario, e)
     avisar("Convirtiendo las cifras en pautas para el canal")
-    crudo = gemini.generar(_texto_para_gemini(canal, m, videos), sistema=SISTEMA, esquema=Informe, temperatura=0.6,
+    crudo = gemini.generar(_texto_para_gemini(canal, m, videos, referentes), sistema=SISTEMA, esquema=Informe, temperatura=0.6,
                            detalle=f"tendencias · {canal['nombre']}")
     bloque = re.search(r"\{.*\}", crudo, re.DOTALL)
     informe = Informe.model_validate_json(bloque.group(0) if bloque else crudo).model_dump()
     datos = {"canal": cid, "fecha": time.strftime("%Y-%m-%d %H:%M:%S"), "metricas": m, "informe": informe,
+             "referentes": [{"canal": r["canal"], "suscriptores": r["suscriptores"],
+                             "videos": [{k: v[k] for k in ("titulo", "vistas", "vistas_hora", "segundos")} for v in r["videos"][:8]]}
+                            for r in referentes],
              "rapidos": sorted(videos, key=lambda v: -v["vistas_hora"])[:12]}
     _archivo(cid).parent.mkdir(parents=True, exist_ok=True)
     _archivo(cid).write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")

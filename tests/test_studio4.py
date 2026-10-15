@@ -826,3 +826,16 @@ def test_fuentes_elige_paginas_del_tema_y_se_guardan_en_el_canal(aislado):
     assert fuentes.elegir(urls, ["helicopter"]) == []
     c = canales.guardar({**canales.obtener("fourlevel"), "fuentes": ["https://www.gtabase.com/gta-6/", "no es web"]})
     assert c["fuentes"] == ["https://www.gtabase.com/gta-6/"]
+
+
+def test_referentes_del_canal_y_su_formula_en_el_informe(aislado):
+    from studio4 import canales, tendencias
+    c = canales.guardar({**canales.obtener("fourlevel"), "referentes": ["https://www.youtube.com/@leyendasyvideojuegos", "@leyendasyvideojuegos", "otro"]})
+    assert c["referentes"] == ["@leyendasyvideojuegos", "@otro"]
+    m = tendencias.metricas([{"id": "1", "titulo": "t", "canal": "c", "categoria": "", "etiquetas": [], "segundos": 40, "hd": True,
+                              "vistas": 10, "vistas_hora": 5, "horas": 2, "origen": "España · General", "url": ""}])
+    ref = [{"canal": "Leyendas & Videojuegos", "suscriptores": 759000,
+            "videos": [{"titulo": "La leyenda de Herobrine", "vistas_hora": 900, "segundos": 610}]}]
+    texto = tendencias._texto_para_gemini({**c, "id": "fourlevel"}, m, [], ref)
+    assert "CANAL DE REFERENCIA «Leyendas & Videojuegos»" in texto and "La leyenda de Herobrine" in texto
+    assert "nunca el contenido" in texto

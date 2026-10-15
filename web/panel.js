@@ -1020,6 +1020,10 @@ function fichaCanal(c, redes) {
   return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
     <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
     <label class="ancho"><span>Nicho (de qué trata el canal)</span><input class="campo" name="nicho" value="${esc(c.nicho || "")}" placeholder="historia y ciencia curiosa…" autocomplete="off"></label>
+    <label class="ancho"><span>Canales de referencia (YouTube, uno por línea)</span><textarea class="campo fuentes-campo" name="referentes" rows="2"
+      placeholder="@canalqueteinspira…" spellcheck="false">${esc((c.referentes || []).join("\n"))}</textarea></label>
+    ${c.id ? `<div class="ancho parecidos"><button class="boton" type="button" data-parecidos="${esc(c.id)}">Buscar canales parecidos</button>
+      <div class="parecidos-lista"></div></div>` : ""}
     <label class="ancho"><span>Fuentes de confianza (una web por línea)</span><textarea class="campo fuentes-campo" name="fuentes" rows="2"
       placeholder="https://www.gtabase.com/gta-6/…" spellcheck="false">${esc((c.fuentes || []).join("\n"))}</textarea></label>
     ${Object.keys(redes).map((r) => {
@@ -1042,7 +1046,8 @@ $("canales-lista").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const f = ev.target;
   const datos = Object.fromEntries(new FormData(f));
-  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", fuentes: (datos.fuentes || "").split(/\s+/).filter(Boolean), redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
+  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", fuentes: (datos.fuentes || "").split(/\s+/).filter(Boolean),
+    referentes: (datos.referentes || "").split(/\s+/).filter(Boolean), redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
   if (f.dataset.canal) cuerpo.id = f.dataset.canal;
   try {
     await api("/api/canales", cuerpo);
@@ -1054,6 +1059,27 @@ $("canales-lista").addEventListener("submit", async (ev) => {
   } catch (e) { f.querySelector("[role=status]").textContent = e.message || String(e); }
 });
 $("canal-nuevo").addEventListener("click", () => pintarCanalesAjustes(true));
+$("canales-lista").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-parecidos]");
+  const a = ev.target.closest("[data-anadir-referente]");
+  if (a) {   // añade el canal sugerido a la lista de referentes de su ficha (se guarda con «Guardar canal»)
+    const area = a.closest("form").querySelector('[name="referentes"]');
+    const lista = area.value.split(/\s+/).filter(Boolean);
+    if (!lista.includes(a.dataset.anadirReferente)) area.value = [...lista, a.dataset.anadirReferente].join("\n");
+    a.textContent = "Añadido"; a.disabled = true;
+    return;
+  }
+  if (!b) return;
+  b.disabled = true; b.textContent = "Buscando…";
+  try {
+    const d = await api("/api/canales/parecidos", { id: b.dataset.parecidos });
+    b.closest(".parecidos").querySelector(".parecidos-lista").innerHTML = d.canales.length ? d.canales.map((x) => `
+      <div class="parecido">${x.foto ? `<img src="${esc(x.foto)}" alt="" width="36" height="36">` : ""}
+        <div><b>${esc(x.canal)}</b><small>${esc(x.usuario)} · ${compactoNum(x.suscriptores)} suscriptores</small></div>
+        <button class="boton" type="button" data-anadir-referente="${esc(x.usuario)}">Añadir</button></div>`).join("")
+      : `<p class="meta">No encontré canales parecidos: revisa el nicho del canal.</p>`;
+  } catch (e) { aviso(e); } finally { b.disabled = false; b.textContent = "Buscar canales parecidos"; }
+});
 $("abrir-ajustes").addEventListener("click", () => pintarCanalesAjustes());
 
 // ============================================================== Canales: panel de control
@@ -1155,7 +1181,19 @@ function pintarTendencias(t) {
   if (m.etiquetas_cuenta?.length) graf.push(barras("Etiquetas que más se repiten", m.etiquetas_cuenta.slice(0, 10).map(([k, n]) => ({ etiqueta: k, valor: n, texto: `${n}` }))));
   if (m.por_categoria?.length) graf.push(barras("Por categoría", m.por_categoria.map(([k, n]) => ({ etiqueta: k, valor: n, texto: `${n}` }))));
   if (m.por_pais?.length) graf.push(barras("Por país", m.por_pais.map(([k, n]) => ({ etiqueta: k, valor: n, texto: `${n}` }))));
+  const deReferentes = (d.referentes || []).flatMap((r) => r.videos.map((v) => ({ ...v, canal: r.canal })))
+    .sort((a, b) => b.vistas_hora - a.vistas_hora).slice(0, 8);
+  if (deReferentes.length) graf.push(barras("Lo que más crece en tus referentes (vistas por hora)", deReferentes.map((v) => ({
+    etiqueta: v.titulo, valor: v.vistas_hora, texto: compactoNum(v.vistas_hora),
+    tip: `${v.titulo} · ${v.canal} · ${compactoNum(v.vistas_hora)} vistas/hora · ${minSeg(v.segundos)}` })), { ancha: true }));
   $("td-graficas").innerHTML = graf.join("");
+  const subs = Object.fromEntries((d.referentes || []).map((r) => [r.canal, r.suscriptores]));
+  $("td-formulas-bloque").hidden = !(i.formulas || []).length;
+  $("td-formulas").innerHTML = (i.formulas || []).map((f) => `
+    <div class="td-formula"><div class="td-formula-cab"><b class="display">${esc(f.canal)}</b>${subs[f.canal] ? `<small>${compactoNum(subs[f.canal])} suscriptores</small>` : ""}</div>
+      <p>${esc(f.formula)}</p>
+      <ul>${f.ideas.map((x) => `<li><span>${esc(x.idea)}</span><button class="boton" type="button" data-rapido="${esc(x.idea)}"
+        data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear ya</button></li>`).join("")}</ul></div>`).join("");
   $("td-formato").innerHTML = [["Vídeo corto", i.duracion_corto], ["Vídeo largo", i.duracion_largo], ["Calidad", i.calidad], ["Títulos", i.titulos]]
     .map(([k, v]) => `<div><b>${k}</b><p>${esc(v)}</p></div>`).join("");
   $("td-ideas").innerHTML = i.ideas.map((x) => `

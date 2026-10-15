@@ -314,6 +314,9 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/tendencias":
             tendencias.lanzar(canales.activo()["id"])
             return self._json({"ok": True})
+        if ruta == "/api/canales/parecidos":   # canales del mismo nicho para tomarlos de referencia
+            c = canales.obtener(str(self._cuerpo_json().get("id", "")) or canales.activo()["id"])
+            return self._json({"canales": tendencias.parecidos(c)})
         if ruta == "/api/canales/activar":
             return self._json({"ok": True, "canal": canales.activar(str(self._cuerpo_json().get("id", "")))})
         if ruta == "/api/referencias":   # foto o documento para el vídeo que se va a crear
