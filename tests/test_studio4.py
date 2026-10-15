@@ -438,7 +438,13 @@ def test_presupuesto_para_antes_de_pasarse_y_devuelve_lo_fallido():
         p.reservar(0.039, "imagen")          # 0,117 $ > 0,10 $: no se hace
     p.devolver(0.039)
     assert p.gastado == pytest.approx(0.039)
-    assert v.estimar(23, 1) == pytest.approx(23 * 0.039 + 8 * 0.03)
+    escenas = [{"elegida": None, "tipo_clip": "video", "segundos": 5.4}, {"elegida": None, "tipo_clip": "imagen", "segundos": 6},
+               {"elegida": 0, "tipo_clip": "video", "segundos": 8}]                     # la que ya tiene clip no cuenta
+    e = v.estimar(escenas, personajes=2)
+    assert (e["escenas"], e["videos"], e["segundos_video"]) == (2, 1, 6)                 # 5,4 s de voz → clip de 6 s
+    assert e["coste_imagenes"] == pytest.approx(4 * v.PRECIO_IMAGEN)
+    assert e["coste_todo"] == pytest.approx(4 * v.PRECIO_IMAGEN + 6 * v.PRECIO_VIDEO_SEGUNDO)
+    assert [v.segundos_clip(s) for s in (3.0, 4.1, 5.9, 7.9, 12)] == [4, 4, 6, 8, 8]   # 0,25 s de margen: cámara lenta imperceptible
 
 
 def test_intercalar_gancho_en_video_y_nunca_tres_imagenes_seguidas():

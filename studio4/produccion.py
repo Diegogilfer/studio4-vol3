@@ -168,7 +168,7 @@ _QUE_FALLO = {
     "Entregas": "No se pudieron preparar los 3 formatos",
     "Vídeo o imagen": "No se pudo decidir qué escenas van en vídeo o imagen",
     "Miniaturas": "No se pudieron crear las miniaturas",
-    "Imágenes por API": "No se pudieron generar las imágenes",
+    "Imágenes por API": "No se pudieron generar las escenas",
     "Personajes": "No se pudieron afinar los personajes",
     "Importar vídeo": "No se pudo importar el vídeo",
 }
@@ -179,6 +179,8 @@ def _error_legible(nombre: str, e: Exception) -> str:
     motivo = ("el servicio está saturado o sin conexión; suele bastar con esperar un minuto"
               if any(k in texto for k in ("429", "503", "ocupado", "Timeout", "timed out", "Connection", "no respondió", "vacía", "cortada"))
               else "")
+    if "facturación" in texto or "presupuesto" in texto.lower() or "ya van" in texto:
+        return texto   # sin facturación o tope alcanzado: el motivo exacto es lo útil
     if isinstance(e, ValueError) and len(texto) < 160 and "Expecting" not in texto:
         return texto   # los ValueError propios ya están escritos para la persona («Primero renderiza…»)
     return f"{_QUE_FALLO.get(nombre, f'No se pudo completar «{nombre}»')}{f': {motivo}' if motivo else ''}. Pulsa «Reintentar»."
@@ -620,8 +622,14 @@ def recomendar_tipos(pid: str) -> None:
 
 
 # --- Imágenes y vídeo por la API de Google (de pago, con presupuesto) ---------------------------
-def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | None = None) -> None:
-    """Rellena las escenas sin clip con imágenes (y vídeo Veo en las elegidas) sin pasar de `limite_usd`."""
+def estimar_visuales_api(pid: str) -> dict[str, Any]:
+    p = cargar(pid)
+    return visuales_api.estimar(p["escenas"], personajes=len(p.get("fichas") or []))
+
+
+def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | None = None, solo_imagenes: bool = False) -> None:
+    """Rellena TODAS las escenas sin clip de una vez: retratos de los personajes, una imagen por escena y vídeo Veo
+    en las que el plan marcó como vídeo (salvo `solo_imagenes`). Nunca pasa de `limite_usd`."""
     from . import flow
     p = cargar(pid)
     if not p["escenas"]:
@@ -629,11 +637,15 @@ def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | Non
     aspecto = config.FORMATOS[p["formato"]]["aspecto"]
     presupuesto = visuales_api.Presupuesto(limite_usd)
 
+    if con_video is None:
+        con_video = [] if solo_imagenes else [e["orden"] for e in p["escenas"] if e.get("tipo_clip") == "video"]
+
     def fase():
         res = visuales_api.generar_escenas(
             cargar(pid)["escenas"], aspecto, presupuesto,
             recibir=lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="api"),
-            con_video=set(con_video or []), produccion=pid, avisar=lambda f, n: _avisar(pid, f, n))
+            con_video=set(con_video), produccion=pid, avisar=lambda f, n: _avisar(pid, f, n),
+            fichas=cargar(pid).get("fichas"), retratos=carpeta(pid) / "retratos")
         modificar(pid, lambda q: q.update(gasto_api=round(q.get("gasto_api", 0.0) + res["gastado"], 4)))
     _en_fondo(pid, "Imágenes por API", fase)
 

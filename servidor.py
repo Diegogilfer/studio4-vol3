@@ -388,12 +388,14 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/escena/activa":
             flow.marcar_activa(int(self._cuerpo_json().get("escena", 0)))
             return self._json({"ok": True})
-        if ruta == "/api/visuales-api":
+        if ruta == "/api/visuales-api/estimar":
+            return self._json(produccion.estimar_visuales_api(pid))
+        if ruta == "/api/visuales-api":   # todas las escenas de una vez, por la API de pago de Google, con tope
             d = self._cuerpo_json()
             limite = float(d.get("limite_usd", 0))
-            if not 0 < limite <= 20:
-                raise Error(400, "Indica un presupuesto entre 0 y 20 $")
-            produccion.generar_visuales_api(pid, limite, [int(x) for x in d.get("video", [])])
+            if not 0 < limite <= 60:
+                raise Error(400, "Indica un tope de gasto entre 0 y 60 $")
+            produccion.generar_visuales_api(pid, limite, solo_imagenes=bool(d.get("solo_imagenes")))
             return self._json({"ok": True})
         if ruta == "/api/entregas":
             produccion.preparar_entregas(pid)

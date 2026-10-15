@@ -2,9 +2,11 @@
 no quieres generar a mano. Siempre con un presupuesto: antes de cada llamada se comprueba que el gasto
 acumulado no lo supere, y si fuera a pasarse, se para.
 
-- Imágenes: gemini-2.5-flash-image («Nano Banana», ~0,039 $ por imagen). Desde la segunda, la primera
-  imagen va como referencia para que personajes, luz y estilo no cambien entre escenas.
-- Vídeo: veo-3.1-lite (~0,03 $/s a 720p sin sonido). Solo para las escenas que elijas (p. ej. el gancho).
+- Personajes: primero un retrato de cada uno con su ficha; ese retrato va como referencia en cada escena donde
+  sale, para que la cara y la ropa no cambien.
+- Imágenes: gemini-3.1-flash-image (~0,02-0,04 $ por imagen; se reserva 0,04 para no pasarse nunca).
+- Vídeo: veo-3.1-lite a 720p (0,05 $/s), arrancando de la imagen de su escena, con la duración de su voz (4, 6 u 8 s).
+Precios de septiembre de 2026 (ai.google.dev/gemini-api/docs/pricing): cámbialos aquí si Google los cambia.
 """
 
 from __future__ import annotations
@@ -22,11 +24,16 @@ from . import config, gemini, registro
 
 logger = logging.getLogger("studio4.visuales_api")
 
-MODELO_IMAGEN = "gemini-2.5-flash-image"
+MODELO_IMAGEN = "gemini-3.1-flash-image"
 MODELO_VIDEO = "veo-3.1-lite-generate-preview"
-PRECIO_IMAGEN = 0.039          # $ por imagen 1K
-PRECIO_VIDEO_SEGUNDO = 0.03    # $ por segundo, 720p sin sonido
+PRECIO_IMAGEN = 0.04           # $ por imagen (reserva prudente: el precio real está entre 0,02 y 0,04)
+PRECIO_VIDEO_SEGUNDO = 0.05    # $ por segundo, 720p
 SEGUNDOS_VIDEO = 8
+
+
+def segundos_clip(segundos: float) -> int:
+    """Veo genera clips de 4, 6 u 8 s: el más corto que cubre la voz de la escena."""
+    return next((s for s in (4, 6, 8) if s >= (segundos or 8) - 0.25), 8)
 
 
 class Presupuesto:
@@ -52,18 +59,25 @@ class SinFacturacion(RuntimeError):
     pass
 
 
-def estimar(escenas_imagen: int, escenas_video: int) -> float:
-    return escenas_imagen * PRECIO_IMAGEN + escenas_video * SEGUNDOS_VIDEO * PRECIO_VIDEO_SEGUNDO
+def estimar(escenas: list[dict], personajes: int = 0) -> dict:
+    """Lo que costaría rellenar las escenas que aún no tienen clip: todo como recomienda el plan, o solo imágenes."""
+    pendientes = [e for e in escenas if e.get("elegida") is None]
+    videos = [e for e in pendientes if e.get("tipo_clip") == "video"]
+    seg = sum(segundos_clip(e.get("segundos") or 8) for e in videos)
+    base = (len(pendientes) + personajes) * PRECIO_IMAGEN
+    return {"escenas": len(pendientes), "videos": len(videos), "segundos_video": seg, "personajes": personajes,
+            "coste_todo": round(base + seg * PRECIO_VIDEO_SEGUNDO, 2), "coste_imagenes": round(base, 2)}
 
 
 def imagen(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, referencia: Optional[Path] = None,
-           produccion: str = "") -> Path:
+           produccion: str = "", referencias: Optional[list[Path]] = None) -> Path:
     presupuesto.reservar(PRECIO_IMAGEN, "Una imagen")
     contenido: list = []
-    if referencia and referencia.exists():
-        contenido.append(types.Part.from_bytes(data=referencia.read_bytes(), mime_type="image/png"))
-        contenido.append("Use the image above only as a reference for the characters, wardrobe, lighting and art style. "
-                         "Create a NEW frame for this shot:")
+    refs = [r for r in ([referencia] if referencia else []) + list(referencias or []) if r and r.exists()][:3]
+    if refs:
+        contenido += [types.Part.from_bytes(data=r.read_bytes(), mime_type="image/png") for r in refs]
+        contenido.append("Use the image(s) above only as references for the characters' faces, hair and clothes, and for "
+                         "the lighting and art style. Do NOT copy their pose or framing. Create a NEW frame for this shot:")
     contenido.append(f"{prompt}\nSingle cinematic still frame, no text, no letters, no watermark.")
     cfg = types.GenerateContentConfig(response_modalities=["IMAGE"], image_config=types.ImageConfig(aspect_ratio=aspecto))
     for intento in range(2):
@@ -90,8 +104,8 @@ def imagen(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, r
 
 
 def video(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, imagen_inicial: Optional[Path] = None,
-          produccion: str = "") -> Path:
-    coste = SEGUNDOS_VIDEO * PRECIO_VIDEO_SEGUNDO
+          produccion: str = "", segundos: int = SEGUNDOS_VIDEO) -> Path:
+    coste = segundos * PRECIO_VIDEO_SEGUNDO
     presupuesto.reservar(coste, "Un clip de vídeo")
     cliente = gemini.cliente()
     kwargs = {}
@@ -100,7 +114,7 @@ def video(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, im
     try:
         op = cliente.models.generate_videos(
             model=MODELO_VIDEO, prompt=prompt,
-            config=types.GenerateVideosConfig(aspect_ratio=aspecto, resolution="720p", duration_seconds=SEGUNDOS_VIDEO,
+            config=types.GenerateVideosConfig(aspect_ratio=aspecto, resolution="720p", duration_seconds=segundos,
                                               number_of_videos=1, generate_audio=False),
             **kwargs)
     except Exception:
@@ -117,29 +131,41 @@ def video(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, im
     generado = op.response.generated_videos[0].video
     cliente.files.download(file=generado)
     generado.save(str(destino))
-    registro.apuntar("Google · vídeo Veo (API de pago)", f"{MODELO_VIDEO} · {SEGUNDOS_VIDEO} s 720p",
-                     cantidad=SEGUNDOS_VIDEO, unidad="segundos", produccion=produccion, usd=coste)
+    registro.apuntar("Google · vídeo Veo (API de pago)", f"{MODELO_VIDEO} · {segundos} s 720p",
+                     cantidad=segundos, unidad="segundos", produccion=produccion, usd=coste)
     return destino
 
 
 def generar_escenas(escenas: list[dict], aspecto: str, presupuesto: Presupuesto, recibir: Callable[[Path, str, int], None],
                     con_video: set[int] = frozenset(), produccion: str = "",
-                    avisar: Callable[[str, int], None] = lambda *_: None) -> dict:
-    """Genera lo que falta en cada escena y lo entrega con `recibir(archivo, mime, orden)` (la misma vía que Flow)."""
-    hechas, referencia = [], None
+                    avisar: Callable[[str, int], None] = lambda *_: None, fichas: Optional[list[dict]] = None,
+                    retratos: Optional[Path] = None) -> dict:
+    """Genera lo que falta en cada escena y lo entrega con `recibir(archivo, mime, orden)` (la misma vía que Flow).
+    Primero los retratos de los personajes (se guardan en `retratos` y se reutilizan si ya estaban)."""
+    hechas, estilo = [], None
     trabajo = Path(tempfile.mkdtemp(prefix="studio4_api_", dir=config.PRODUCCIONES))
+    caras: dict[str, Path] = {}
+    for f in fichas or []:
+        destino = (retratos or trabajo) / f"retrato_{f['nombre'].lower()}.png"
+        if not destino.exists():
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            avisar(f"Retrato de {f['nombre']} ({presupuesto.gastado:.2f} $ de {presupuesto.limite:.2f} $)", 3)
+            imagen(f["prompt"], "3:4", destino, presupuesto, produccion=produccion)
+        caras[f["nombre"].upper()] = destino
     pendientes = [e for e in escenas if e.get("elegida") is None]
     for i, e in enumerate(pendientes):
         n = e["orden"]
         avisar(f"Escena {n}: {'vídeo' if n in con_video else 'imagen'} ({presupuesto.gastado:.2f} $ de {presupuesto.limite:.2f} $)",
                5 + int(90 * i / max(1, len(pendientes))))
         foto = trabajo / f"escena_{n:02d}.png"
-        imagen(e["prompt_flow"], aspecto, foto, presupuesto, referencia=referencia, produccion=produccion)
-        referencia = referencia or foto      # la primera imagen fija el estilo y los personajes de todas
+        salen = [caras[c] for c in caras if f"{c} is" in e["prompt_flow"]]
+        imagen(e["prompt_flow"], aspecto, foto, presupuesto, referencias=salen or ([estilo] if estilo else []), produccion=produccion)
+        estilo = estilo or foto      # sin personajes, la primera escena marca la luz y el estilo
         if n in con_video:
             clip = trabajo / f"escena_{n:02d}.mp4"
             try:
-                video(e["prompt_flow"], aspecto, clip, presupuesto, imagen_inicial=foto, produccion=produccion)
+                video(e["prompt_flow"], aspecto, clip, presupuesto, imagen_inicial=foto, produccion=produccion,
+                      segundos=segundos_clip(e.get("segundos") or SEGUNDOS_VIDEO))
                 recibir(clip, "video/mp4", n)
                 hechas.append((n, "video"))
                 continue

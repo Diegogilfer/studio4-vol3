@@ -1289,3 +1289,8 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .ideas-vacio { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .ideas-vacio b.display { font-size: clamp(22px, 2.4vw, 30px); }
 .td-nicho li .boton, .idea-hoy .primario, .td-idea .primario { white-space: nowrap; flex: none; }
+/* Flow › Todas las escenas de una vez */
+.todo-api { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+  padding: 20px 22px; border-radius: var(--r-caja); background: color-mix(in oklab, var(--accent) 8%, var(--caja));
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--caja-borde)); box-shadow: var(--caja-sombra); }
+.todo-api > div:first-child { display: grid; gap: 2px; } .todo-api b { font-size: 15px; }

@@ -636,6 +636,30 @@ function portada(e) {
   return `<div class="sin-portada"></div>`;   // en negro hasta que llegue su clip
 }
 
+// Todas las escenas de una vez por la API de pago de Google: precio antes de gastar y tope que no se supera.
+let estimadoApi = null;
+async function pintarTodoApi() {
+  const p = estado.produccion;
+  if (p.version === "importado" || !p.escenas.some((e) => e.elegida === null)) { $("todo-api").hidden = true; return; }
+  try { estimadoApi = await api("/api/visuales-api/estimar", {}); } catch (_) { $("todo-api").hidden = true; return; }
+  const e = estimadoApi, usd = (x) => `${x.toFixed(2).replace(".", ",")} $`;
+  $("todo-api").hidden = false;
+  $("api-estimado").textContent = `${e.escenas} escenas sin clip · ${e.videos} en vídeo (${e.segundos_video} s)`
+    + (e.personajes ? ` · ${e.personajes} retratos de personaje` : "");
+  $("api-todo").textContent = `Generar todo · ${usd(e.coste_todo)}`;
+  $("api-imagenes").textContent = `Solo imágenes · ${usd(e.coste_imagenes)}`;
+}
+async function generarTodo(soloImagenes) {
+  const e = estimadoApi;
+  if (!e) return;
+  const coste = soloImagenes ? e.coste_imagenes : e.coste_todo;
+  const tope = Math.min(60, Math.ceil(coste * 1.1 * 100) / 100);
+  if (!confirm(`Se generan ${e.escenas} escenas${soloImagenes ? " en imagen" : ` (${e.videos} en vídeo)`} con la API de pago de Google.\n`
+    + `Coste estimado: ${coste.toFixed(2)} $. Tope: ${tope.toFixed(2)} $ (nunca se pasa).\n\n¿Seguir?`)) return;
+  try { await api("/api/visuales-api", { limite_usd: tope, solo_imagenes: soloImagenes }); await refrescar(); } catch (err) { aviso(err); }
+}
+$("api-todo").addEventListener("click", () => generarTodo(false));
+$("api-imagenes").addEventListener("click", () => generarTodo(true));
 // Personajes: un retrato por personaje, generado una vez en Flow y usado como ingrediente en cada escena.
 function pintarFichas(fichas) {
   $("fichas").hidden = !fichas?.length;
@@ -1230,6 +1254,7 @@ async function refrescar() {
   siCambia("extension", [d.extension.conectada, d.extension.desactualizada], () => pintarExtension(d.extension));
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
   siCambia("fichas", p.fichas || [], pintarFichas);
+  siCambia("todo-api", { id: p.id, e: p.escenas.map((e) => [e.elegida, e.tipo_clip, e.segundos]), f: (p.fichas || []).length }, pintarTodoApi);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
   siCambia("voces", { id: p.id, voces: o.voces_gemini, actual: p.voz_nombre || o.voz_por_defecto, muestras: p.muestras_voz,
     marcadas: [...vocesMarcadas] }, (x) => pintarVoces(x));
