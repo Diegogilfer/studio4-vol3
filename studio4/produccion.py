@@ -18,7 +18,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (canales, carpetas, config, director, entregas, guion, importar, investigacion, miniaturas, referencias, render,
+from . import (canales, carpetas, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas, referencias, render,
                subtitulos, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -335,6 +335,18 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     if dossier is None:
         _avisar(pids, "Investigando el tema", 10)
         dossier = investigacion.investigar(idea, produccion=pids[0])
+        propias = canales.de_produccion(cargar(pids[0])).get("fuentes") or []
+        if propias:   # las webs de confianza del canal: datos de primera mano, por delante de lo general
+            _avisar(pids, "Leyendo tus fuentes de confianza", 28)
+            try:
+                extra = fuentes.investigar(idea, propias, produccion=pids[0])
+            except Exception as e:  # noqa: BLE001 - sin fuentes el guion sale igual
+                logger.warning("Fuentes del canal: %s", e)
+                extra = {"texto": "", "fuentes": []}
+            if extra["texto"]:
+                dossier["dossier"] = (f"DE TUS FUENTES DE CONFIANZA (datos de primera mano):\n{extra['texto']}\n\n"
+                                      + dossier.get("dossier", ""))
+                dossier["fuentes"] = extra["fuentes"] + list(dossier.get("fuentes") or [])
     if youtube.disponible() and not dossier.get("youtube"):   # también al reescribir con una investigación vieja
         _avisar(pids, "Mirando qué hay en YouTube y qué funciona en tu canal", 35)
         usuario = canales.de_produccion(cargar(pids[0]))["redes"].get("youtube") or config.YOUTUBE_CANAL

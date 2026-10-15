@@ -815,3 +815,14 @@ def test_crear_rapido_usa_lo_de_siempre_del_canal(aislado, monkeypatch):
     assert (idea, versiones, estilo, k["tono"], k["voz_nombre"]) == ("El faro de Alejandría", ["largo"], "cinematografico", "intrigante", "Puck")
     with pytest.raises(ValueError):
         produccion.crear_rapido("x")
+
+
+# --- Fuentes de confianza del canal ------------------------------------------------------------------
+def test_fuentes_elige_paginas_del_tema_y_se_guardan_en_el_canal(aislado):
+    from studio4 import canales, fuentes
+    urls = ["https://www.gtabase.com/gta-6/characters/lucia", "https://www.gtabase.com/gta-6/characters/jason",
+            "https://www.gtabase.com/gta-6/vehicles/dinka-jester", "https://www.gtabase.com/gta-6/map"]
+    assert fuentes.elegir(urls, ["lucia", "jason", "gta 6"]) == urls[:2]
+    assert fuentes.elegir(urls, ["helicopter"]) == []
+    c = canales.guardar({**canales.obtener("fourlevel"), "fuentes": ["https://www.gtabase.com/gta-6/", "no es web"]})
+    assert c["fuentes"] == ["https://www.gtabase.com/gta-6/"]

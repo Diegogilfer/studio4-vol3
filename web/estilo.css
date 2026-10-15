@@ -1294,3 +1294,4 @@ html .progreso div { transition: width 1.2s var(--calma); }
   padding: 20px 22px; border-radius: var(--r-caja); background: color-mix(in oklab, var(--accent) 8%, var(--caja));
   border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--caja-borde)); box-shadow: var(--caja-sombra); }
 .todo-api > div:first-child { display: grid; gap: 2px; } .todo-api b { font-size: 15px; }
+.fuentes-campo { height: auto; min-height: 60px; padding: 10px 14px; resize: none; font: 13.5px/1.5 var(--sans); }

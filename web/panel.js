@@ -1020,6 +1020,8 @@ function fichaCanal(c, redes) {
   return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
     <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
     <label class="ancho"><span>Nicho (de qué trata el canal)</span><input class="campo" name="nicho" value="${esc(c.nicho || "")}" placeholder="historia y ciencia curiosa…" autocomplete="off"></label>
+    <label class="ancho"><span>Fuentes de confianza (una web por línea)</span><textarea class="campo fuentes-campo" name="fuentes" rows="2"
+      placeholder="https://www.gtabase.com/gta-6/…" spellcheck="false">${esc((c.fuentes || []).join("\n"))}</textarea></label>
     ${Object.keys(redes).map((r) => {
       const ok = !!c.redes?.[r];   // con logo a color si está vinculada; en gris oscuro si falta
       return `<label class="red-campo ${ok ? "vinculada" : ""}"><span><svg class="red-logo" aria-hidden="true"><use href="#l-${r}"/></svg>${esc(REDES[r]?.[0] || redes[r])}
@@ -1040,7 +1042,7 @@ $("canales-lista").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const f = ev.target;
   const datos = Object.fromEntries(new FormData(f));
-  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
+  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", fuentes: (datos.fuentes || "").split(/\s+/).filter(Boolean), redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
   if (f.dataset.canal) cuerpo.id = f.dataset.canal;
   try {
     await api("/api/canales", cuerpo);

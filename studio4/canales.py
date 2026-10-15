@@ -73,7 +73,8 @@ def _limpio(c: dict[str, Any]) -> dict[str, Any]:
     redes = {k: _usuario(str((c.get("redes") or {}).get(k, ""))) for k in REDES}
     return {"id": c.get("id") or _id(nombre), "nombre": nombre, "redes": {k: v for k, v in redes.items() if v},
             "voz_nombre": str(c.get("voz_nombre", ""))[:30], "estilo": str(c.get("estilo", ""))[:30],
-            "nicho": str(c.get("nicho", "")).strip()[:80], "tono": str(c.get("tono", ""))[:80], "publico": str(c.get("publico", ""))[:80]}
+            "nicho": str(c.get("nicho", "")).strip()[:80], "tono": str(c.get("tono", ""))[:80],
+            "fuentes": [u.strip() for u in (c.get("fuentes") or []) if re.match(r"https?://\S+$", str(u).strip())][:6], "publico": str(c.get("publico", ""))[:80]}
 
 
 def listar() -> list[dict[str, Any]]:
