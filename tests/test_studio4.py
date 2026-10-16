@@ -1184,3 +1184,12 @@ def test_copiar_todo_para_flow_y_estado_de_la_carpeta(aislado):
     (clips_dir / "notas.txt").write_text("no es un clip")
     e = carpetas.estado(p)
     assert (e["archivos"], e["escenas_en_carpeta"], e["total"]) == (1, 1, 2)
+
+
+def test_guardar_canal_no_borra_lo_que_el_formulario_no_trae(aislado):
+    from studio4 import canales
+    c = canales.obtener("fourlevel")
+    canales.guardar({**c, "tono": "cómplice", "voz_nombre": "Charon", "arquetipo": "gamer veterano"})
+    canales.guardar({"id": "fourlevel", "nombre": c["nombre"], "nicho": "videojuegos", "cta": "Comenta tu juego"})
+    g = canales.obtener("fourlevel")
+    assert (g["tono"], g["voz_nombre"], g["arquetipo"], g["nicho"], g["cta"]) == ("cómplice", "Charon", "gamer veterano", "videojuegos", "Comenta tu juego")

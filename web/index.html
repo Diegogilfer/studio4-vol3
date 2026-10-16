@@ -87,17 +87,13 @@
     <div class="hero-fondo" aria-hidden="true"><div class="hero-vivo"><div class="hero-rejilla"></div></div></div>
     <div class="hero-cuerpo">
       <p class="aviso-txt" id="aviso-panel" role="alert" hidden></p>
-      <ol class="a-pasos" id="a-pasos">
-        <li data-paso="1"><b>1</b> Idea</li><li data-paso="2"><b>2</b> Formatos</li><li data-paso="3"><b>3</b> Estilo y voz</li><li data-paso="4"><b>4</b> Guion</li>
-      </ol>
-
-      <!-- Paso 1 · ¿De qué trata? -->
-      <div class="paso" data-paso="1">
+      <!-- Crear: todo en una tarjeta · la idea (o tu guion o un vídeo), formato, estilo y voz, y un botón -->
+      <div class="paso crear-unico" data-paso="1">
         <div class="pregunta"><b>¿De qué trata el vídeo?</b>
           <div class="segmentos" role="tablist" aria-label="Cómo empezar">
-            <label><input type="radio" name="modo" value="idea" checked>Tengo una idea</label>
-            <label><input type="radio" name="modo" value="propio">Tengo mi guion</label>
-            <label><input type="radio" name="modo" value="video">Tengo un vídeo</label>
+            <label><input type="radio" name="modo" value="idea" checked>Una idea</label>
+            <label><input type="radio" name="modo" value="propio">Mi guion</label>
+            <label><input type="radio" name="modo" value="video">Un vídeo</label>
           </div>
         </div>
         <div class="solo-video importar" hidden>
@@ -110,11 +106,38 @@
           <label class="check"><input type="checkbox" id="v-derechos"> El vídeo es mío o tengo derechos para reutilizarlo</label>
           <div class="acciones-paso"><button class="primario" id="v-importar" type="button">Importar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
         </div>
+        <div class="crear-opciones">
         <div class="caja-viva">
           <textarea id="a-idea" rows="3" placeholder="Ej.: por qué los pulpos tienen tres corazones…"></textarea>
           <textarea id="a-guion" rows="8" hidden placeholder="Pega tu guion… o arrastra aquí el archivo (PDF, TXT o MD)"></textarea>
         </div>
         <p class="meta" id="a-guion-info" role="status" aria-live="polite"></p>
+        <div class="crear-bloque"><p class="meta">Formato y duración · cada escena es un clip de 8 s en Flow</p>
+          <div class="formatos solo-idea">
+            <label class="formato"><input type="checkbox" id="a-corto" checked>
+              <span class="formato-cab"><i class="marco-916"></i><b>Corto</b><span class="meta">Shorts y Reels</span></span>
+              <span class="formato-dur"><input type="range" id="a-corto-s" min="16" max="96" step="8" value="48"><em id="a-corto-v">48 s · 6 clips</em></span></label>
+            <label class="formato"><input type="checkbox" id="a-largo">
+              <span class="formato-cab"><i class="marco-169"></i><b>Largo</b><span class="meta">YouTube</span></span>
+              <span class="formato-dur"><input type="range" id="a-largo-m" min="2" max="15" step="0.5" value="5"><em id="a-largo-v">5 min</em></span>
+              <span class="meta" id="a-largo-nota"></span></label>
+          </div>
+          <div class="solo-propio" hidden>
+            <div class="segmentos" role="radiogroup" aria-label="Formato">
+              <label><input type="radio" name="formato" value="vertical" checked>9:16 · Shorts y Reels</label>
+              <label><input type="radio" name="formato" value="horizontal">16:9 · YouTube</label>
+              <label><input type="radio" name="formato" value="cuadrado">1:1 · Feed</label>
+            </div>
+          </div>
+        </div>
+        <div class="crear-bloque"><p class="meta">Estilo</p><div class="estilos" id="a-estilos"></div></div>
+        <div class="crear-bloque"><div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select></div>
+          <div class="voces-lista" id="a-voces"></div></div>
+        <div class="solo-idea opciones">
+          <div><p class="meta">¿Para quién?</p><div class="chips" data-grupo="publico">
+            <button data-v="público general" class="si">Público general</button><button data-v="curiosos de la ciencia y la historia">Curiosos</button>
+            <button data-v="jóvenes de 16 a 25 años">Jóvenes</button><button data-v="niños y familias">Familias</button><button data-v="gente que ya sabe del tema">Expertos</button></div></div>
+        </div>
         <div class="referencias" id="referencias">
           <div class="ref-cab"><b>Referencias</b><span class="meta">Opcional · fotos, documentos, artículos, YouTube o Google Maps</span></div>
           <div class="ref-botones">
@@ -127,46 +150,9 @@
           <div class="ref-lista" id="ref-lista"></div>
           <textarea id="ref-datos" class="campo ref-datos" rows="2" placeholder="Datos que no pueden faltar: nombres, fechas, cifras…" aria-label="Datos que no pueden faltar"></textarea>
         </div>
-        <div class="solo-idea opciones">
-          <div><p class="meta">¿Para quién?</p><div class="chips" data-grupo="publico">
-            <button data-v="público general" class="si">Público general</button><button data-v="curiosos de la ciencia y la historia">Curiosos</button>
-            <button data-v="jóvenes de 16 a 25 años">Jóvenes</button><button data-v="niños y familias">Familias</button><button data-v="gente que ya sabe del tema">Expertos</button></div></div>
-        </div>
-        <div class="acciones-paso"><button class="boton" data-ir="2">Personalizar</button>
-          <button class="primario" id="a-rapido" type="button">Crear ya <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
-      </div>
-
-      <!-- Paso 2 · ¿Dónde se publica? -->
-      <div class="paso" data-paso="2" hidden>
-        <div class="pregunta"><b>¿Dónde se va a publicar?</b></div>
-        <div class="formatos solo-idea">
-          <label class="formato"><input type="checkbox" id="a-corto" checked>
-            <span class="formato-cab"><i class="marco-916"></i><b>Corto</b><span class="meta">Shorts y Reels</span></span>
-            <span class="formato-dur"><input type="range" id="a-corto-s" min="20" max="90" step="5" value="50"><em id="a-corto-v">50 s</em></span></label>
-          <label class="formato"><input type="checkbox" id="a-largo">
-            <span class="formato-cab"><i class="marco-169"></i><b>Largo</b><span class="meta">YouTube</span></span>
-            <span class="formato-dur"><input type="range" id="a-largo-m" min="2" max="15" step="0.5" value="5"><em id="a-largo-v">5 min</em></span>
-            <span class="meta" id="a-largo-nota"></span></label>
-        </div>
-        <div class="solo-propio" hidden>
-          <div class="segmentos" role="radiogroup" aria-label="Formato">
-            <label><input type="radio" name="formato" value="vertical" checked>9:16 · Shorts y Reels</label>
-            <label><input type="radio" name="formato" value="horizontal">16:9 · YouTube</label>
-            <label><input type="radio" name="formato" value="cuadrado">1:1 · Feed</label>
-          </div>
-        </div>
-        <div class="acciones-paso"><button class="boton" data-ir="1">Atrás</button><button class="primario" data-ir="3">Siguiente <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
-      </div>
-
-      <!-- Paso 3 · ¿Cómo se ve y suena? -->
-      <div class="paso" data-paso="3" hidden>
-        <div class="pregunta"><b>¿Cómo se ve y cómo suena?</b></div>
-        <div class="estilos" id="a-estilos"></div>
-        <div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select></div>
-        <div class="voces-lista" id="a-voces"></div>
         <p class="resumen" id="a-resumen"></p>
-        <div class="acciones-paso"><button class="boton" data-ir="2">Atrás</button>
-          <button class="primario" id="a-crear"><span id="a-crear-txt">Investigar y escribir</span> <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
+        <div class="acciones-paso"><button class="primario" id="a-crear"><span id="a-crear-txt">Investigar y escribir</span> <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
+        </div>
       </div>
 
       <!-- Paso 4 · Revisa el guion -->
@@ -284,8 +270,14 @@
         </div>
         <div class="guia-acciones"><button class="primario" id="pedir-tipos" hidden title="Gemini decide qué escenas conviene hacer en vídeo y cuáles en imagen">Recomendar vídeo o imagen</button><button class="boton" id="abrir-flow" title="Abre Google Flow en una ventana a la derecha">Abrir Flow</button></div>
       </div>
-      <div class="fila carpeta-botones"><button class="primario" data-abrir="1 Clips de Flow">Abrir carpeta de clips</button>
-        <button class="boton" data-abrir="">Abrir carpeta</button></div>
+      <div class="todo-flow">
+        <div class="todo-flow-cab"><b>Todo el vídeo en Flow, de una vez</b>
+          <span class="meta">Copia, pégalo en Flow y genera. Lo que bajes a la carpeta de clips llega solo a su escena.</span></div>
+        <div class="fila"><button class="primario" id="copiar-todo-flow" type="button">Copiar todo para Flow</button>
+          <button class="boton" data-abrir="1 Clips de Flow" type="button">Abrir carpeta de clips</button>
+          <button class="boton" id="ensamblar" type="button">Ensamblar vídeo</button></div>
+        <p class="meta carpeta-estado" id="carpeta-estado" role="status" aria-live="polite"></p>
+      </div>
       <div id="todo-api" class="todo-api" hidden>
         <div><b>Todas las escenas de una vez</b><span class="meta" id="api-estimado"></span></div>
         <div class="fila"><button class="primario" id="api-todo" type="button"></button>

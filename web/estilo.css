@@ -1103,6 +1103,7 @@ html[data-tema="grafito"], html[data-tema="medianoche"], html[data-tema="aurora"
 .referencias { display: grid; gap: 12px; padding: 18px; border-radius: var(--r-caja); background: var(--caja);
   border: var(--b-ancho) dashed var(--line-strong); transition: border-color .2s var(--ease), background .2s var(--ease); }
 .referencias.soltando { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 8%, var(--caja)); }
+.referencias { grid-template-columns: minmax(0, 1fr); }
 .ref-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .ref-cab b { font-size: 15px; }
 .ref-botones { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -1226,7 +1227,10 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .boton.cargando { opacity: .6; pointer-events: none; }
 .boton.cargando::after { content: "…"; }
 /* Crear › Tengo un vídeo */
-#crear[data-modo="video"] :is(.caja-viva, #a-guion-info, #referencias, .a-pasos, .paso[data-paso="1"] > .acciones-paso) { display: none; }
+#crear[data-modo="video"] .crear-opciones { display: none; }
+.crear-opciones, .crear-bloque { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; } .crear-opciones { gap: 18px; }
+.paso { grid-template-columns: minmax(0, 1fr); }   /* en el móvil nada empuja la tarjeta más allá de la pantalla */
+.crear-bloque > .meta:first-child { margin: 0; }
 .importar { display: grid; gap: 12px; }
 .importar-fila { display: flex; gap: 10px; flex-wrap: wrap; }
 .importar-fila .campo { flex: 1 1 320px; height: 48px; font-size: 15px; }
@@ -1297,6 +1301,12 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .ideas-vacio { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .ideas-vacio b.display { font-size: clamp(22px, 2.4vw, 30px); }
 .td-nicho li .boton, .idea-hoy .primario, .td-idea .primario { white-space: nowrap; flex: none; }
+/* Flow › Todo el vídeo en Flow, de una vez (copiar, carpeta y ensamblar) */
+.todo-flow { display: grid; gap: 12px; margin-bottom: 16px; padding: 20px 22px; border-radius: var(--r-caja);
+  background: color-mix(in oklab, var(--accent) 10%, var(--caja)); border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--caja-borde));
+  box-shadow: var(--caja-sombra); }
+.todo-flow-cab { display: grid; gap: 2px; } .todo-flow-cab b { font-size: 15px; }
+.carpeta-estado { margin: 0; overflow-wrap: anywhere; } .carpeta-estado b { color: var(--fg); }
 /* Flow › Todas las escenas de una vez */
 .todo-api { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
   padding: 20px 22px; border-radius: var(--r-caja); background: color-mix(in oklab, var(--accent) 8%, var(--caja));
@@ -1322,3 +1332,5 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .td-formula li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 14px;
   border-top: 1px solid var(--line); }
 .td-formula li .boton { flex: none; white-space: nowrap; }
+/* Escenas: «Añadir escena al principio» en su propia fila, no como una tarjeta más */
+.anadir-principio { grid-column: 1 / -1; justify-self: start; }

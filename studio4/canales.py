@@ -109,8 +109,10 @@ def guardar(datos: dict[str, Any]) -> dict[str, Any]:
     """Crea un canal nuevo o actualiza uno existente (si trae su id)."""
     with _lock:
         d = _leer()
-        c = _limpio(datos)
         existentes = {x["id"]: i for i, x in enumerate(d["canales"])}
+        # Al actualizar se combina con lo guardado: un formulario que no trae el tono, la voz o el estilo no los borra.
+        previo = d["canales"][existentes[datos["id"]]] if datos.get("id") in existentes else {}
+        c = _limpio({**previo, **datos})
         if datos.get("id") in existentes:
             d["canales"][existentes[datos["id"]]] = c
         else:

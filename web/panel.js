@@ -196,26 +196,22 @@ let estiloElegido = "cinematografico";
 const modo = () => document.querySelector('input[name="modo"]:checked').value;
 const elegido = (grupo) => document.querySelector(`.chips[data-grupo="${grupo}"] .si`)?.dataset.v || "";
 
-function irA(n) {
-  if (n === 2 && modo() === "idea" && $("a-idea").value.trim().length < 3) return alertaError("Escribe la idea del vídeo.");
-  if (n === 2 && modo() === "propio" && $("a-guion").value.trim().split(/\s+/).length < 10) return alertaError("Pega tu guion (al menos unas frases).");
-  if (n === 3 && modo() === "idea" && !$("a-corto").checked && !$("a-largo").checked) return alertaError("Marca corto, largo o los dos.");
-  paso = n;
-  pintarAsistente();
+// Crear es una sola tarjeta: lo que falta se avisa al pulsar «Crear», no paso a paso.
+function faltaParaCrear() {
+  if (modo() === "idea" && $("a-idea").value.trim().length < 3) return "Escribe la idea del vídeo.";
+  if (modo() === "propio" && $("a-guion").value.trim().split(/\s+/).length < 10) return "Pega tu guion (al menos unas frases).";
+  if (modo() === "idea" && !$("a-corto").checked && !$("a-largo").checked) return "Marca corto, largo o los dos.";
+  return "";
 }
-document.querySelectorAll("[data-ir]").forEach((b) => b.addEventListener("click", () => irA(Number(b.dataset.ir))));
+const CLIP_S = 8, PALABRAS_CLIP = 18;   // un clip de Flow (Veo) dura 8 s ≈ 18 palabras de voz
 
 function pintarAsistente() {
   const p = estado?.produccion;
   // Con un guion aprobado, la caja se pliega a una línea: lo importante pasa a ser la ejecución.
   // El asistente se ve siempre completo; una línea discreta permite volver a la producción en curso.
   const enGuion = p && !p.guion_aprobado && !empezarOtro;
-  const visible = enGuion ? 4 : paso;
+  const visible = enGuion ? 4 : 1;
   document.querySelectorAll(".paso").forEach((el) => { el.hidden = Number(el.dataset.paso) !== visible; });
-  document.querySelectorAll("#a-pasos li").forEach((li) => {
-    const n = Number(li.dataset.paso);
-    li.className = n < visible ? "hecho" : n === visible ? "ahora" : "";
-  });
   const propio = modo() === "propio";
   $("crear").dataset.modo = modo();   // «Tengo un vídeo» esconde por CSS la idea, las referencias y los pasos
   $("a-idea").hidden = propio; $("a-guion").hidden = !propio;
@@ -223,7 +219,7 @@ function pintarAsistente() {
   document.querySelectorAll(".solo-propio").forEach((el) => { el.hidden = !propio; });
   document.querySelectorAll(".solo-video").forEach((el) => { el.hidden = modo() !== "video"; });
   $("a-crear-txt").textContent = propio ? "Usar mi guion" : "Investigar y escribir";
-  if (visible === 3) pintarResumen();
+  pintarResumen();
 }
 document.querySelectorAll('input[name="modo"]').forEach((r) => r.addEventListener("change", pintarAsistente));
 document.querySelectorAll(".chips").forEach((g) => g.addEventListener("click", (ev) => {
@@ -231,11 +227,14 @@ document.querySelectorAll(".chips").forEach((g) => g.addEventListener("click", (
   if (!b) return;
   g.querySelectorAll("button").forEach((x) => x.classList.toggle("si", x === b));
 }));
-$("a-corto-s").addEventListener("input", () => { $("a-corto-v").textContent = `${$("a-corto-s").value} s`; });
+$("a-corto-s").addEventListener("input", () => {
+  const s = Number($("a-corto-s").value);
+  $("a-corto-v").textContent = `${s} s · ${Math.round(s / CLIP_S)} clips`;
+});
 $("a-largo-m").addEventListener("input", () => {
   const m = Number($("a-largo-m").value);
   $("a-largo-v").textContent = `${String(m).replace(".", ",")} min`;
-  $("a-largo-nota").textContent = `≈ ${Math.round((m * 60 * 2.3) / 14)} escenas para generar en Flow`;
+  $("a-largo-nota").textContent = `${Math.round((m * 60) / CLIP_S)} clips de ${CLIP_S} s para generar en Flow`;
 });
 $("a-largo-m").dispatchEvent(new Event("input"));
 
@@ -256,18 +255,23 @@ function pintarResumen() {
   const propio = modo() === "propio";
   const formatos = propio
     ? { vertical: "vertical 9:16", horizontal: "horizontal 16:9", cuadrado: "cuadrado 1:1" }[document.querySelector('input[name="formato"]:checked').value]
-    : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s (Shorts y Reels)`,
+    : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s en ${Math.round($("a-corto-s").value / CLIP_S)} clips (Shorts y Reels)`,
        $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
   const voz = $("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "";
   const nRefs = refs.items.length + refs.enlaces.length + ($("ref-datos").value.trim() ? 1 : 0);
   const conRefs = nRefs ? `${nRefs} ${nRefs === 1 ? "referencia" : "referencias"}` : "";
-  const partes = propio ? [formatos, ESTILOS[estiloElegido][0], voz, conRefs]
+  const palabras = $("a-guion").value.trim().split(/\s+/).filter(Boolean).length;
+  const clipsGuion = palabras >= 10 ? `${Math.max(2, Math.round(palabras / PALABRAS_CLIP))} clips de ${CLIP_S} s` : "";
+  const partes = propio ? [formatos, clipsGuion, ESTILOS[estiloElegido][0], voz, conRefs]
     : [formatos, elegido("publico"), ESTILOS[estiloElegido][0], voz, conRefs];
   $("a-resumen").innerHTML = partes.filter(Boolean).map((x) => `<b>${esc(x)}</b>`).join(" · ");
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
+$("a-guion").addEventListener("input", pintarResumen);
 
 $("a-crear").addEventListener("click", async () => {
+  const falta = faltaParaCrear();
+  if (falta) return alertaError(falta);
   const propio = modo() === "propio";
   const datos = {
     idea: $("a-idea").value, guion_propio: propio ? $("a-guion").value : "", estilo: estiloElegido, voz: $("a-voz").value,
@@ -775,7 +779,7 @@ function pintarEscenas({ escenas, activa }) {
   }).join("") || `<p class="meta">Gemini está convirtiendo el guion en escenas…</p>`;
   if (escenas.length && !importado) {
     $("escenas").insertAdjacentHTML("afterbegin", anadirTras === 0 ? formNueva(0)
-      : `<button class="boton" type="button" data-anadir-tras="0">Añadir escena al principio</button>`);
+      : `<button class="boton anadir-principio" type="button" data-anadir-tras="0">Añadir escena al principio</button>`);
   }
   if (anadirTras !== null) document.getElementById("nueva-voz")?.focus();
 }
@@ -970,6 +974,30 @@ function pintarRender({ p }) {
     $("r-descargar").download = nombreArchivo(p, VERSION[p.version] || "video", "mp4");
   }
 }
+// Flow: todo el vídeo en un texto, el estado de la carpeta de clips y ensamblar cuando estén.
+function pintarFlowTodo(p) {
+  const c = p.carpeta_clips;
+  const listas = p.escenas.filter((e) => e.elegida !== null).length;
+  $("ensamblar").disabled = listas < p.escenas.length || !p.voz;
+  $("ensamblar").title = listas < p.escenas.length ? `Faltan ${p.escenas.length - listas} escenas con clip` : !p.voz ? "Falta la voz" : "";
+  $("carpeta-estado").innerHTML = c
+    ? `<b>${listas} de ${p.escenas.length}</b> escenas con clip · en la carpeta: ${c.archivos} ${c.archivos === 1 ? "archivo" : "archivos"}
+       (${c.escenas_en_carpeta} con número de escena) · nómbralos «escena 1», «escena 2»… · ${esc(c.ruta)}`
+    : `<b>${listas} de ${p.escenas.length}</b> escenas con clip`;
+}
+$("copiar-todo-flow").addEventListener("click", async (ev) => {
+  const b = ev.currentTarget;
+  try {
+    const { texto } = await api("/api/flow/todo");
+    await navigator.clipboard.writeText(texto);
+    b.textContent = "Copiado: pégalo en Flow";
+    setTimeout(() => { b.textContent = "Copiar todo para Flow"; }, 2500);
+    await api("/api/escena/activa", { escena: 1 });   // la extensión empieza a recoger desde la escena 1
+  } catch (e) { aviso(e); }
+});
+$("ensamblar").addEventListener("click", async () => {
+  try { await api("/api/render", {}); await refrescar(); location.hash = "#render"; } catch (e) { aviso(e); }
+});
 $("r-boton").addEventListener("click", async () => {
   try { await api("/api/render", {}); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -1118,6 +1146,9 @@ function fichaCanal(c, redes) {
   return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
     <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
     <label class="ancho"><span>Nicho (de qué trata el canal)</span><input class="campo" name="nicho" value="${esc(c.nicho || "")}" placeholder="historia y ciencia curiosa…" autocomplete="off"></label>
+    <label class="ancho"><span>Narrador del canal (cómo habla siempre)</span><input class="campo" name="arquetipo" value="${esc(c.arquetipo || "")}" placeholder="un gamer veterano que te cuenta secretos con complicidad…" autocomplete="off"></label>
+    <label><span>Arco emocional</span><input class="campo" name="arco" value="${esc(c.arco || "")}" placeholder="curiosidad → sorpresa → ganas de comentar" autocomplete="off"></label>
+    <label><span>Llamada a la acción fija</span><input class="campo" name="cta" value="${esc(c.cta || "")}" placeholder="Comenta qué juego quieres en el próximo" autocomplete="off"></label>
     <label class="ancho"><span>Canales de referencia (YouTube, uno por línea)</span><textarea class="campo fuentes-campo" name="referentes" rows="2"
       placeholder="@canalqueteinspira…" spellcheck="false">${esc((c.referentes || []).join("\n"))}</textarea></label>
     ${c.id ? `<div class="ancho parecidos"><button class="boton" type="button" data-parecidos="${esc(c.id)}">Buscar canales parecidos</button>
@@ -1144,7 +1175,8 @@ $("canales-lista").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const f = ev.target;
   const datos = Object.fromEntries(new FormData(f));
-  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", fuentes: (datos.fuentes || "").split(/\s+/).filter(Boolean),
+  const cuerpo = { nombre: datos.nombre, nicho: datos.nicho || "", arquetipo: datos.arquetipo || "", arco: datos.arco || "", cta: datos.cta || "",
+    fuentes: (datos.fuentes || "").split(/\s+/).filter(Boolean),
     referentes: (datos.referentes || "").split(/\s+/).filter(Boolean), redes: Object.fromEntries(Object.keys(REDES).map((r) => [r, datos[r] || ""])) };
   if (f.dataset.canal) cuerpo.id = f.dataset.canal;
   try {
@@ -1341,12 +1373,6 @@ document.addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-rapido]");
   if (b) crearRapido(b.dataset.rapido, b.dataset.formato || "corto", b);
 });
-$("a-rapido").addEventListener("click", () => {
-  if (modo() === "propio") return irA(2);   // con tu guion se elige el formato: es un paso más
-  const idea = $("a-idea").value.trim();
-  if (idea.length < 3) return alertaError("Escribe la idea del vídeo.");
-  crearRapido(idea, $("a-largo").checked && !$("a-corto").checked ? "largo" : "corto", $("a-rapido"));
-});
 // Inicio: las ideas del día del canal, para crear con un clic.
 async function pintarIdeasHoy() {
   let t;
@@ -1410,6 +1436,7 @@ async function refrescar() {
   siCambia("extension", [d.extension.conectada, d.extension.desactualizada], () => pintarExtension(d.extension));
   siCambia("escenas", { id: p.id, escenas: p.escenas, activa: p.escena_activa }, pintarEscenas);
   siCambia("fichas", p.fichas || [], pintarFichas);
+  siCambia("flow-todo", { id: p.id, c: p.carpeta_clips, e: p.escenas.map((e) => e.elegida), v: !!p.voz }, () => pintarFlowTodo(p));
   siCambia("todo-api", { id: p.id, e: p.escenas.map((e) => [e.elegida, e.tipo_clip, e.segundos]), f: (p.fichas || []).length }, pintarTodoApi);
   siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
   siCambia("voces", { id: p.id, voces: o.voces_gemini, actual: p.voz_nombre || o.voz_por_defecto, muestras: p.muestras_voz,
