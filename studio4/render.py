@@ -14,6 +14,56 @@ COLA_FINAL = 0.6  # segundos de imagen tras la última palabra
 ENTRADA = 2.0     # carátula de entrada (título y marca) antes de que empiece la voz
 
 
+# Edición: se aplica a cada trozo por separado, así la duración no cambia y la voz sigue sincronizada.
+TRANSICIONES = {"corte": "Corte", "fundido": "Fundido a negro", "destello": "Destello"}
+EFECTOS = {"ninguno": "Ninguno", "cine": "Color cine", "grano": "Grano de película", "byn": "Blanco y negro", "zoom": "Zoom suave"}
+EDICION_POR_DEFECTO = {"transicion": "corte", "efecto": "ninguno", "caratula": True, "inicio": 0.0, "final": 0.0}
+FUNDIDO = 0.22
+
+
+def edicion_de(p: dict[str, Any]) -> dict[str, Any]:
+    return {**EDICION_POR_DEFECTO, "caratula": p.get("entrada", True), **(p.get("edicion") or {})}
+
+
+def _acabado(ed: dict[str, Any], d: float, primero: bool, ultimo: bool, video: bool, ancho: int, alto: int) -> list[str]:
+    """Filtros de efecto y transición para un trozo de `d` segundos."""
+    f: list[str] = []
+    efecto = ed.get("efecto", "ninguno")
+    if efecto == "cine":
+        f.append("eq=contrast=1.06:saturation=1.12,vignette=PI/5")
+    elif efecto == "grano":
+        f.append("noise=alls=10:allf=t+u")
+    elif efecto == "byn":
+        f.append("hue=s=0,eq=contrast=1.1")
+    elif efecto == "zoom" and video:   # las imágenes ya llevan su acercamiento
+        frames = int(d * config.FPS) + 1
+        f.append(f"zoompan=z='min(1+0.06*on/{frames},1.06)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS}")
+    t = ed.get("transicion", "corte")
+    if t == "fundido" and d > 4 * FUNDIDO:
+        if not primero:
+            f.append(f"fade=t=in:st=0:d={FUNDIDO}")
+        if not ultimo:
+            f.append(f"fade=t=out:st={d - FUNDIDO:.3f}:d={FUNDIDO}")
+    elif t == "destello" and not primero:
+        f.append("fade=t=in:st=0:d=0.25:color=white")
+    return f
+
+
+def recortar_final(video: Path, inicio: float, final: float) -> None:
+    """Quita segundos del principio y del final del vídeo montado (si hay algo que quitar)."""
+    inicio, final = max(0.0, float(inicio or 0)), max(0.0, float(final or 0))
+    if inicio < 0.05 and final < 0.05:
+        return
+    total = medios.duracion(video)
+    queda = total - inicio - final
+    if queda < 3:
+        raise ValueError(f"Con ese recorte quedarían {max(0, queda):.1f} s de vídeo.")
+    tmp = video.with_name(video.stem + "_recortado.mp4")
+    medios.ffmpeg("-ss", f"{inicio:.3f}", "-i", str(video), "-t", f"{queda:.3f}", "-c:v", "libx264", "-preset", "medium",
+                  "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(tmp))
+    tmp.replace(video)
+
+
 def _es_tarjeta(esc: dict[str, Any]) -> bool:
     """La toma elegida es una tarjeta de diseño: ya lleva su titular, así que no se le pone el rótulo de gancho."""
     return esc.get("elegida") is not None and esc["tomas"][esc["elegida"]].get("origen") == "tarjeta"
@@ -23,7 +73,7 @@ def _encuadre(ancho: int, alto: int) -> str:
     return f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},setsar=1"
 
 
-def _segmento_video(origen: Path, destino: Path, d: float, ancho: int, alto: int) -> None:
+def _segmento_video(origen: Path, destino: Path, d: float, ancho: int, alto: int, acabado: list[str] | tuple = ()) -> None:
     inf = medios.info(origen)
     c = max(0.1, inf["duracion"])
     lento = min(max(d / c, 1.0), config.CAMARA_LENTA_MAX)
@@ -31,6 +81,7 @@ def _segmento_video(origen: Path, destino: Path, d: float, ancho: int, alto: int
     vf += [_encuadre(ancho, alto), f"fps={config.FPS}"]
     if c * lento < d:
         vf.append(f"tpad=stop_mode=clone:stop_duration={d - c * lento + 0.2:.3f}")  # congela el último fotograma
+    vf += list(acabado)
 
     entradas = ["-i", str(origen)]
     if inf["audio"] and config.VOLUMEN_AMBIENTE > 0:
@@ -45,11 +96,12 @@ def _segmento_video(origen: Path, destino: Path, d: float, ancho: int, alto: int
     )
 
 
-def _segmento_imagen(origen: Path, destino: Path, d: float, ancho: int, alto: int) -> None:
+def _segmento_imagen(origen: Path, destino: Path, d: float, ancho: int, alto: int, acabado: list[str] | tuple = ()) -> None:
     """Imagen fija → acercamiento lento (Ken Burns), sin saltos: se escala a 2x antes del zoompan."""
     frames = int(d * config.FPS) + 1
     vf = (f"scale={ancho * 2}:{alto * 2}:force_original_aspect_ratio=increase,crop={ancho * 2}:{alto * 2},"
           f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={ancho}x{alto}:fps={config.FPS},setsar=1")
+    vf = ",".join([vf, *acabado])
     medios.ffmpeg(
         "-loop", "1", "-i", str(origen), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
         "-vf", vf, "-map", "0:v", "-map", "1:a", "-t", f"{d:.3f}",
@@ -115,7 +167,8 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
 
     lista = []
     entrada = 0.0
-    if p.get("entrada", True):   # la carátula: si no se puede dibujar, el vídeo sale igual, sin ella
+    ed = edicion_de(p)
+    if ed["caratula"]:   # la carátula: si no se puede dibujar, el vídeo sale igual, sin ella
         try:
             from . import canales, tarjetas
             avisar("Dibujando la carátula de entrada", 6)
@@ -135,8 +188,10 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
         if not origen.exists():
             raise RuntimeError(f"Escena {esc['orden']}: falta el archivo de la toma elegida; elige otra o súbela de nuevo.")
         hacer = _segmento_video if toma["tipo"] == "video" else _segmento_imagen
+        acabado = _acabado(ed, d, primero=i == 0 and not entrada, ultimo=i == n - 1, video=toma["tipo"] == "video",
+                           ancho=ancho, alto=alto)
         try:
-            hacer(origen, seg, d, ancho, alto)
+            hacer(origen, seg, d, ancho, alto, acabado)
         except (RuntimeError, ValueError) as e:
             raise RuntimeError(f"Escena {esc['orden']}: el clip no se pudo procesar ({str(e)[-300:]}). Elige otra toma.") from e
         lista.append(seg)
@@ -173,6 +228,7 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(final),
         cwd=trabajo,
     )
+    recortar_final(final, ed.get("inicio", 0.0), ed.get("final", 0.0))
     registro.apuntar("Render local (FFmpeg)", f"{n} escenas · {fmt['aspecto']} · {total:.1f}s", produccion=p["id"])
     return final
 
@@ -198,7 +254,9 @@ def recorte(p: dict[str, Any], carpeta: Path, desde: int, hasta: int, destino: P
         toma = esc["tomas"][esc["elegida"]]
         d = t["fin"] - t["ini"] + (COLA_FINAL if orden == n else 0.4 if orden == hasta else 0)
         seg = trabajo / f"seg_{orden:02d}.mp4"
-        (_segmento_video if toma["tipo"] == "video" else _segmento_imagen)(carpeta / toma["archivo"], seg, d, ancho, alto)
+        acabado = _acabado(edicion_de(p), d, primero=orden == desde, ultimo=orden == hasta, video=toma["tipo"] == "video",
+                           ancho=ancho, alto=alto)
+        (_segmento_video if toma["tipo"] == "video" else _segmento_imagen)(carpeta / toma["archivo"], seg, d, ancho, alto, acabado)
         lista.append(seg)
     concat = trabajo / "lista.txt"
     concat.write_text("".join(f"file '{x.as_posix()}'\n" for x in lista), encoding="utf-8")

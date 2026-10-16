@@ -361,14 +361,16 @@ class Panel(BaseHTTPRequestHandler):
             d = self._cuerpo_json()
             if not d.get("derechos"):
                 raise Error(400, "Confirma que el vídeo es tuyo o que tienes derechos para reutilizarlo.")
-            return self._json({"ok": True, "id": produccion.importar_video(url=str(d.get("url", "")).strip())})
+            return self._json({"ok": True, "id": produccion.importar_video(url=str(d.get("url", "")).strip(),
+                                                                           completo=bool(d.get("completo")))})
         if ruta == "/api/importar/archivo":
             if (query.get("derechos") or [""])[0] != "1":
                 raise Error(400, "Confirma que el vídeo es tuyo o que tienes derechos para reutilizarlo.")
             tmp = self._cuerpo_a_temporal()
             try:
                 return self._json({"ok": True, "id": produccion.importar_video(
-                    archivo=tmp, nombre=urllib.parse.unquote(self.headers.get("X-Nombre", "")))})
+                    archivo=tmp, nombre=urllib.parse.unquote(self.headers.get("X-Nombre", "")),
+                    completo=(query.get("completo") or [""])[0] == "1")})
             finally:
                 tmp.unlink(missing_ok=True)
         if ruta == "/api/guion/desde-archivo":   # tu guion en un archivo: se queda solo la narración
@@ -414,6 +416,9 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if ruta == "/api/guion/reescribir":
             produccion.reescribir_guion(pid)
+            return self._json({"ok": True})
+        if ruta == "/api/edicion":   # transición, efecto, carátula y recorte (se aplican al volver a montar)
+            produccion.editar(pid, self._cuerpo_json())
             return self._json({"ok": True})
         if ruta == "/api/escena/anadir":   # una escena tuya, después de la que digas (0 = al principio)
             d = self._cuerpo_json()

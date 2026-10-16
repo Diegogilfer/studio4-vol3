@@ -18,7 +18,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (aprender, archivo, canales, carpetas, clips, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas,
+from . import (aprender, archivo, canales, carpetas, clips, config, director, entregas, medios, fuentes, guion, importar, investigacion, miniaturas,
                referencias, registro, render, subtitulos, tarjetas, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -291,15 +291,21 @@ def crear_rapido(idea: str, version: str = "corto") -> list[str]:
                  velocidad_voz=float(c.get("velocidad") or 1.0))
 
 
-def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "") -> str:
+# Desde URL: lo que sale con solo pulsar «Procesar» (todo se puede cambiar después y volver a montar).
+EDICION_URL = {"transicion": "fundido", "efecto": "cine", "caratula": True, "inicio": 0.0, "final": 0.0}
+
+
+def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "", completo: bool = False) -> str:
     """Un vídeo ya hecho (enlace o archivo) pasa a ser una producción: escenas con su texto y su trozo de vídeo,
-    lista para revisar, renderizar con subtítulos y sacar los 3 formatos."""
+    lista para revisar, renderizar con subtítulos y sacar los 3 formatos. Con `completo` (panel «Desde URL») sigue
+    solo hasta el final: descarga, monta con transiciones y efectos, y deja los 3 formatos con sus textos."""
     if not url and not archivo:
         raise ValueError("Pega el enlace del vídeo o sube el archivo.")
     titulo = nombre.rsplit(".", 1)[0] if nombre else "Vídeo importado"
     pid = f"{time.strftime('%Y%m%d-%H%M%S')}-importado-{_slug(titulo if not url else 'video')}"
     _nueva(pid, tema=titulo, version="importado", estado="importando", guion_aprobado=True, autor_guion="Vídeo original",
-           subtitulos={**subtitulos.POR_DEFECTO, "sonidos": False}, origen={"url": url, "archivo": nombre})
+           subtitulos={**subtitulos.POR_DEFECTO, "sonidos": False}, origen={"url": url, "archivo": nombre},
+           **({"edicion": dict(EDICION_URL), "desde_url": True} if completo else {}))
     if archivo:
         importar.subida_a_origen(archivo, carpeta(pid))
     activar(pid)
@@ -314,8 +320,27 @@ def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "")
                                           tema=datos.get("titulo") or q["tema"],
                                           origen={**q["origen"], **{k: datos[k] for k in ("canal",) if k in datos}}))
         preparar_carpeta(pid)
-    _en_fondo(pid, "Importar vídeo", fase, reintentable=False)
+        if completo:
+            _fase_render(pid)
+    _en_fondo(pid, "Desde URL" if completo else "Importar vídeo", fase, reintentable=False)
     return pid
+
+
+def editar(pid: str, datos: dict[str, Any]) -> dict[str, Any]:
+    """Transición, efecto, carátula y recorte del inicio y del final. Se aplica al volver a montar."""
+    def cambio(p):
+        ed = render.edicion_de(p)
+        if datos.get("transicion") in render.TRANSICIONES:
+            ed["transicion"] = datos["transicion"]
+        if datos.get("efecto") in render.EFECTOS:
+            ed["efecto"] = datos["efecto"]
+        if "caratula" in datos:
+            ed["caratula"] = bool(datos["caratula"])
+        for k in ("inicio", "final"):
+            if k in datos:
+                ed[k] = round(min(600.0, max(0.0, float(datos[k] or 0))), 2)
+        p["edicion"] = ed
+    return modificar(pid, cambio)
 
 
 def _guardar_referencias(pids: list[str], refs: dict[str, Any] | None) -> None:
@@ -629,25 +654,28 @@ def rehacer_voz(pid: str, proveedor: str) -> None:
 
 
 def renderizar(pid: str) -> None:
-    def fase():
-        p = cargar(pid)
-        modificar(pid, lambda q: q.update(estado="renderizando"))
-        try:
-            final = render.renderizar(p, carpeta(pid), avisar=lambda f, n: _avisar(pid, f, n))
-        except Exception:
-            modificar(pid, lambda q: q.update(estado="rodando"))
-            raise
-        modificar(pid, lambda q: q.update(estado="terminado", final={
-            "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
-        # Siempre se entregan los 3 formatos: completo, Reels y Shorts, sin pulsar nada más.
-        _avisar(pid, "Preparando Reels y Shorts para publicar", 92)
-        try:
-            res = entregas.preparar(cargar(pid), carpeta(pid), avisar=lambda f, n: _avisar(pid, f, 92 + n // 13))
-            modificar(pid, lambda q: q.update(entregas=res, entregas_error=""))
-        except Exception as e:  # noqa: BLE001 - el vídeo completo ya está hecho; los recortes se pueden repetir
-            logger.exception("Entregas tras el render")
-            modificar(pid, lambda q: q.update(entregas_error=str(e)))
-    _en_fondo(pid, "Render", fase)
+    _en_fondo(pid, "Render", lambda: _fase_render(pid))
+
+
+def _fase_render(pid: str) -> None:
+    """Monta el vídeo completo y deja los 3 formatos (completo, Reels y Shorts) con sus textos."""
+    p = cargar(pid)
+    modificar(pid, lambda q: q.update(estado="renderizando"))
+    try:
+        final = render.renderizar(p, carpeta(pid), avisar=lambda f, n: _avisar(pid, f, n))
+    except Exception:
+        modificar(pid, lambda q: q.update(estado="rodando"))
+        raise
+    modificar(pid, lambda q: q.update(estado="terminado", final={
+        "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
+    # Siempre se entregan los 3 formatos: completo, Reels y Shorts, sin pulsar nada más.
+    _avisar(pid, "Preparando Reels y Shorts para publicar", 92)
+    try:
+        res = entregas.preparar(cargar(pid), carpeta(pid), avisar=lambda f, n: _avisar(pid, f, 92 + n // 13))
+        modificar(pid, lambda q: q.update(entregas=res, entregas_error=""))
+    except Exception as e:  # noqa: BLE001 - el vídeo completo ya está hecho; los recortes se pueden repetir
+        logger.exception("Entregas tras el render")
+        modificar(pid, lambda q: q.update(entregas_error=str(e)))
 
 
 # --- Carpeta de la producción en tu PC -------------------------------------------------------------
@@ -890,7 +918,12 @@ def anadir_escena(pid: str, despues: int, texto_voz: str, que_se_ve: str = "", t
 
 
 def quitar_escena(pid: str, orden: int) -> dict[str, Any]:
-    """Quita una escena (su texto sale del guion; sus tomas se quedan en la carpeta por si acaso)."""
+    """Quita una escena (su texto sale del guion; sus tomas se quedan en la carpeta por si acaso).
+    En un vídeo importado la voz es el audio original: se corta ese trozo y todo lo demás se recoloca."""
+    p0 = cargar(pid)
+    if p0.get("version") == "importado" and p0.get("voz"):
+        return _quitar_escena_importada(pid, orden)
+
     def cambio(p):
         if p["trabajo"].get("ocupado"):
             raise RuntimeError("Espera a que termine la fase en curso.")
@@ -901,6 +934,39 @@ def quitar_escena(pid: str, orden: int) -> dict[str, Any]:
         p["escenas"].pop(orden - 1)
         _renumerar(p)
         p["escena_activa"] = min(max(1, p.get("escena_activa", 1) - (orden < p.get("escena_activa", 1))), len(p["escenas"]))
+    return modificar(pid, cambio)
+
+
+def _quitar_escena_importada(pid: str, orden: int) -> dict[str, Any]:
+    p = cargar(pid)
+    if p["trabajo"].get("ocupado"):
+        raise RuntimeError("Espera a que termine la fase en curso.")
+    if not 1 <= orden <= len(p["escenas"]) or len(p["escenas"]) == 1:
+        raise ValueError(f"No se puede quitar la escena {orden}")
+    t = p["voz"]["escenas"][orden - 1]
+    ini, fin = t["ini"], t["fin"]
+    hueco = fin - ini
+    wav = carpeta(pid) / p["voz"]["archivo"]
+    tmp = wav.with_name("voz_sin_escena.wav")
+    medios.ffmpeg("-i", str(wav), "-filter_complex",
+                  f"[0:a]atrim=0:{ini:.3f},asetpts=PTS-STARTPTS[a0];[0:a]atrim=start={fin:.3f},asetpts=PTS-STARTPTS[a1];"
+                  "[a0][a1]concat=n=2:v=0:a=1[o]", "-map", "[o]", str(tmp))
+    tmp.replace(wav)
+
+    def mover(x: dict[str, Any]) -> dict[str, Any]:
+        return {**x, "ini": round(x["ini"] - hueco, 3), "fin": round(x["fin"] - hueco, 3)} if x["ini"] >= fin - 0.01 else x
+
+    def cambio(q):
+        v = q["voz"]
+        v["escenas"] = [mover(x) for i, x in enumerate(v["escenas"]) if i != orden - 1]
+        v["palabras"] = [mover(w) for w in v.get("palabras", []) if not (w["ini"] >= ini - 0.01 and w["fin"] <= fin + 0.01)]
+        v["duracion"] = round(v["duracion"] - hueco, 3)
+        q["escenas"].pop(orden - 1)
+        for i, e in enumerate(q["escenas"], 1):
+            e["orden"] = i
+        q["guion"] = " ".join(e["texto_voz"] for e in q["escenas"])
+        q["escena_activa"] = min(q.get("escena_activa", 1), len(q["escenas"]))
+        q["final"] = None
     return modificar(pid, cambio)
 
 

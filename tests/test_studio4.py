@@ -1219,3 +1219,43 @@ def test_idea_en_tendencia_es_original_y_detallada(aislado, monkeypatch):
     assert d["leido"] and "¿Recuerdan a este youtuber?" in pedidos[0] and "6.000.000 vistas" in pedidos[0]
     t = ideas.como_texto(d)
     assert "Inspirada en «SON IGUALES» (MrRelevante)" in t and "gancho → dato → apuesta" in t and "- 1:1" in t
+
+
+def test_edicion_transiciones_y_efectos():
+    ed = {**render.EDICION_POR_DEFECTO, "transicion": "fundido", "efecto": "cine"}
+    medio = render._acabado(ed, 5.0, primero=False, ultimo=False, video=True, ancho=1080, alto=1920)
+    assert medio[0].startswith("eq=") and "fade=t=in:st=0" in medio[1] and "fade=t=out:st=4.780" in medio[2]
+    assert not any("fade=t=in" in f for f in render._acabado(ed, 5.0, primero=True, ultimo=False, video=True, ancho=1, alto=1))
+    assert render._acabado({**ed, "transicion": "destello", "efecto": "zoom"}, 5.0, False, True, video=False, ancho=1, alto=1) == [
+        "fade=t=in:st=0:d=0.25:color=white"]                      # el zoom no se aplica a imágenes (ya llevan el suyo)
+    assert render._acabado(render.EDICION_POR_DEFECTO, 5.0, False, False, True, 1, 1) == []   # por defecto, nada cambia
+
+
+def test_editar_valida_y_recorte_minimo(aislado, tmp_path):
+    _produccion("p-ed", escenas=1)
+    produccion.editar("p-ed", {"transicion": "fundido", "efecto": "inventado", "inicio": "1.5", "final": -3, "caratula": False})
+    ed = produccion.cargar("p-ed")["edicion"]
+    assert (ed["transicion"], ed["efecto"], ed["inicio"], ed["final"], ed["caratula"]) == ("fundido", "ninguno", 1.5, 0.0, False)
+    if shutil.which("ffmpeg"):
+        v = tmp_path / "v.mp4"
+        medios.ffmpeg("-f", "lavfi", "-i", "color=c=black:s=320x240:d=6", "-f", "lavfi", "-i", "sine=d=6", "-shortest", str(v))
+        render.recortar_final(v, 1.0, 1.0)
+        assert abs(medios.duracion(v) - 4.0) < 0.2
+        with pytest.raises(ValueError, match="quedarían"):
+            render.recortar_final(v, 2.0, 1.5)
+
+
+@hay_ffmpeg
+def test_quitar_escena_de_video_importado_corta_su_audio(aislado):
+    p = _produccion("p-imp", escenas=3, version="importado")
+    wav = produccion.carpeta("p-imp") / "voz.wav"
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=d=9", str(wav))
+    voz_ = {"archivo": "voz.wav", "duracion": 9.0, "escenas": [{"ini": 0, "fin": 3}, {"ini": 3, "fin": 6}, {"ini": 6, "fin": 9}],
+            "palabras": [{"palabra": "a", "ini": 1, "fin": 2}, {"palabra": "b", "ini": 4, "fin": 5}, {"palabra": "c", "ini": 7, "fin": 8}]}
+    produccion.modificar("p-imp", lambda q: q.update(voz=voz_))
+    produccion.quitar_escena("p-imp", 2)
+    q = produccion.cargar("p-imp")
+    assert [e["texto_voz"] for e in q["escenas"]] == ["frase 1", "frase 3"] and q["voz"] is not None
+    assert q["voz"]["escenas"] == [{"ini": 0, "fin": 3}, {"ini": 3.0, "fin": 6.0}]
+    assert [w["palabra"] for w in q["voz"]["palabras"]] == ["a", "c"] and q["voz"]["palabras"][1]["ini"] == 4.0
+    assert abs(medios.duracion(wav) - 6.0) < 0.15
