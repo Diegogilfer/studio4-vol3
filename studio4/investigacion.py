@@ -107,6 +107,8 @@ def _con_wikipedia(idea: str, produccion: str) -> dict[str, Any]:
 
 
 def investigar(idea: str, produccion: str = "") -> dict[str, Any]:
+    if gemini.bloqueado() or not config.GEMINI_API_KEY:   # Gemini en pausa: directo a Wikipedia (con la reserva)
+        return _con_wikipedia(idea, produccion)
     try:
         return _con_google(idea, produccion)
     except Exception as e:  # noqa: BLE001 - 429 sin facturación, modelo sin búsqueda, red...
