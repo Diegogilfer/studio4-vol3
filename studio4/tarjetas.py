@@ -75,11 +75,11 @@ def html_tarjeta(t: dict[str, Any], n: int, ancho: int, alto: int, marca: str = 
     grande = f'<div class="cifra">{esc(t["cifra"])}</div>' if t.get("tipo") == "cifra" and t.get("cifra") else ""
     comillas = '<div class="comillas">“</div>' if t.get("tipo") == "cita" else ""
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
-@font-face {{ font-family: Serif; src: url("{_uri(fuentes / 'instrument-serif-latin-normal.woff2')}"); }}
-@font-face {{ font-family: Serif; font-style: italic; src: url("{_uri(fuentes / 'instrument-serif-latin-italic.woff2')}"); }}
-@font-face {{ font-family: Sans; src: url("{_uri(fuentes / 'geist-latin-wght-normal.woff2')}"); font-weight: 100 900; }}
+@font-face {{ font-family: "S4 Serif"; src: url("{_uri(fuentes / 'instrument-serif-latin-normal.woff2')}"); }}
+@font-face {{ font-family: "S4 Serif"; font-style: italic; src: url("{_uri(fuentes / 'instrument-serif-latin-italic.woff2')}"); }}
+@font-face {{ font-family: "S4 Sans"; src: url("{_uri(fuentes / 'geist-latin-wght-normal.woff2')}"); font-weight: 100 900; }}
 html, body {{ margin: 0; width: {ancho}px; height: {alto}px; overflow: hidden; }}
-body {{ position: relative; background: radial-gradient(120% 80% at 20% 10%, {f2}, {f1} 70%); color: #f4f1ff; font-family: Sans, sans-serif; }}
+body {{ position: relative; background: radial-gradient(120% 80% at 20% 10%, {f2}, {f1} 70%); color: #f4f1ff; font-family: "S4 Sans", sans-serif; }}
 .luz1, .luz2 {{ position: absolute; border-radius: 50%; filter: blur({int(base * .09)}px); opacity: .55; }}
 .luz1 {{ width: {int(base * .9)}px; height: {int(base * .9)}px; left: -{int(base * .25)}px; top: {int(alto * .05)}px; background: {acento}; }}
 .luz2 {{ width: {int(base * .8)}px; height: {int(base * .8)}px; right: -{int(base * .3)}px; bottom: {int(alto * .12)}px; background: {luz}; opacity: .4; }}
@@ -89,17 +89,17 @@ body {{ position: relative; background: radial-gradient(120% 80% at 20% 10%, {f2
 .grano {{ position: absolute; inset: 0; opacity: .12; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>"); }}
 .velo {{ position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,.55)); }}
 .caja {{ position: absolute; left: {int(ancho * .12)}px; right: {int(ancho * .12)}px; top: {int(alto * (.15 if vertical else .17))}px; }}
-.ante {{ display: inline-block; font: 600 {int(base * .028)}px/1 Sans; letter-spacing: .22em; text-transform: uppercase; color: {acento};
+.ante {{ display: inline-block; font: 600 {int(base * .028)}px/1 "S4 Sans"; letter-spacing: .22em; text-transform: uppercase; color: {acento};
   padding: {int(base * .014)}px {int(base * .026)}px; border: 2px solid {acento}; border-radius: 999px; }}
-.num {{ position: absolute; right: {int(ancho * .12)}px; top: {int(alto * .08)}px; font: italic 400 {int(base * .2)}px/1 Serif;
+.num {{ position: absolute; right: {int(ancho * .12)}px; top: {int(alto * .08)}px; font: italic 400 {int(base * .2)}px/1 "S4 Serif";
   color: transparent; -webkit-text-stroke: 2px rgba(255,255,255,.18); }}
-.cifra {{ font: 400 {int(base * (.36 if vertical else .3))}px/.9 Serif; color: {acento}; margin-top: {int(base * .04)}px;
+.cifra {{ font: 400 {int(base * (.36 if vertical else .3))}px/.9 "S4 Serif"; color: {acento}; margin-top: {int(base * .04)}px;
   text-shadow: 0 0 {int(base * .06)}px {acento}66; }}
-.comillas {{ font: 400 {int(base * .3)}px/.6 Serif; color: {acento}; margin-top: {int(base * .06)}px; }}
-h1 {{ font: 400 {int(base * (.12 if vertical else .1))}px/1 Serif; margin: {int(base * .035)}px 0 0; letter-spacing: -.01em; }}
+.comillas {{ font: 400 {int(base * .3)}px/.6 "S4 Serif"; color: {acento}; margin-top: {int(base * .06)}px; }}
+h1 {{ font: 400 {int(base * (.12 if vertical else .1))}px/1 "S4 Serif"; margin: {int(base * .035)}px 0 0; letter-spacing: -.01em; }}
 h1 em {{ font-style: italic; color: {acento}; text-shadow: 0 0 {int(base * .05)}px {acento}55; }}
-p {{ font: 400 {int(base * .042)}px/1.4 Sans; color: rgba(244,241,255,.82); margin: {int(base * .04)}px 0 0; max-width: 92%; }}
-.marca {{ position: absolute; left: {int(ancho * .12)}px; bottom: {int(alto * .09)}px; font: 600 {int(base * .022)}px Sans;
+p {{ font: 400 {int(base * .042)}px/1.4 "S4 Sans"; color: rgba(244,241,255,.82); margin: {int(base * .04)}px 0 0; max-width: 92%; }}
+.marca {{ position: absolute; left: {int(ancho * .12)}px; bottom: {int(alto * .09)}px; font: 600 {int(base * .022)}px "S4 Sans";
   letter-spacing: .3em; color: rgba(255,255,255,.45); }}
 </style></head><body><div class="luz1"></div><div class="luz2"></div><div class="rejilla"></div><div class="velo"></div>
 <div class="num">{n:02d}</div>
@@ -118,9 +118,9 @@ def html_caratula(titulo: str, subtitulo: str, marca: str, arriba: Path, abajo: 
     if len(palabras) > 1:   # la última palabra del título, en cursiva y con el color de acento
         palabras[-1] = f"<em>{palabras[-1]}</em>"
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
-@font-face {{ font-family: Serif; src: url("{_uri(fuentes / 'instrument-serif-latin-normal.woff2')}"); }}
-@font-face {{ font-family: Serif; font-style: italic; src: url("{_uri(fuentes / 'instrument-serif-latin-italic.woff2')}"); }}
-@font-face {{ font-family: Sans; src: url("{_uri(fuentes / 'geist-latin-wght-normal.woff2')}"); font-weight: 100 900; }}
+@font-face {{ font-family: "S4 Serif"; src: url("{_uri(fuentes / 'instrument-serif-latin-normal.woff2')}"); }}
+@font-face {{ font-family: "S4 Serif"; font-style: italic; src: url("{_uri(fuentes / 'instrument-serif-latin-italic.woff2')}"); }}
+@font-face {{ font-family: "S4 Sans"; src: url("{_uri(fuentes / 'geist-latin-wght-normal.woff2')}"); font-weight: 100 900; }}
 html, body {{ margin: 0; width: {ancho}px; height: {alto}px; overflow: hidden; background: #08060f; color: #f4f1ff; }}
 .foto {{ position: absolute; left: 0; right: 0; height: 52%; background-size: cover; background-position: center 30%; }}
 .arriba {{ top: 0; background-image: url("{_uri(arriba)}"); filter: grayscale(1) contrast(1.1);
@@ -128,11 +128,11 @@ html, body {{ margin: 0; width: {ancho}px; height: {alto}px; overflow: hidden; b
 .abajo {{ bottom: 0; background-image: url("{_uri(abajo)}"); -webkit-mask: linear-gradient(0deg, #000 60%, transparent); }}
 .velo {{ position: absolute; inset: 0; background: radial-gradient(90% 26% at 50% 50%, rgba(8,6,15,.92), rgba(8,6,15,0)); }}
 .centro {{ position: absolute; left: {int(ancho * .12)}px; right: {int(ancho * .12)}px; top: 50%; transform: translateY(-50%); text-align: center; }}
-.marca {{ display: inline-block; font: 600 {int(base * .026)}px/1 Sans; letter-spacing: .32em; color: {acento};
+.marca {{ display: inline-block; font: 600 {int(base * .026)}px/1 "S4 Sans"; letter-spacing: .32em; color: {acento};
   padding: {int(base * .014)}px {int(base * .03)}px; border: 2px solid {acento}; border-radius: 999px; }}
-h1 {{ font: 400 {int(base * .14)}px/.95 Serif; margin: {int(base * .035)}px 0 0; letter-spacing: -.01em; text-shadow: 0 4px 30px #000; }}
+h1 {{ font: 400 {int(base * .14)}px/.95 "S4 Serif"; margin: {int(base * .035)}px 0 0; letter-spacing: -.01em; text-shadow: 0 4px 30px #000; }}
 h1 em {{ color: {acento}; text-shadow: 0 0 {int(base * .05)}px {acento}66; }}
-p {{ font: 400 {int(base * .036)}px/1.35 Sans; color: rgba(244,241,255,.86); margin: {int(base * .03)}px auto 0; max-width: 92%; }}
+p {{ font: 400 {int(base * .036)}px/1.35 "S4 Sans"; color: rgba(244,241,255,.86); margin: {int(base * .03)}px auto 0; max-width: 92%; }}
 </style></head><body><div class="foto arriba"></div><div class="foto abajo"></div><div class="velo"></div>
 <div class="centro"><span class="marca">{esc(marca.upper())}</span><h1>{" ".join(palabras)}</h1>{f"<p>{esc(subtitulo)}</p>" if subtitulo else ""}</div>
 </body></html>"""

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio 4 · Términos y licencias</title>
+<link rel="icon" href="/web/studio4.ico">
+<style>
+@font-face { font-family: "S4 Serif"; src: url("/web/fuentes/instrument-serif-latin-normal.woff2"); }
+@font-face { font-family: "S4 Serif"; font-style: italic; src: url("/web/fuentes/instrument-serif-latin-italic.woff2"); }
+@font-face { font-family: "S4 Sans"; src: url("/web/fuentes/geist-latin-wght-normal.woff2"); font-weight: 100 900; }
+:root { --bg: #f4f2fb; --caja: #ffffff; --borde: #e4e1f0; --fg: #161827; --suave: #4a4f66; --a: #7c3aed; }
+@media (prefers-color-scheme: dark) { :root { --bg: #07080d; --caja: #12141d; --borde: #232736; --fg: #eef1f6; --suave: #9aa3b2; --a: #8b5cf6; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 "S4 Sans", system-ui, sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 64px; display: grid; gap: 18px; }
+h1 { margin: 0; font: 400 clamp(36px, 7vw, 54px)/1.05 "S4 Serif", serif; } h1 em { color: var(--a); }
+h2 { margin: 0 0 6px; font: 400 26px/1.2 "S4 Serif", serif; }
+section { background: var(--caja); border: 1px solid var(--borde); border-radius: 26px; padding: 22px 24px; }
+p, li { color: var(--suave); } ul { padding-left: 1.1rem; margin: 6px 0 0; } li + li { margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; } td, th { text-align: left; padding: 8px 6px; border-top: 1px solid var(--borde); vertical-align: top; }
+th { color: var(--fg); font-weight: 600; } .meta { font-size: 13px; color: var(--suave); }
+a { color: var(--a); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Términos de uso y <em>licencias</em></h1>
+  <p class="meta">Revisado el 15 de octubre de 2026. Este texto explica cómo usar Studio 4 de forma segura; no sustituye el consejo de un abogado.</p>
+
+  <section>
+    <h2>Términos de uso</h2>
+    <ul>
+      <li>Solo procesas vídeos, imágenes, música y textos <b>propios</b> o con <b>permiso o licencia</b> de su autor. Al marcar «Acepto los términos de uso» lo confirmas para ese contenido.</li>
+      <li>Los vídeos de otros canales que guardas como <b>vídeo modelo</b> o que Studio 4 estudia en <b>Ideas en tendencia</b> sirven para aprender la <b>forma</b> (ritmo, estructura, tono). No se vuelven a publicar ni se copian sus frases.</li>
+      <li>Volver a subir un vídeo ajeno, aunque esté editado, puede recibir una reclamación de derechos de autor y penalizar tu canal.</li>
+      <li>Si un vídeo muestra a personas reales, necesitas su permiso o una base legal para usar su imagen.</li>
+      <li>Las plataformas piden indicar el contenido realista hecho o alterado con IA. Revisa las normas de cada red antes de publicar.</li>
+      <li>Studio 4 no publica nada por ti: tú decides qué subes, dónde y cuándo.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Servicios externos</h2>
+    <p>Studio 4 usa tus propias claves y cuentas. Cada servicio tiene sus términos, que aceptas al usarlo:</p>
+    <ul>
+      <li><b>Google:</b> API de Gemini (texto, voz, imágenes y vídeo), API de datos de YouTube (solo lectura) y Google Flow con tu suscripción.</li>
+      <li><b>DeepSeek:</b> escritura de guiones (pago por uso).</li>
+      <li><b>fal.ai:</b> imágenes y vídeo opcionales (saldo prepagado).</li>
+      <li><b>Wikimedia Commons:</b> solo se usan fotos marcadas como dominio público.</li>
+      <li><b>YouTube, TikTok, Instagram, Facebook:</b> descargar contenido debe respetar sus condiciones y los derechos de autor.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Licencias de terceros</h2>
+    <table>
+      <tr><th>Componente</th><th>Uso</th><th>Licencia</th></tr>
+      <tr><td>FFmpeg 9.0.1 (build de gyan.dev)</td><td>Montaje, cortes y audio</td><td>GPL v3 (se usa como programa aparte)</td></tr>
+      <tr><td>yt-dlp</td><td>Leer enlaces y subtítulos, descargar</td><td>Unlicense (dominio público)</td></tr>
+      <tr><td>faster-whisper · CTranslate2</td><td>Transcripción en tu PC</td><td>MIT</td></tr>
+      <tr><td>google-genai</td><td>Conexión con Gemini</td><td>Apache 2.0</td></tr>
+      <tr><td>requests</td><td>Conexiones web</td><td>Apache 2.0</td></tr>
+      <tr><td>pydantic</td><td>Validación de datos</td><td>MIT</td></tr>
+      <tr><td>Pillow</td><td>Imágenes y portadas</td><td>MIT-CMU</td></tr>
+      <tr><td>python-dotenv</td><td>Claves en .env</td><td>BSD 3-Clause</td></tr>
+      <tr><td>Geist · Instrument Serif</td><td>Tipografías del panel</td><td>SIL Open Font License 1.1</td></tr>
+      <tr><td>Logos de redes sociales</td><td>Iconos del panel</td><td>Marcas registradas de sus dueños; solo identifican cada red</td></tr>
+    </table>
+  </section>
+
+  <p class="meta"><a href="/">Volver a Studio 4</a></p>
+</main>
+</body>
+</html>

@@ -427,7 +427,7 @@ $("v-archivo").addEventListener("change", (ev) => {
 });
 $("v-url").addEventListener("input", () => { if ($("v-url").value) { videoSubido = null; $("v-info").textContent = ""; } });
 $("v-importar").addEventListener("click", async () => {
-  if (!$("v-derechos").checked) return alertaError("Marca que el vídeo es tuyo o que tienes derechos para reutilizarlo.");
+  if (!$("v-derechos").checked) return alertaError("Acepta los términos de uso para continuar.");
   const url = $("v-url").value.trim();
   if (!videoSubido && !/^https?:\/\/\S+$/.test(url)) return alertaError("Pega el enlace del vídeo o sube el archivo.");
   $("v-importar").disabled = true;
@@ -1154,7 +1154,7 @@ $("u-url").addEventListener("input", () => {
         <div><b>${esc(v.titulo || "Vídeo sin título")}</b><span class="meta">${esc(v.canal)}${v.duracion ? ` · ${minutos(v.duracion)}` : ""}${
           v.vistas ? ` · ${compactoNum(v.vistas)} vistas` : ""}</span>
         ${v.demasiado_largo ? `<span class="error">Dura más de ${v.max_minutos} minutos: no se puede procesar.</span>` : ""}</div>`;
-      $("u-info").textContent = "¿Es este? Marca que tienes derechos y pulsa «Procesar».";
+      $("u-info").textContent = "¿Es este? Acepta los términos y pulsa «Procesar».";
     } catch (e) { $("u-vista").hidden = true; $("u-info").textContent = `No pude leer el enlace: ${e.message || e}`; }
     finally { $("u-logo").classList.remove("leyendo"); }
   }, 600);
@@ -1169,7 +1169,7 @@ $("u-archivo").addEventListener("change", () => {
 $("u-procesar").addEventListener("click", async () => {
   const url = $("u-url").value.trim();
   if (!url && !videoUrlSubido) return alertaError("Pega el enlace del vídeo o sube el archivo.");
-  if (!$("u-derechos").checked) return alertaError("Marca que el vídeo es tuyo o que tienes derechos para reutilizarlo.");
+  if (!$("u-derechos").checked) return alertaError("Acepta los términos de uso para continuar.");
   $("u-procesar").disabled = true;
   try {
     if (videoUrlSubido) {

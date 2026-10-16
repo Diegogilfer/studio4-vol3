@@ -45,7 +45,7 @@ logger = logging.getLogger("studio4.servidor")
 
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
-PAGINAS = {"/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
+PAGINAS = {"/legal": "legal.html", "/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
 MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|entregas/[\w.-]+\.(mp4|jpg)|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
@@ -384,12 +384,12 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/importar":   # un vídeo ya hecho, por enlace (solo tuyo o con derechos)
             d = self._cuerpo_json()
             if not d.get("derechos"):
-                raise Error(400, "Confirma que el vídeo es tuyo o que tienes derechos para reutilizarlo.")
+                raise Error(400, "Acepta los términos de uso para continuar.")
             return self._json({"ok": True, "id": produccion.importar_video(url=str(d.get("url", "")).strip(),
                                                                            completo=bool(d.get("completo")))})
         if ruta == "/api/importar/archivo":
             if (query.get("derechos") or [""])[0] != "1":
-                raise Error(400, "Confirma que el vídeo es tuyo o que tienes derechos para reutilizarlo.")
+                raise Error(400, "Acepta los términos de uso para continuar.")
             tmp = self._cuerpo_a_temporal()
             try:
                 return self._json({"ok": True, "id": produccion.importar_video(

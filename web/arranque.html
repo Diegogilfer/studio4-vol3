@@ -7,20 +7,20 @@
 <link rel="icon" href="studio4.ico">
 <!-- Pantalla de carga: se abre al instante desde iniciar.bat (sin servidor) y entra en el panel cuando responde. -->
 <style>
-@font-face { font-family: Serif; src: url("fuentes/instrument-serif-latin-normal.woff2"); }
-@font-face { font-family: Serif; font-style: italic; src: url("fuentes/instrument-serif-latin-italic.woff2"); }
-@font-face { font-family: Sans; src: url("fuentes/geist-latin-wght-normal.woff2"); font-weight: 100 900; }
+@font-face { font-family: "S4 Serif"; src: url("fuentes/instrument-serif-latin-normal.woff2"); }
+@font-face { font-family: "S4 Serif"; font-style: italic; src: url("fuentes/instrument-serif-latin-italic.woff2"); }
+@font-face { font-family: "S4 Sans"; src: url("fuentes/geist-latin-wght-normal.woff2"); font-weight: 100 900; }
 :root { --bg: #f4f2fb; --fg: #161827; --suave: #4a4f66; --a: #7c3aed; --b: #0d9488; }
 @media (prefers-color-scheme: dark) { :root { --bg: #07080d; --fg: #eef1f6; --suave: #9aa3b2; --a: #8b5cf6; --b: #2dd4bf; } }
 html, body { margin: 0; height: 100%; }
 body { display: grid; place-items: center; background: radial-gradient(80% 60% at 30% 20%, color-mix(in oklab, var(--a) 18%, var(--bg)), var(--bg) 70%);
-  color: var(--fg); font-family: Sans, system-ui, sans-serif; overflow: hidden; }
+  color: var(--fg); font-family: "S4 Sans", system-ui, sans-serif; overflow: hidden; }
 .centro { display: grid; justify-items: center; gap: 22px; text-align: center; padding: 16px; }
-.logo { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 32px; color: #fff; font: 700 34px Sans, sans-serif;
+.logo { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 32px; color: #fff; font: 700 34px "S4 Sans", sans-serif;
   background: linear-gradient(135deg, var(--a), var(--b)); box-shadow: 0 24px 60px -20px color-mix(in oklab, var(--a) 80%, transparent),
   inset 0 1px 0 rgb(255 255 255 / .35); animation: respirar 2.4s ease-in-out infinite; }
 @keyframes respirar { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-h1 { margin: 0; font: 400 clamp(40px, 8vw, 64px)/1 Serif, serif; letter-spacing: -.01em; }
+h1 { margin: 0; font: 400 clamp(40px, 8vw, 64px)/1 "S4 Serif", serif; letter-spacing: -.01em; }
 h1 em { color: var(--a); }
 p { margin: 0; color: var(--suave); font-size: 15px; min-height: 1.4em; }
 .puntos { display: flex; gap: 8px; } .puntos i { width: 8px; height: 8px; border-radius: 999px; background: var(--a); opacity: .3;
