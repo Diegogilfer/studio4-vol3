@@ -1259,6 +1259,11 @@ function fichaCanal(c, redes) {
   return `<form class="canal-ficha" data-canal="${esc(c.id || "")}">
     <label><span>Nombre</span><input class="campo" name="nombre" value="${esc(c.nombre || "")}" required autocomplete="off" aria-label="Nombre del canal"></label>
     <label class="ancho"><span>Nicho (de qué trata el canal)</span><input class="campo" name="nicho" value="${esc(c.nicho || "")}" placeholder="historia y ciencia curiosa…" autocomplete="off"></label>
+    ${c.id ? `<div class="ancho modelo-canal"><span class="meta">Vídeo modelo (así quieres tus vídeos)</span>
+      <div class="fila"><input class="campo" name="modelo_url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false">
+        <button class="boton" type="button" data-modelo="${esc(c.id)}">Estudiar</button></div>
+      <textarea class="campo fuentes-campo" name="modelo_nota" rows="2" placeholder="Qué tomar de él: voz, montaje, ritmo…"></textarea>
+      <span class="meta" data-modelo-estado></span></div>` : ""}
     <label class="ancho"><span>Narrador del canal (cómo habla siempre)</span><input class="campo" name="arquetipo" value="${esc(c.arquetipo || "")}" placeholder="un gamer veterano que te cuenta secretos con complicidad…" autocomplete="off"></label>
     <label><span>Arco emocional</span><input class="campo" name="arco" value="${esc(c.arco || "")}" placeholder="curiosidad → sorpresa → ganas de comentar" autocomplete="off"></label>
     <label><span>Llamada a la acción fija</span><input class="campo" name="cta" value="${esc(c.cta || "")}" placeholder="Comenta qué juego quieres en el próximo" autocomplete="off"></label>
@@ -1284,6 +1289,17 @@ async function pintarCanalesAjustes(conNuevo = false) {
     if (conNuevo) $("canales-lista").lastElementChild.querySelector("input").focus();
   } catch (e) { aviso(e); }
 }
+$("canales-lista").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-modelo]");
+  if (!b) return;
+  const f = b.closest("form");
+  const estado = f.querySelector("[data-modelo-estado]");
+  b.disabled = true; estado.textContent = "Leyendo el vídeo…";
+  try {
+    const m = await api("/api/modelo", { url: f.modelo_url.value, nota: f.modelo_nota.value });
+    estado.textContent = `Guardado: ${m.resumen || "vídeo modelo estudiado"}${m.leido ? "" : " (sin subtítulos: con tu nota)"}`;
+  } catch (e) { estado.textContent = e.message || String(e); } finally { b.disabled = false; }
+});
 $("canales-lista").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const f = ev.target;

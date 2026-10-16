@@ -340,6 +340,12 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/manual":
             aprender.lanzar(canales.activo()["id"])
             return self._json({"ok": True})
+        if ruta == "/api/modelo":   # «así quiero mis vídeos»: un vídeo de ejemplo que manda sobre el estilo
+            d = self._cuerpo_json()
+            url = str(d.get("url", "")).strip()
+            if not url.startswith(("http://", "https://")):
+                raise Error(400, "Pega el enlace del vídeo modelo.")
+            return self._json(aprender.estudiar_modelo(canales.activo()["id"], url, str(d.get("nota", ""))[:600]))
         if ruta == "/api/ideas/vivo":   # lo que más crece esta semana en el nicho del canal
             return self._json({"videos": ideas.en_vivo(canales.activo()["id"])})
         if ruta == "/api/ideas/inspirar":   # una idea original a partir de un vídeo en tendencia

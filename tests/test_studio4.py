@@ -1259,3 +1259,18 @@ def test_quitar_escena_de_video_importado_corta_su_audio(aislado):
     assert q["voz"]["escenas"] == [{"ini": 0, "fin": 3}, {"ini": 3.0, "fin": 6.0}]
     assert [w["palabra"] for w in q["voz"]["palabras"]] == ["a", "c"] and q["voz"]["palabras"][1]["ini"] == 4.0
     assert abs(medios.duracion(wav) - 6.0) < 0.15
+
+
+def test_video_modelo_manda_en_el_guion_y_en_la_voz(aislado, monkeypatch):
+    from studio4 import aprender
+    monkeypatch.setattr(aprender, "transcripcion", lambda url: {"texto": "Rockstar acaba de revelar " * 10, "ritmo": 2.6})
+    monkeypatch.setattr(aprender, "_generar_json", lambda *a, **k: {
+        "resumen": "análisis narrado", "narrador": "Loquendo", "voz": "Voz sintética estilo Loquendo",
+        "estructura": ["noticia", "bloques"], "ritmo": "rápido", "visual": "material del juego", "datos": "cifras",
+        "cierre": "balance", "reglas": ["Usa narrador no humano"]})
+    aprender.estudiar_modelo("fourlevel", "https://youtu.be/m", "así quiero mis vídeos")
+    aprender.estudiar_modelo("fourlevel", "https://youtu.be/m", "nota nueva")   # el mismo vídeo se reemplaza, no se duplica
+    texto = aprender.para_guion("fourlevel")
+    assert texto.startswith("VÍDEO MODELO DEL AUTOR (https://youtu.be/m)") and "Nota del autor: nota nueva" in texto
+    assert texto.count("VÍDEO MODELO") == 1 and "- Usa narrador no humano" in texto
+    assert aprender.voz_modelo("fourlevel") == "Voz sintética estilo Loquendo"

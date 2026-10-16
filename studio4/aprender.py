@@ -182,6 +182,40 @@ def estudiar(cid: str, avisar: Callable[[str, int], None] = lambda *_: None) -> 
     return datos
 
 
+SISTEMA_MODELO = """Eres jefe de guion. El autor del canal te da un VÍDEO MODELO: así quiere que sean sus vídeos.
+Estudia cómo está hecho (con frases literales de la transcripción como prueba) y tradúcelo a instrucciones para su
+guionista y su montaje. La nota del autor manda. No copies el tema ni las frases: copia la FORMA. Devuelve JSON:
+{"resumen": "2-3 frases: qué es y por qué es el modelo", "narrador": "cómo habla el narrador (y si es voz sintética)",
+ "voz": "instrucción breve para la voz en off (timbre, ritmo, emoción)", "estructura": ["paso 1", "..."],
+ "ritmo": "cómo de rápido va y cómo pasa de un dato a otro", "visual": "qué se ve en pantalla y cómo se mezcla",
+ "datos": "cómo presenta cifras, nombres y detalles", "cierre": "cómo termina", "reglas": ["6 a 10 reglas imperativas"]}"""
+
+
+def estudiar_modelo(cid: str, url: str, nota: str = "") -> dict[str, Any]:
+    """Un vídeo que el autor pone de ejemplo («así quiero mis vídeos»): se estudia y se guarda en el manual del canal;
+    manda sobre todo lo demás al escribir y al locutar."""
+    canal = canales.obtener(cid)
+    t = transcripcion(url)
+    texto = " ".join(t["texto"].split()[:PALABRAS_POR_VIDEO]) if t else "(sin subtítulos: guíate por la nota del autor)"
+    a = _generar_json(SISTEMA_MODELO, f"Canal: {canal['nombre']} · nicho: {canal.get('nicho') or '—'}\n"
+                      f"Vídeo modelo: {url}\nNOTA DEL AUTOR (manda): {nota or '—'}\n"
+                      + (f"Ritmo medido: {t['ritmo']} palabras por segundo\n" if t else "") + f"\nTRANSCRIPCIÓN:\n{texto}",
+                      temperatura=0.3, detalle="vídeo modelo", produccion=cid)
+    modelo = {**a, "url": url, "nota": nota, "leido": bool(t), "fecha": time.strftime("%Y-%m-%d %H:%M")}
+    d = leer(cid) or {"canal": cid, "fecha": "", "manual": {}, "videos": [], "ritmo": 0}
+    d["modelos"] = [m for m in d.get("modelos", []) if m.get("url") != url] + [modelo]
+    ruta = _archivo(cid)
+    tmp = ruta.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(ruta)
+    return modelo
+
+
+def voz_modelo(cid: str) -> str:
+    """Cómo debe sonar la voz según los vídeos modelo del canal ("" si no hay)."""
+    return " ".join(m.get("voz", "") for m in (leer(cid) or {}).get("modelos", []) if m.get("voz"))
+
+
 def lanzar(cid: str) -> None:
     canales.obtener(cid)
     with _lock:
@@ -208,8 +242,17 @@ def para_guion(cid: str) -> str:
     d = leer(cid)
     if not d:
         return ""
+    previas = []
+    for mo in d.get("modelos", []):   # el vídeo que el autor puso de ejemplo manda sobre todo lo demás
+        previas += [f"VÍDEO MODELO DEL AUTOR ({mo['url']}) · así quiere sus vídeos; manda sobre todo lo demás:",
+                    f"Nota del autor: {mo.get('nota', '')}", f"Qué es: {mo.get('resumen', '')}",
+                    f"Narrador: {mo.get('narrador', '')}", f"Ritmo: {mo.get('ritmo', '')}", f"Visual: {mo.get('visual', '')}",
+                    f"Datos: {mo.get('datos', '')}", "Estructura: " + " → ".join(mo.get("estructura") or []),
+                    f"Cierre: {mo.get('cierre', '')}"] + [f"- {r}" for r in mo.get("reglas") or []] + [""]
+    if not d.get("manual"):
+        return "\n".join(previas)
     m = d["manual"]
-    lineas = [f"MANUAL DEL CANAL (aprendido el {d['fecha']} de {len(d['videos'])} vídeos que funcionan en su nicho; "
+    lineas = previas + [f"MANUAL DEL CANAL (aprendido el {d['fecha']} de {len(d['videos'])} vídeos que funcionan en su nicho; "
               "manda sobre el estilo por defecto):", f"Lo que tienen en común: {m.get('resumen', '')}",
               f"Voz del narrador: {m.get('voz', '')}", f"Presentar lo desconocido: {m.get('presentar', '')}"]
     lineas += ["Ganchos que funcionan:"] + [f"- {g.get('patron', '')} (ej.: «{g.get('ejemplo', '')}»)" for g in m.get("ganchos", [])]

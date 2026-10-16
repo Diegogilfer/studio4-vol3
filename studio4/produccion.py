@@ -594,7 +594,9 @@ def _generar_voz(pid: str) -> None:
     segmentos = [e["texto_voz"] for e in p["escenas"]]
     direcciones = [{"tono": e.get("tono_voz", "narrativo"), "ritmo": e.get("ritmo_voz", "normal")} for e in p["escenas"]]
     arquetipo = canales.de_produccion(p).get("arquetipo", "")   # la voz fija del canal dirige también la locución
-    estilo_voz = f"{config.ESTILO_VOZ}. Interpreta a este narrador: {arquetipo}" if arquetipo else ""
+    modelo = aprender.voz_modelo(p["canal"])                    # y el vídeo modelo, si el autor puso uno
+    estilo_voz = ". ".join(x for x in (config.ESTILO_VOZ if arquetipo or modelo else "",
+                                       f"Interpreta a este narrador: {arquetipo}" if arquetipo else "", modelo) if x)
     try:
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
                               direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz,
