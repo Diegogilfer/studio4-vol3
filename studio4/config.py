@@ -43,6 +43,9 @@ ESTILO_VOZ = os.getenv(
     "Narra en español neutro, como un documental intrigante: ritmo ágil, pausas cortas entre frases",
 )
 
+# --- fal.ai (de pago por uso, con saldo previo): imágenes Nano Banana y vídeo Veo 3.1 sin la facturación de Google --
+FAL_KEY = (os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY") or "").strip()
+
 # --- DeepSeek (de pago por uso, céntimos por guion): escribe los guiones ---------------------------
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")   # o deepseek-v4-pro, más fino y más caro

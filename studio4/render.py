@@ -11,6 +11,12 @@ from . import config, medios, registro, sonidos, subtitulos
 
 logger = logging.getLogger("studio4.render")
 COLA_FINAL = 0.6  # segundos de imagen tras la última palabra
+ENTRADA = 2.0     # carátula de entrada (título y marca) antes de que empiece la voz
+
+
+def _es_tarjeta(esc: dict[str, Any]) -> bool:
+    """La toma elegida es una tarjeta de diseño: ya lleva su titular, así que no se le pone el rótulo de gancho."""
+    return esc.get("elegida") is not None and esc["tomas"][esc["elegida"]].get("origen") == "tarjeta"
 
 
 def _encuadre(ancho: int, alto: int) -> str:
@@ -108,6 +114,17 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     trabajo.mkdir(exist_ok=True)
 
     lista = []
+    entrada = 0.0
+    if p.get("entrada", True):   # la carátula: si no se puede dibujar, el vídeo sale igual, sin ella
+        try:
+            from . import canales, tarjetas
+            avisar("Dibujando la carátula de entrada", 6)
+            caratula = tarjetas.dibujar_caratula(p, carpeta, canales.de_produccion(p)["nombre"])
+            _segmento_imagen(caratula, trabajo / "seg_00.mp4", ENTRADA, ancho, alto)
+            lista.append(trabajo / "seg_00.mp4")
+            entrada = ENTRADA
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Sin carátula de entrada: %s", e)
     n = len(p["escenas"])
     for i, (esc, t) in enumerate(zip(p["escenas"], voz["escenas"])):
         avisar(f"Ajustando escena {i + 1} de {n} a su voz", 10 + int(70 * i / n))
@@ -130,7 +147,7 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     cuerpo = trabajo / "cuerpo.mp4"
     medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", str(cuerpo))
 
-    total = voz["duracion"] + COLA_FINAL
+    total = entrada + voz["duracion"] + COLA_FINAL
     ambiente = 0.0 if p.get("version") == "importado" else config.VOLUMEN_AMBIENTE
     ruidos: list[dict[str, Any]] = []
     if (p.get("subtitulos") or {}).get("sonidos", subtitulos.POR_DEFECTO["sonidos"]):
@@ -139,9 +156,12 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
     sonidos.guardar(trabajo / "sonidos.json", ruidos)   # Reels y Shorts los reutilizan sin volver a escuchar
 
     avisar("Mezclando voz, ambiente y subtítulos", 90)
-    ass = subtitulos.construir(voz["palabras"], trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"),
-                               gancho=p["escenas"][0].get("texto_pantalla", ""), sonidos=ruidos)
-    mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
+    palabras = [{**w, "ini": w["ini"] + entrada, "fin": w["fin"] + entrada} for w in voz["palabras"]]
+    ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"),
+                               gancho="" if _es_tarjeta(p["escenas"][0]) else p["escenas"][0].get("texto_pantalla", ""), sonidos=ruidos,
+                               inicio_gancho=entrada)
+    retraso = int(entrada * 1000)
+    mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,adelay={retraso}:all=1[voz];"
               f"[0:a]volume={ambiente}[amb];"
               f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
     final = carpeta / "final.mp4"
@@ -191,7 +211,8 @@ def recorte(p: dict[str, Any], carpeta: Path, desde: int, hasta: int, destino: P
     ambiente = 0.0 if p.get("version") == "importado" else config.VOLUMEN_AMBIENTE
     ruidos = [{**s, "ini": s["ini"] - ini, "fin": min(s["fin"], fin) - ini}
               for s in sonidos.leer(carpeta / "render" / "sonidos.json") if ini <= s["ini"] < fin - 0.5]
-    ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"), gancho=gancho, sonidos=ruidos)
+    ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"),
+                               gancho="" if _es_tarjeta(p["escenas"][desde - 1]) else gancho, sonidos=ruidos)
     mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
               f"[0:a]volume={ambiente}[amb];"
               f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")

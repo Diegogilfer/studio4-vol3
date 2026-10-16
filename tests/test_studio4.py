@@ -30,7 +30,20 @@ def aislado(tmp_path, monkeypatch):
     from studio4 import carpetas, youtube   # las pruebas nunca consultan YouTube ni escriben en tus Vídeos
     monkeypatch.setattr(carpetas, "RAIZ_USUARIO", tmp_path / "Videos")
     monkeypatch.setattr(config, "YOUTUBE_API_KEY", "")
+    monkeypatch.setattr(config, "FAL_KEY", "")   # nunca se gasta saldo de fal en una prueba
+    from studio4 import tarjetas   # las pruebas no abren el navegador: el render sale sin carátula
+
+    def sin_navegador(*_a, **_k):
+        raise RuntimeError("sin navegador en las pruebas")
+    monkeypatch.setattr(tarjetas, "dibujar_caratula", sin_navegador)
     monkeypatch.setattr(youtube, "TOKEN", tmp_path / "youtube_token.json")
+    # Las pruebas nunca salen a internet: lo que necesite Gemini lo simula cada prueba.
+    from studio4 import gemini, sonidos
+
+    def sin_red(*_a, **_k):
+        raise RuntimeError("sin red en las pruebas")
+    monkeypatch.setattr(gemini, "generar", sin_red)
+    monkeypatch.setattr(sonidos, "detectar", lambda *_a, **_k: [])
     return tmp_path
 
 
@@ -356,6 +369,7 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
 
 
 def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
+    monkeypatch.setattr(produccion, "completar_guion", lambda *_a, **_k: None)   # aquí se aprueba tal cual, sin completar
     [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
     monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None, reparto=None: {
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
@@ -389,11 +403,14 @@ def test_limpieza_y_frases_que_suenan_a_ia():
 
 
 def test_deepseek_lee_json_y_apunta_tokens(aislado, monkeypatch):
-    class R:
+    class R:   # streaming: el JSON llega en dos trozos y el uso al final
         status_code = 200
-        def json(self):
-            return {"choices": [{"message": {"content": '{"corto": {"guion": "x"}}'}}],
-                    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}}
+        def iter_lines(self, decode_unicode=True):
+            yield 'data: {"choices": [{"delta": {"content": "{\\"corto\\": "}}]}'
+            yield ""
+            yield 'data: {"choices": [{"delta": {"content": "{\\"guion\\": \\"x\\"}}"}, "finish_reason": "stop"}]}'
+            yield 'data: {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}}'
+            yield "data: [DONE]"
     monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "k")
     monkeypatch.setattr(deepseek.requests, "post", lambda *a, **k: R())
     assert deepseek.generar_json("s", "p", detalle="guion") == {"corto": {"guion": "x"}}
@@ -430,7 +447,7 @@ def test_texto_dirigido_solo_etiqueta_cuando_cambia_el_tono():
     assert voz._texto_dirigido(["Uno."], None) == "Uno."
 
 
-def test_presupuesto_para_antes_de_pasarse_y_devuelve_lo_fallido():
+def test_presupuesto_para_antes_de_pasarse_y_devuelve_lo_fallido(aislado):
     from studio4 import visuales_api as v
     p = v.Presupuesto(0.10)
     p.reservar(0.039, "imagen"); p.reservar(0.039, "imagen")
@@ -690,14 +707,18 @@ def test_deepseek_sin_espacio_reintenta_una_vez_con_mas_margen(aislado, monkeypa
     monkeypatch.setattr(deepseek.time, "sleep", lambda _s: None)
     pedidos = []
 
-    class R:
+    class R:   # respuesta en streaming: un trozo vacío que acaba por falta de espacio
         status_code = 200
-        def __init__(self, cuerpo): self.cuerpo = cuerpo
-        def json(self): return self.cuerpo
+        def __init__(self, n): self.n = n
+        def iter_lines(self, decode_unicode=True):
+            yield 'data: {"choices": [{"delta": {"content": ""}, "finish_reason": "length"}]}'
+            yield 'data: {"choices": [], "usage": {"completion_tokens": %d}}' % self.n
+            yield "data: [DONE]"
 
-    def post(url, json, timeout, headers):
+    def post(url, json, timeout, headers, stream):
+        assert stream and json["stream"]
         pedidos.append(json["max_tokens"])
-        return R({"choices": [{"message": {"content": ""}, "finish_reason": "length"}], "usage": {"completion_tokens": json["max_tokens"]}})
+        return R(json["max_tokens"])
     monkeypatch.setattr(deepseek.requests, "post", post)
     with pytest.raises(RuntimeError):
         deepseek.generar_json("s", "p")
@@ -839,3 +860,100 @@ def test_referentes_del_canal_y_su_formula_en_el_informe(aislado):
     texto = tendencias._texto_para_gemini({**c, "id": "fourlevel"}, m, [], ref)
     assert "CANAL DE REFERENCIA «Leyendas & Videojuegos»" in texto and "La leyenda de Herobrine" in texto
     assert "nunca el contenido" in texto
+
+
+def test_archivo_compone_sin_recortar():
+    """La foto de archivo entra entera en el formato vertical y deja margen para el acercamiento del montaje."""
+    from PIL import Image
+    from studio4 import archivo
+    foto = Image.new("RGB", (1600, 900), (200, 30, 30))
+    c = archivo.componer(foto, 1080, 1920)
+    assert c.size == (1080, 1920)
+    assert c.getpixel((540, 960))[0] > 150            # el centro es la foto
+    assert c.getpixel((30, 960))[0] < 120              # el borde es el fondo oscurecido, no la foto
+
+
+def test_flow_anima_la_imagen_de_api():
+    """Escena de vídeo con imagen de API y sin vídeo: Flow recibe esa imagen como inicial y un prompt de movimiento."""
+    from studio4 import flow
+    esc = {"orden": 3, "tipo_clip": "video", "segundos": 5.2, "prompt_flow": "LUCIA walks through prison gates.",
+           "tomas": [{"archivo": "tomas/a.png", "tipo": "imagen", "origen": "api"}], "elegida": 0}
+    assert flow.por_animar(esc)
+    assert "Bring this exact image to life as a 5-second shot. LUCIA walks" in flow.prompt_animar(esc)
+    assert not flow.por_animar({**esc, "tipo_clip": "imagen"})
+    assert not flow.por_animar({**esc, "tomas": esc["tomas"] + [{"tipo": "video", "origen": "flow"}]})
+    assert not flow.por_animar({**esc, "tomas": [{"archivo": "tomas/t.png", "tipo": "imagen", "origen": "tarjeta"}]})
+
+
+def test_escena_rechazada_por_el_filtro_se_suaviza_y_no_tumba_el_lote(monkeypatch, tmp_path):
+    """El filtro rechaza el plano de la pistola: se pide sin lo explícito; si una escena falla igual, las demás siguen."""
+    from studio4 import visuales_api as v
+    pedidos = []
+
+    def imagen(prompt, aspecto, destino, presupuesto, **_):
+        pedidos.append(prompt)
+        if "pistol" in prompt and v.SUAVIZAR not in prompt or "door" in prompt:
+            raise v.Moderada("filtro")
+        destino.write_bytes(b"png")
+        return destino
+    monkeypatch.setattr(v, "imagen", imagen)
+    monkeypatch.setattr(v, "revisar", lambda *a, **k: {"ok": True})
+    recibidas = []
+    escenas = [{"orden": 1, "elegida": None, "prompt_flow": "LUCIA aims a pistol."},
+               {"orden": 2, "elegida": None, "prompt_flow": "LUCIA kicks a door."},
+               {"orden": 3, "elegida": None, "prompt_flow": "A motel at night."}]
+    res = v.generar_escenas(escenas, "9:16", v.Presupuesto(1), recibir=lambda a, m, n: recibidas.append(n))
+    assert recibidas == [1, 3]
+    assert [f["orden"] for f in res["fallidas"]] == [2]
+    assert pedidos[1].endswith(v.SUAVIZAR)
+
+
+def test_quita_franjas_negras(tmp_path):
+    from PIL import Image
+    from studio4 import visuales_api as v
+    im = Image.new("RGB", (100, 200), (0, 0, 0))
+    im.paste((180, 90, 40), (0, 30, 100, 170))
+    ruta = tmp_path / "a.png"
+    im.save(ruta)
+    assert v.quitar_franjas(ruta)
+    assert Image.open(ruta).size == (100, 140)
+    assert not v.quitar_franjas(ruta)
+
+
+def test_caratula_lleva_titulo_marca_y_las_dos_imagenes(tmp_path):
+    from studio4 import tarjetas
+    h = tarjetas.html_caratula("Bonnie nunca disparó", "Lo que GTA 6 le debe", "FourLevel", tmp_path / "a.jpg", tmp_path / "b.png", 1080, 1920)
+    assert "Bonnie nunca <em>disparó</em>" in h and "FOURLEVEL" in h and "GTA 6" in h
+    assert (tmp_path / "a.jpg").as_uri() in h and (tmp_path / "b.png").as_uri() in h
+
+
+def test_anadir_y_quitar_escena_a_mano(aislado):
+    """Escena tuya en medio: se renumera todo, el guion la incluye, la voz se rehace y lleva la ficha del personaje."""
+    pid = produccion.crear("Idea", [], "cinematografico", "gemini", guion_propio=" ".join(["palabra"] * 200))[0]
+
+    def preparar(p):
+        p["biblia"] = {"escenario_en": "Florida", "luz_en": "neon", "paleta_en": "pink",
+                       "personajes": [{"nombre": "Lucia", "aspecto_en": "long wavy hair", "edad": "29"}]}
+        p["escenas"] = [{"orden": i, "texto_voz": f"Frase {i}.", "plano_en": "wide", "camara_en": "static", "accion_en": "a street",
+                         "tomas": [], "elegida": None, "segundos": 3} for i in (1, 2)]
+        p["voz"], p["escena_activa"] = {"duracion": 6}, 2
+    produccion.modificar(pid, preparar)
+    produccion.anadir_escena(pid, 1, "Lucía sale de la cárcel.", "Lucia walks out of a prison gate", "imagen")
+    p = produccion.cargar(pid)
+    assert [e["orden"] for e in p["escenas"]] == [1, 2, 3]
+    assert p["escenas"][1]["texto_voz"] == "Lucía sale de la cárcel." and p["escena_activa"] == 3
+    assert p["guion"] == "Frase 1. Lucía sale de la cárcel. Frase 2." and p["voz"] is None
+    assert "LUCIA is" in p["escenas"][1]["prompt_flow"] and "Florida" in p["escenas"][1]["prompt_flow"]
+    produccion.quitar_escena(pid, 1)
+    p = produccion.cargar(pid)
+    assert [e["texto_voz"] for e in p["escenas"]] == ["Lucía sale de la cárcel.", "Frase 2."]
+
+
+def test_guion_pegado_corto_se_completa_con_investigacion(aislado, monkeypatch):
+    from studio4 import guion
+    assert guion.corto_de_mas("Bonnie nunca disparó. Lucía sí.", 50)
+    assert not guion.corto_de_mas(" ".join(["x"] * 110), 50)
+    llamadas = []
+    monkeypatch.setattr(produccion, "completar_guion", lambda pid, seg: llamadas.append((pid, seg)))
+    pid = produccion.crear("Bonnie y Lucía", [], "cinematografico", "gemini", guion_propio="Bonnie nunca disparó. Lucía sí.")[0]
+    assert llamadas == [(pid, 50)]

@@ -63,6 +63,9 @@ def generar(
                 ultimo = RuntimeError(f"{modelo} devolvió una respuesta vacía")
             except Exception as e:  # noqa: BLE001 - la API mezcla tipos de error; se reintenta igual
                 ultimo = e
+                if "402" in str(e) or "prepayment credits" in str(e):   # proyecto sin saldo: ningún reintento ni modelo lo arregla
+                    raise RuntimeError("Tu proyecto de Google se quedó sin saldo de prepago (402): crea una clave de API en un "
+                                       "proyecto SIN facturación para volver al nivel gratuito.") from e
                 limite = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)
                 logger.warning("Gemini %s (intento %d): %s", modelo, intento + 1, e)
                 if not limite and intento:

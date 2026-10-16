@@ -82,7 +82,7 @@ def _dos_lineas(textos: list[str], max_linea: int) -> str:
 
 def construir(palabras: list[dict[str, Any]], destino: Path, ancho: int, alto: int,
               ajustes: dict[str, Any] | None = None, gancho: str = "", segundos_gancho: float = 3.0,
-              sonidos: list[dict[str, Any]] | None = None) -> Path:
+              sonidos: list[dict[str, Any]] | None = None, inicio_gancho: float = 0.0) -> Path:
     a = {**POR_DEFECTO, **(ajustes or {})}
     cine = a["estilo"] == "cine"
     pal = PALETAS.get(a["paleta"], PALETAS["amarillo"])
@@ -119,7 +119,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     eventos: list[str] = []
     if a["gancho"] and gancho.strip():
-        eventos.append(f"Dialogue: 1,{_ts(0)},{_ts(segundos_gancho)},Gancho,,0,0,0,,{_limpia(gancho).upper()}")
+        eventos.append(f"Dialogue: 1,{_ts(inicio_gancho)},{_ts(inicio_gancho + segundos_gancho)},Gancho,,0,0,0,,"
+                       f"{_limpia(gancho).upper()}")
 
     if a["activos"] and cine:
         max_linea = 30 if vertical else 42

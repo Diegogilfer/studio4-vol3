@@ -18,8 +18,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (canales, carpetas, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas, referencias, render,
-               subtitulos, tendencias, visuales_api, voz, youtube)
+from . import (aprender, canales, carpetas, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas, referencias, render,
+               subtitulos, tarjetas, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -171,6 +171,7 @@ _QUE_FALLO = {
     "Imágenes por API": "No se pudieron generar las escenas",
     "Personajes": "No se pudieron afinar los personajes",
     "Importar vídeo": "No se pudo importar el vídeo",
+    "Tarjetas": "No se pudieron dibujar las tarjetas",
 }
 
 
@@ -248,9 +249,13 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
         _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
                voz_nombre=voz_nombre,
                version="propio", guion=texto, autor_guion="Tú", reparto=list(reparto or [])[:6],
-               segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO))
+               segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO), tono=tono.strip()[:80])
         _guardar_referencias([pid], refs)
         activar(pid)
+        objetivo = int((segundos or {}).get("corto" if formato_propio == "vertical" else "largo")
+                       or config.VERSIONES["corto" if formato_propio == "vertical" else "largo"]["segundos"])
+        if guion.corto_de_mas(texto, objetivo):   # no da para contar la historia: se investiga y se completa
+            completar_guion(pid, objetivo)
         return [pid]
 
     tono = tono or canales.activo().get("tono", "")   # sin elegir: el del canal, o el que pida el tema
@@ -330,8 +335,8 @@ def _material(pids: list[str]) -> dict[str, Any] | None:
     return cargar(pids[0])["referencias"]
 
 
-def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int], dossier: dict | None = None) -> None:
-    refs = _material(pids)
+def _investigar(pids: list[str], idea: str, dossier: dict | None = None) -> dict:
+    """Dossier del tema: investigación general, las fuentes de confianza del canal, YouTube y las tendencias."""
     if dossier is None:
         _avisar(pids, "Investigando el tema", 10)
         dossier = investigacion.investigar(idea, produccion=pids[0])
@@ -353,6 +358,12 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
         dossier["youtube"] = youtube.contexto_para_guion(idea, usuario)
     if t := tendencias.para_guion(cargar(pids[0])["canal"]):   # pautas del día del canal, si ya se pidieron
         dossier.setdefault("youtube", {})["tendencias"] = t
+    return dossier
+
+
+def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int], dossier: dict | None = None) -> None:
+    refs = _material(pids)
+    dossier = _investigar(pids, idea, dossier)
     for pid in pids:
         modificar(pid, lambda p: p.update(investigacion=dossier, estado="escribiendo"))
     _avisar(pids, "Escribiendo el guion", 45)
@@ -360,7 +371,7 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     p0 = cargar(pids[0])
     escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0],
                              tono=p0.get("tono", ""), publico=p0.get("publico", ""), youtube=dossier.get("youtube"),
-                             referencias=referencias.para_guion(refs))
+                             referencias=referencias.para_guion(refs), manual=aprender.para_guion(p0["canal"]))
     for pid in pids:
         v = cargar(pid)["version"]
         modificar(pid, lambda p: p.update(
@@ -445,6 +456,29 @@ def reescribir_guion(pid: str) -> None:
                                                            dossier=p.get("investigacion")))
 
 
+def completar_guion(pid: str, segundos: int | None = None) -> None:
+    """Tu guion (o el actual) se queda corto: se investiga el tema y se convierte en la historia verdadera y completa,
+    conservando tu ángulo y tus frases. El original queda guardado en «guion_original»."""
+    p = cargar(pid)
+    if p.get("guion_aprobado") and p["escenas"]:
+        raise ValueError("El guion ya está aprobado: reábrelo para completarlo.")
+    objetivo = int(segundos or p.get("segundos") or config.VERSIONES["corto"]["segundos"])
+
+    def fase():
+        q = cargar(pid)
+        _avisar(pid, "Investigando para completar la historia", 10)
+        dossier = _investigar([pid], q["tema"], q.get("investigacion"))
+        _avisar(pid, "Completando la historia", 50)
+        hecho = guion.completar(q["guion"], q["tema"], dossier.get("dossier", ""), objetivo, produccion=pid,
+                                tono=q.get("tono", ""), referencias=referencias.para_guion(_material([pid])),
+                                manual=aprender.para_guion(q["canal"]))
+        modificar(pid, lambda r: r.update(
+            guion_original=r.get("guion_original") or r["guion"], guion=hecho["guion"], investigacion=dossier,
+            autor_guion=f"Tú + {hecho['autor']}", reparto=r.get("reparto") or hecho["reparto"], segundos=objetivo,
+            titulo=r.get("titulo") or hecho["titulo_provisional"], estado="guion_listo", guion_aprobado=False))
+    _en_fondo(pid, "Guion", fase)
+
+
 def guardar_guion(pid: str, texto: str) -> None:
     texto = " ".join(str(texto).split())
     if len(texto.split()) < 10:
@@ -489,7 +523,8 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
                                    referencias_visuales=referencias.visuales(refs), reparto=q.get("reparto") or [])
 
         def aplicar(r):
-            r.update(titulo=plan["titulo"], descripcion=plan["descripcion"], hashtags=plan["hashtags"],
+            r.update(titulo=r.get("titulo") or plan["titulo"],   # el título del guionista manda; Gemini solo si no hay
+                     descripcion=plan["descripcion"], hashtags=plan["hashtags"],
                      biblia=plan["biblia"], estilo_en=plan["estilo_en"], avisos=plan.get("avisos", []),
                      estado="rodando", escena_activa=1, recoger_para="escenas")
             r["escenas"] = [{**e, "tomas": [], "elegida": None} for e in plan["escenas"]]
@@ -603,7 +638,7 @@ def importar_carpeta(pid: str) -> int:
             or not (Path(p["carpeta"]) / carpetas.subcarpeta(p, carpetas.CLIPS)).is_dir()):
         preparar_carpeta(pid)   # crea la carpeta o la pone al día (nombres con el título del vídeo)
         p = cargar(pid)
-    nuevas = carpetas.importar(p, lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="carpeta"))
+    nuevas = carpetas.importar(p, lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="carpeta", pid=pid))
     if nuevas:
         modificar(pid, lambda q: q.update(importados=[*q.get("importados", []), *nuevas]))
     return len(nuevas)
@@ -634,6 +669,27 @@ def recomendar_tipos(pid: str) -> None:
 
 
 # --- Imágenes y vídeo por la API de Google (de pago, con presupuesto) ---------------------------
+def rellenar_tarjetas(pid: str) -> None:
+    """Escenas gratis: una tarjeta de diseño para cada escena que aún no tiene clip (no gasta nada)."""
+    p = cargar(pid)
+    if not p["escenas"]:
+        raise ValueError("Primero aprueba el guion: hacen falta las escenas.")
+
+    def fase():
+        q = cargar(pid)
+        nuevas = tarjetas.rellenar(q, carpeta(pid), canales.de_produccion(q)["nombre"], avisar=lambda f, n: _avisar(pid, f, n),
+                                   produccion=pid)
+
+        def poner(r):
+            for x in nuevas:
+                esc = r["escenas"][x["orden"] - 1]
+                if esc.get("elegida") is None:
+                    esc["tomas"].append(x["toma"])
+                    esc["elegida"] = len(esc["tomas"]) - 1
+        modificar(pid, poner)
+    _en_fondo(pid, "Tarjetas", fase)
+
+
 def estimar_visuales_api(pid: str) -> dict[str, Any]:
     p = cargar(pid)
     return visuales_api.estimar(p["escenas"], personajes=len(p.get("fichas") or []))
@@ -653,12 +709,15 @@ def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | Non
         con_video = [] if solo_imagenes else [e["orden"] for e in p["escenas"] if e.get("tipo_clip") == "video"]
 
     def fase():
-        res = visuales_api.generar_escenas(
-            cargar(pid)["escenas"], aspecto, presupuesto,
-            recibir=lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="api"),
-            con_video=set(con_video), produccion=pid, avisar=lambda f, n: _avisar(pid, f, n),
-            fichas=cargar(pid).get("fichas"), retratos=carpeta(pid) / "retratos")
-        modificar(pid, lambda q: q.update(gasto_api=round(q.get("gasto_api", 0.0) + res["gastado"], 4)))
+        try:
+            res = visuales_api.generar_escenas(
+                cargar(pid)["escenas"], aspecto, presupuesto,
+                recibir=lambda archivo, mime, orden: flow.recibir(archivo, mime, pista=orden, origen="api", pid=pid),
+                con_video=set(con_video), produccion=pid, avisar=lambda f, n: _avisar(pid, f, n),
+                fichas=cargar(pid).get("fichas"), retratos=carpeta(pid) / "retratos")
+            modificar(pid, lambda q: q.update(revision_api=res["revisiones"], fallidas_api=res["fallidas"]))
+        finally:   # lo gastado se apunta aunque algo falle a mitad
+            modificar(pid, lambda q: q.update(gasto_api=round(q.get("gasto_api", 0.0) + presupuesto.gastado, 4)))
     _en_fondo(pid, "Imágenes por API", fase)
 
 
@@ -754,6 +813,55 @@ def editar_escena(pid: str, orden: int, datos: dict[str, Any]) -> dict[str, Any]
             if esc["elegida"] is not None:
                 esc["elegida"] = None if not esc["tomas"] else min(esc["elegida"] - (esc["elegida"] > i), len(esc["tomas"]) - 1)
     return modificar(pid, cambio)
+
+
+def anadir_escena(pid: str, despues: int, texto_voz: str, que_se_ve: str = "", tipo_clip: str = "video") -> dict[str, Any]:
+    """Una escena tuya, después de la escena `despues` (0 = al principio). Su texto se suma al guion y la voz
+    se tiene que rehacer; lo que se ve (en inglés o español) es su prompt para Flow."""
+    texto = " ".join(str(texto_voz).split())
+    if len(texto.split()) < 2:
+        raise ValueError("Escribe lo que dice la voz en la escena nueva.")
+
+    def cambio(p):
+        if p["trabajo"].get("ocupado"):
+            raise RuntimeError("Espera a que termine la fase en curso.")
+        if not 0 <= despues <= len(p["escenas"]):
+            raise ValueError(f"No existe la escena {despues}")
+        ve = " ".join(str(que_se_ve).split()) or texto
+        # Con plano y acción, el prompt lo arma el estudio: luz, estilo y la ficha de cada personaje que nombres.
+        nueva = {"texto_voz": texto, "plano_en": "Medium", "camara_en": "slow dolly-in", "accion_en": ve, "personajes": [],
+                 "continua": False, "texto_pantalla": "", "tono_voz": "narrativo", "ritmo_voz": "normal",
+                 "tipo_clip": tipo_clip if tipo_clip in ("video", "imagen") else "video", "motivo_tipo": "Escena añadida a mano",
+                 "prompt_flow": ve, "prompt_editado": not p.get("biblia"), "manual": True,
+                 "segundos": round(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO, 1), "tomas": [], "elegida": None}
+        p["escenas"].insert(despues, nueva)
+        _renumerar(p)
+        if despues < p.get("escena_activa", 1):
+            p["escena_activa"] += 1
+    return modificar(pid, cambio)
+
+
+def quitar_escena(pid: str, orden: int) -> dict[str, Any]:
+    """Quita una escena (su texto sale del guion; sus tomas se quedan en la carpeta por si acaso)."""
+    def cambio(p):
+        if p["trabajo"].get("ocupado"):
+            raise RuntimeError("Espera a que termine la fase en curso.")
+        if not 1 <= orden <= len(p["escenas"]):
+            raise ValueError(f"No existe la escena {orden}")
+        if len(p["escenas"]) == 1:
+            raise ValueError("Es la única escena: rehaz el guion en su lugar.")
+        p["escenas"].pop(orden - 1)
+        _renumerar(p)
+        p["escena_activa"] = min(max(1, p.get("escena_activa", 1) - (orden < p.get("escena_activa", 1))), len(p["escenas"]))
+    return modificar(pid, cambio)
+
+
+def _renumerar(p: dict[str, Any]) -> None:
+    """Tras añadir o quitar: orden 1..n, el guion vuelve a ser la suma de las escenas y la voz hay que rehacerla."""
+    for i, e in enumerate(p["escenas"], 1):
+        e["orden"] = i
+    p["guion"] = " ".join(e["texto_voz"] for e in p["escenas"])
+    p["voz"], p["final"] = None, None
 
 
 def ajustar_subtitulos(pid: str, ajustes: dict[str, Any]) -> dict[str, Any]:

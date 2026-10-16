@@ -384,12 +384,26 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/guion/reescribir":
             produccion.reescribir_guion(pid)
             return self._json({"ok": True})
+        if ruta == "/api/escena/anadir":   # una escena tuya, después de la que digas (0 = al principio)
+            d = self._cuerpo_json()
+            produccion.anadir_escena(pid, int(d.get("despues", 0)), d.get("texto_voz", ""), d.get("que_se_ve", ""),
+                                     d.get("tipo_clip", "video"))
+            return self._json({"ok": True})
+        if ruta == "/api/escena/quitar":
+            produccion.quitar_escena(pid, int(self._cuerpo_json().get("orden", 0)))
+            return self._json({"ok": True})
+        if ruta == "/api/guion/completar":   # tu guion se queda corto: investigar y contar la historia completa
+            produccion.completar_guion(pid)
+            return self._json({"ok": True})
         if ruta == "/api/escena":
             d = self._cuerpo_json()
             produccion.editar_escena(pid, int(d.pop("orden")), d)
             return self._json({"ok": True})
         if ruta == "/api/escena/activa":
             flow.marcar_activa(int(self._cuerpo_json().get("escena", 0)))
+            return self._json({"ok": True})
+        if ruta == "/api/tarjetas":   # escenas gratis: tarjetas de diseño para las que no tienen clip
+            produccion.rellenar_tarjetas(pid)
             return self._json({"ok": True})
         if ruta == "/api/visuales-api/estimar":
             return self._json(produccion.estimar_visuales_api(pid))

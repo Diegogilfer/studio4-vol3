@@ -44,15 +44,38 @@ def _limpio(texto: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", texto)).strip().rstrip(".")
 
 
+def _recortar(texto: str, n: int) -> str:
+    """Como mucho `n` letras, cortando en una palabra entera (Windows no admite rutas de más de 260 letras y el
+    nombre del vídeo se repite en la carpeta, la subcarpeta y cada archivo)."""
+    if len(texto) <= n:
+        return texto
+    corte = texto[:n].rsplit(" ", 1)[0]
+    palabras = (corte if len(corte) > n // 2 else texto[:n]).rstrip(" ,;:-·").split(" ")
+    while len(palabras) > 2 and palabras[-1].lower() in SUELTAS:   # que no acabe en «y el», «de la»…
+        palabras.pop()
+    return " ".join(palabras).rstrip(" ,;:-·")
+
+
+SUELTAS = {"y", "e", "o", "u", "el", "la", "los", "las", "lo", "de", "del", "al", "a", "en", "con", "por", "para", "un", "una",
+           "su", "sus", "que", "the", "of", "and", "to", "in"}
+
+
+def _titulo(p: dict[str, Any]) -> str:
+    """El título para nombrar carpetas: si tiene dos partes («Bonnie nunca disparó: lo que…»), la primera."""
+    t = (p.get("titulo") or p.get("tema") or "Producción").strip()
+    antes = t.split(":")[0].strip()
+    return _limpio(antes if len(antes) >= 12 else t)
+
+
 def nombre(p: dict[str, Any]) -> str:
-    titulo = _limpio(p.get("titulo") or p.get("tema") or "Producción")[:80]
+    titulo = _recortar(_titulo(p), 44)
     version = VERSION.get(p.get("version", ""), "")
     return f"{p['creado'][:10]} · {titulo}" + (f" ({version})" if version else "")
 
 
 def corto(p: dict[str, Any]) -> str:
     """El nombre del vídeo para ponerlo delante de cada archivo y subcarpeta."""
-    return _limpio(p.get("titulo") or p.get("tema") or "Producción")[:60].rstrip(" ,;-")
+    return _recortar(_titulo(p), 32)
 
 
 def subcarpeta(p: dict[str, Any], cual: str) -> str:
@@ -76,8 +99,9 @@ def preparar(p: dict[str, Any]) -> Path:
     c = corto(p)
     for cual in (CLIPS, GUION, ENTREGAS):
         nueva = base / subcarpeta(p, cual)
-        vieja = base / cual                       # carpetas creadas antes de llevar el nombre del vídeo
-        if vieja.is_dir() and not nueva.exists():
+        viejas = [base / cual] + sorted(base.glob(f"{cual} · *"))   # sin el nombre del vídeo, o con uno más largo
+        vieja = next((v for v in viejas if v.is_dir() and v != nueva), None)
+        if vieja and not nueva.exists():
             vieja.rename(nueva)
         nueva.mkdir(parents=True, exist_ok=True)
     clips, guion = base / subcarpeta(p, CLIPS), base / subcarpeta(p, GUION)

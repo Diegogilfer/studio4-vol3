@@ -69,9 +69,11 @@ def _escena_destino(p: dict[str, Any], pista: Optional[int], prompt: str) -> int
     return sin_video[0] if sin_video else n
 
 
-def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = None, origen: str = "flow") -> dict[str, Any]:
-    """Valida el archivo recibido y lo guarda como toma de la escena que corresponde."""
-    pid = produccion.activa()
+def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = None, origen: str = "flow",
+            pid: Optional[str] = None) -> dict[str, Any]:
+    """Valida el archivo recibido y lo guarda como toma de la escena que corresponde. Flow y las subidas van a la
+    producción activa; la API y las carpetas dicen la suya (`pid`): si cambias de producción a mitad, no se mezclan."""
+    pid = pid or produccion.activa()
     if not pid:
         raise ValueError("No hay ninguna producción activa en STUDIO 4: crea una antes de generar en Flow.")
     p = produccion.cargar(pid)
@@ -111,7 +113,8 @@ def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = 
             esc["elegida"] = len(esc["tomas"]) - 1
 
     produccion.modificar(pid, cambio)
-    registro.apuntar("Google Flow", f"{tipo} para escena {orden} ({inf['ancho']}x{inf['alto']})",
+    servicio = {"api": "Imágenes por API", "carpeta": "Carpeta importada", "subida": "Subida a mano"}.get(origen, "Google Flow")
+    registro.apuntar(servicio, f"{tipo} para escena {orden} ({inf['ancho']}x{inf['alto']})",
                      unidad="tomas", produccion=pid)
     logger.info("Flow → escena %d: %s %dx%d", orden, tipo, inf["ancho"], inf["alto"])
     return {"ok": True, "escena": orden, "tipo": tipo}
@@ -175,6 +178,22 @@ def _referencia(pid: str, esc: dict[str, Any]) -> Optional[str]:
     return f"/media/{pid}/ref/{ref.name}"
 
 
+def por_animar(esc: dict[str, Any]) -> bool:
+    """Escena de vídeo que ya tiene su imagen (generada por API) pero aún no su vídeo: se anima gratis en Flow."""
+    if esc.get("tipo_clip", "video") != "video" or esc.get("elegida") is None:
+        return False
+    toma = esc["tomas"][esc["elegida"]]
+    return toma["tipo"] == "imagen" and toma.get("origen") == "api" and not any(t["tipo"] == "video" for t in esc["tomas"])
+
+
+def prompt_animar(esc: dict[str, Any]) -> str:
+    """Para «Fotogramas a vídeo»: la imagen ya fija caras, ropa y luz; el prompt solo describe lo que se mueve."""
+    segundos = max(4, min(8, round(esc.get("segundos") or 8)))
+    return (f"Bring this exact image to life as a {segundos}-second shot. {esc['prompt_flow']} "
+            "Keep the same framing, faces, hair, clothes and lighting as the image; natural, fluid motion; "
+            "no text, no new characters.")
+
+
 def sesion_para_extension() -> dict[str, Any]:
     """Lo que muestra la extensión dentro de Flow: la escena que toca, su prompt y la imagen de referencia."""
     pid = produccion.activa()
@@ -198,16 +217,21 @@ def sesion_para_extension() -> dict[str, Any]:
         "titulo": p["titulo"] or p["tema"],
         "total": len(p["escenas"]),
         "aspecto": config.FORMATOS[p["formato"]]["aspecto"],
-        "escenas": [{"escena": e["orden"], "prompt": e["prompt_flow"], "voz": e["texto_voz"], "tipo": e.get("tipo_clip", "video"),
+        "escenas": [{"escena": e["orden"], "prompt": prompt_animar(e) if por_animar(e) else e["prompt_flow"], "voz": e["texto_voz"],
+                     "tipo": e.get("tipo_clip", "video"),
                      "tomas": len(e["tomas"]), "video": any(t["tipo"] == "video" for t in e["tomas"])}
                     for e in p["escenas"]],
         "armado": _extension.get("armado", 0),
-        "siguiente": siguiente or {
+        "siguiente": siguiente or ({
+            "escena": activa["orden"], "estado": "esperando", "prompt": prompt_animar(activa), "tipo": "video",
+            "motivo": "Dale vida a su imagen", "voz": activa["texto_voz"],
+            "referencia": _referencia(pid, activa), "referencia_de": "la imagen de esta escena",
+        } if por_animar(activa) else {
             "escena": activa["orden"], "estado": "esperando", "prompt": activa["prompt_flow"],
             "tipo": activa.get("tipo_clip", "video"), "motivo": activa.get("motivo_tipo", ""),
             "voz": activa["texto_voz"],
             # La imagen inicial fuerza el mismo plano: solo cuando la escena sigue a la anterior sin corte.
             "referencia": _referencia(pid, previa) if previa and activa.get("continua") else None,
             "referencia_de": f"el final de la escena {previa['orden']}" if previa else "",
-        },
+        }),
     }

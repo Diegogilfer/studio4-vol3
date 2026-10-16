@@ -471,7 +471,11 @@ function pintarGuion({ p }) {
   $("g-guardar").disabled = ocupado;
   $("g-otra").hidden = !["corto", "largo"].includes(p.version);
   $("g-otra").disabled = ocupado;
+  $("g-completar").disabled = ocupado || !p.guion;
 }
+$("g-completar").addEventListener("click", async () => {
+  try { await api("/api/guion/completar", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 $("g-versiones").addEventListener("change", async (ev) => {
   try { await api("/api/activar", { id: ev.target.value }); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -660,6 +664,9 @@ async function generarTodo(soloImagenes) {
 }
 $("api-todo").addEventListener("click", () => generarTodo(false));
 $("api-imagenes").addEventListener("click", () => generarTodo(true));
+$("api-tarjetas").addEventListener("click", async () => {   // sin gastar: una tarjeta editorial por escena sin clip
+  try { await api("/api/tarjetas", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 // Personajes: un retrato por personaje, generado una vez en Flow y usado como ingrediente en cada escena.
 function pintarFichas(fichas) {
   $("fichas").hidden = !fichas?.length;
@@ -682,6 +689,24 @@ $("fichas").addEventListener("click", async (ev) => {
 // Vídeo: los segundos de clip a pedir en Flow (los de su voz, entre 4 y 8). Imagen: lo que estará en pantalla.
 const duracionEscena = (e) => (e.tipo_clip === "imagen" ? `${String(e.segundos).replace(".", ",")} s en pantalla`
   : `clip de ${Math.min(8, Math.max(4, Math.ceil(e.segundos)))} s`);
+let anadirTras = null;   // escena tras la que se está escribiendo una nueva (0 = al principio)
+const formNueva = (tras) => `
+      <article class="escena nueva-escena">
+        <div class="escena-cuerpo">
+          <b>Escena nueva ${tras ? `después de la ${tras}` : "al principio"}</b>
+          <textarea class="campo" rows="3" id="nueva-voz" aria-label="Qué dice la voz" placeholder="Qué dice la voz"></textarea>
+          <textarea class="campo" rows="3" id="nueva-ve" aria-label="Qué se ve" placeholder="Qué se ve (personajes, acción, lugar)"></textarea>
+          <div class="acciones">
+            <label class="chip-alt"><input type="radio" name="nueva-tipo" value="video" checked> Vídeo</label>
+            <label class="chip-alt"><input type="radio" name="nueva-tipo" value="imagen"> Imagen</label>
+          </div>
+          <div class="acciones">
+            <button class="primario" type="button" data-crear-escena="${tras}">Añadir escena</button>
+            <button class="boton" type="button" data-cancelar-escena>Cancelar</button>
+          </div>
+          <p class="meta">La voz se rehace al añadirla.</p>
+        </div>
+      </article>`;
 function pintarEscenas({ escenas, activa }) {
   const importado = estado.produccion.version === "importado";
   document.querySelector("#flow-sec h2").firstChild.textContent = importado ? "Revisa las escenas " : "Genera las escenas en Flow ";
@@ -718,16 +743,41 @@ function pintarEscenas({ escenas, activa }) {
             ${importado ? `<button class="boton" data-guardar-texto="${e.orden}">Guardar texto</button>`
               : `<button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>`}
             <label class="boton">Subir clip<input type="file" accept="video/*,image/*" data-subir="${e.orden}"></label>
+            ${importado ? "" : `<button class="boton" data-anadir-tras="${e.orden}">Añadir escena después</button>
+            <button class="boton" data-quitar-escena="${e.orden}">Quitar escena</button>`}
           </div>
         </div>
-      </article>`;
+      </article>${anadirTras === e.orden ? formNueva(e.orden) : ""}`;
   }).join("") || `<p class="meta">Gemini está convirtiendo el guion en escenas…</p>`;
+  if (escenas.length && !importado) {
+    $("escenas").insertAdjacentHTML("afterbegin", anadirTras === 0 ? formNueva(0)
+      : `<button class="boton" type="button" data-anadir-tras="0">Añadir escena al principio</button>`);
+  }
+  if (anadirTras !== null) document.getElementById("nueva-voz")?.focus();
 }
 $("escenas").addEventListener("click", async (ev) => {
   const t = ev.target;
   const p = estado.produccion;
   try {
-    if (t.dataset.guardarTexto) {   // vídeo importado: corregir lo que dicen los subtítulos de esta escena
+    if (t.dataset.anadirTras !== undefined) {   // abre el formulario de escena nueva justo debajo
+      anadirTras = Number(t.dataset.anadirTras);
+      pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
+      return;
+    }
+    if (t.dataset.cancelarEscena !== undefined) {
+      anadirTras = null;
+      pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
+      return;
+    }
+    if (t.dataset.crearEscena !== undefined) {
+      await api("/api/escena/anadir", { despues: Number(t.dataset.crearEscena), texto_voz: $("nueva-voz").value,
+        que_se_ve: $("nueva-ve").value, tipo_clip: document.querySelector('input[name="nueva-tipo"]:checked').value });
+      anadirTras = null;
+    } else if (t.dataset.quitarEscena) {
+      const n = Number(t.dataset.quitarEscena);
+      if (!confirm(`¿Quitar la escena ${n}? Su texto sale del guion y la voz se rehace.`)) return;
+      await api("/api/escena/quitar", { orden: n });
+    } else if (t.dataset.guardarTexto) {   // vídeo importado: corregir lo que dicen los subtítulos de esta escena
       const n = Number(t.dataset.guardarTexto);
       await api("/api/escena", { orden: n, texto_voz: document.querySelector(`[data-texto-escena="${n}"]`).value });
       t.textContent = "Guardado"; setTimeout(() => { t.textContent = "Guardar texto"; }, 1500);

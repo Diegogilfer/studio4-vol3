@@ -22,6 +22,31 @@ class SinEspacio(RuntimeError):
     """El modelo gastó todos los tokens (pensando) sin terminar la respuesta."""
 
 
+def _en_streaming(cuerpo: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """La respuesta llega a trozos mientras el modelo piensa y escribe: la conexión nunca se queda minutos callada
+    (sin streaming, un router o un micro-corte la tiraba en mitad de un guion largo). Devuelve (texto, fin, uso)."""
+    r = requests.post(f"{config.DEEPSEEK_URL}/chat/completions", timeout=(20, 120), stream=True,
+                      json={**cuerpo, "stream": True, "stream_options": {"include_usage": True}},
+                      headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"})
+    if r.status_code in (429, 500, 502, 503, 504):
+        raise RuntimeError(f"DeepSeek ocupado ({r.status_code})")
+    if r.status_code != 200:
+        raise ValueError(f"DeepSeek respondió {r.status_code}: {r.text[:300]}")
+    trozos, fin, uso = [], "", {}
+    for linea in r.iter_lines(decode_unicode=True):   # 120 s sin ningún dato = conexión muerta
+        if not linea or not linea.startswith("data:"):
+            continue
+        dato = linea[5:].strip()
+        if dato == "[DONE]":
+            break
+        d = json.loads(dato)
+        uso = d.get("usage") or uso
+        for c in d.get("choices") or []:
+            trozos.append((c.get("delta") or {}).get("content") or "")
+            fin = c.get("finish_reason") or fin
+    return "".join(trozos).strip(), fin, uso
+
+
 def generar_json(sistema: str, prompt: str, *, temperatura: float = 0.9, detalle: str = "", produccion: str = "") -> dict[str, Any]:
     """Pide una respuesta en JSON y la devuelve ya decodificada.
     - Saturación o red: reintenta igual (hasta 3 veces).
@@ -40,20 +65,11 @@ def generar_json(sistema: str, prompt: str, *, temperatura: float = 0.9, detalle
     ampliado = False
     for intento in range(3):
         try:
-            r = requests.post(f"{config.DEEPSEEK_URL}/chat/completions", json=cuerpo, timeout=240,
-                              headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"})
-            if r.status_code in (429, 500, 502, 503, 504):
-                raise RuntimeError(f"DeepSeek ocupado ({r.status_code})")
-            if r.status_code != 200:
-                raise ValueError(f"DeepSeek respondió {r.status_code}: {r.text[:300]}")
-            d = r.json()
-            eleccion = d["choices"][0]
-            texto = (eleccion["message"].get("content") or "").strip()
-            uso = d.get("usage", {})
+            texto, fin, uso = _en_streaming(cuerpo)
             registro.apuntar("DeepSeek", f"{detalle} · {config.DEEPSEEK_MODEL} · {uso.get('prompt_tokens', 0)}+"
                              f"{uso.get('completion_tokens', 0)} tokens",
                              cantidad=int(uso.get("total_tokens", 0)), unidad="tokens", produccion=produccion)
-            if eleccion.get("finish_reason") == "length" or not texto:
+            if fin == "length" or not texto:
                 raise SinEspacio(f"respuesta {'cortada' if texto else 'vacía'} ({uso.get('completion_tokens', 0)} tokens)")
             return json.loads(texto)
         except SinEspacio as e:

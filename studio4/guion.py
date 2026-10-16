@@ -38,13 +38,29 @@ QUE NO SUENE A IA
   (5-12 palabras), alguna larga; verbos concretos; una idea por frase.
 - Antes de entregar, relee y reescribe cualquier frase genérica, de folleto o que podría estar en cualquier vídeo.
 
+EL ESPECTADOR NO SABE NADA
+- No des por conocido a nadie ni nada. La primera vez que aparece una persona, un lugar, un juego o un hecho,
+  di en pocas palabras quién o qué es y por qué importa (p. ej. «Bonnie Parker, la mitad de Bonnie y Clyde, la
+  pareja de atracadores más buscada de Estados Unidos en 1933»). El gancho puede abrir con el hecho fuerte, pero
+  la frase siguiente presenta a quien sale en él.
+- Escribe para alguien de 16 años que nunca ha oído hablar del tema: si sin contexto no entendería una frase,
+  añade el contexto o cámbiala.
+
 HECHO PARA VÍDEO
 - La primera frase (máx. 14 palabras) engancha con un hecho concreto o una escena, nunca con una pregunta genérica.
 - Cada frase tiene que poder MOSTRARSE en un plano de 8 segundos: personas, objetos, lugares, acciones.
 - Abre preguntas y ciérralas más tarde para que nadie se vaya.
 
-CORTO (Shorts y Reels): un solo hilo, tensión constante, sin introducción, cierre con giro o dato que
-reencuadre el inicio, y como mucho UNA frase final de llamada a la acción, natural.
+CORTO (Shorts y Reels): UNA historia verdadera y COMPLETA, aunque dure un minuto. En orden:
+  1. quién y dónde (una frase de contexto con nombre, lugar y fecha),
+  2. qué pasó: los hechos clave en secuencia, cada uno consecuencia del anterior,
+  3. el giro o la revelación,
+  4. qué significa ahora: un cierre que reencuadra la primera frase.
+  Cada frase se engancha a la anterior por causa o por tiempo (entonces, por eso, pero, años después):
+  nunca una lista de datos sueltos. Quien lo vea sin saber nada del tema tiene que entender la historia entera.
+  Si el tema une dos mundos (un hecho real y un juego, una película o una marca), cuenta primero la historia
+  real completa y después la conexión, explicando qué se tomó y qué cambió. Sin introducción; tensión
+  constante; como mucho UNA frase final de llamada a la acción, natural.
 REPARTO (no se narra): para cada persona o personaje que aparece en la historia, escribe su ficha visual para
 que el vídeo la dibuje SIEMPRE igual: edad aproximada, origen, rostro, pelo (color, largo, peinado), ojos,
 complexión, ropa exacta con colores y materiales, y un detalle distintivo. 40 a 70 palabras cada una, sin
@@ -59,8 +75,10 @@ donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste).
 
 
 def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = "", publico: str = "",
-              youtube: dict[str, Any] | None = None, referencias: str = "") -> str:
+              youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "") -> str:
     partes = [f"Tema: {idea}"]
+    if manual:   # cómo cuentan los vídeos que funcionan en el nicho: manda sobre el estilo genérico
+        partes += ["", manual, ""]
     if tono:
         partes.append(f"Tono: {tono}")
     if publico:
@@ -89,6 +107,47 @@ def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = ""
     return "\n".join(partes)
 
 
+def completar(borrador: str, idea: str, dossier: str, segundos: int, produccion: str = "", tono: str = "",
+              referencias: str = "", manual: str = "") -> dict[str, Any]:
+    """Un guion del autor que se queda corto: con la investigación se convierte en la historia verdadera y completa,
+    conservando su ángulo, su tono y sus mejores frases. Devuelve {"titulo_provisional", "reparto", "guion", "autor"}."""
+    objetivo = int(segundos * PALABRAS_POR_SEGUNDO)
+    prompt = "\n".join([
+        f"Tema: {idea}", f"Tono: {tono}" if tono else "", manual,
+        "", "--- GUION DEL AUTOR (punto de partida: respeta su ángulo, su tono y sus frases buenas) ---", borrador,
+        "--- FIN DEL GUION DEL AUTOR ---",
+        "", f"Es demasiado corto o le faltan pasos de la historia. Con el dossier, conviértelo en la historia verdadera y "
+            f"completa (contexto, hechos en orden, giro, cierre), de {objetivo} palabras (±10 %). Añade solo hechos del "
+            "dossier; donde el autor afirme algo que el dossier contradice, manda el dossier.",
+        "" if not referencias else f"\n--- MATERIAL QUE APORTA EL AUTOR ---\n{referencias}\n--- FIN DEL MATERIAL ---",
+        "", "--- DOSSIER DE INVESTIGACIÓN ---", dossier or "(sin investigación: usa solo hechos muy conocidos)",
+        "--- FIN DEL DOSSIER ---",
+        "", 'Devuelve JSON: {"titulo_provisional": "...", "reparto": [{"nombre": "...", "ficha": "..."}], "guion": "..."}'])
+    datos = None
+    if deepseek.disponible():
+        try:
+            datos, autor = deepseek.generar_json(SISTEMA, prompt, detalle="guion completado", produccion=produccion), "DeepSeek"
+        except RuntimeError as e:
+            logger.warning("%s: el guion lo completa Gemini.", e)
+    if datos is None:
+        crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.8,
+                               detalle="guion completado (reserva)", produccion=produccion)
+        m = re.search(r"\{.*\}", crudo, re.DOTALL)
+        datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
+    texto = _limpiar(str(datos.get("guion", "")))
+    if len(texto.split()) < len(borrador.split()):
+        raise RuntimeError(f"{autor} no devolvió el guion completado. Vuelve a intentarlo.")
+    return {"titulo_provisional": str(datos.get("titulo_provisional", "")).strip(), "autor": autor,
+            "guion": _ajustar_largo(texto, objetivo, produccion),
+            "reparto": [{"nombre": str(r.get("nombre", "")).strip()[:40], "ficha": str(r.get("ficha", "")).strip()[:600]}
+                        for r in datos.get("reparto") or [] if isinstance(r, dict) and r.get("nombre")][:4]}
+
+
+def corto_de_mas(texto: str, segundos: int) -> bool:
+    """¿El guion pegado no llega a contar la historia? (menos del 70 % de las palabras que pide su duración)."""
+    return len(texto.split()) < 0.7 * segundos * PALABRAS_POR_SEGUNDO
+
+
 def _limpiar(texto: str) -> str:
     texto = re.sub(r"\[[^\]]*\]|\([^)]*(?:pausa|música|sonido)[^)]*\)", "", texto, flags=re.I)  # acotaciones
     texto = texto.replace("*", "").replace("#", "")
@@ -96,9 +155,9 @@ def _limpiar(texto: str) -> str:
 
 
 def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "", tono: str = "",
-             publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "") -> dict[str, Any]:
+             publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "") -> dict[str, Any]:
     """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
-    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias)
+    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias, manual)
     datos = None
     if deepseek.disponible():
         try:
