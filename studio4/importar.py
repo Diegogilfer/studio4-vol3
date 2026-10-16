@@ -32,7 +32,7 @@ PLATAFORMAS = {"youtube": "YouTube", "tiktok": "TikTok", "instagram": "Instagram
 
 def plataforma(url: str) -> str:
     """«youtube», «tiktok»… a partir del enlace (sin preguntar a nadie)."""
-    m = re.match(r"https?://(?:[\w-]+\.)*?([\w-]+)\.(?:com|be|tv|net|co)\b", url or "")
+    m = re.match(r"https?://(?:[\w-]+\.)*?([\w-]+)\.(?:com|be|tv|net|co|watch)\b", url or "")
     host = (m.group(1) if m else "").lower()
     return {"youtu": "youtube", "fb": "facebook"}.get(host, host if host in PLATAFORMAS else "")
 
