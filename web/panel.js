@@ -453,13 +453,14 @@ function nuevoVideo() {
 $("ir-crear").addEventListener("click", nuevoVideo);
 
 // Pestañas: cada parte del estudio es su propia vista. Inicio (el logo) es la portada; Crear, solo el asistente.
-const VISTAS = ["inicio", "crear", "canales", "tendencias", "flow", "render", "entregas"];
+const VISTAS = ["inicio", "crear", "url", "canales", "tendencias", "flow", "render", "entregas"];
 const vistaActual = () => (VISTAS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "inicio");
 function mostrarVista() {
   const v = vistaActual();
   const p = estado?.produccion;
   const lista = !!(p && p.guion_aprobado);
-  const fuera = ["inicio", "crear", "canales", "tendencias"].includes(v);   // vistas que no dependen de una producción
+  const fuera = ["inicio", "crear", "url", "canales", "tendencias"].includes(v);   // vistas que no dependen de una producción
+  $("url").hidden = v !== "url";
   $("inicio").hidden = v !== "inicio";
   $("crear").hidden = v !== "crear";
   $("tendencias").hidden = v !== "tendencias";
@@ -1079,7 +1080,11 @@ function pintarPaquete({ p }) {
   $("pq-preparar").firstChild.textContent = pq ? "Volver a preparar " : "Preparar los 3 formatos ";
   $("pq-info").textContent = p.entregas_error ? `Error: ${p.entregas_error}` : pq ? `${pq.piezas.length} piezas listas` : "";
   $("pq-carpeta").hidden = !pq;
-  $("pq-piezas").innerHTML = (pq?.piezas || []).map((z) => `
+  $("pq-piezas").innerHTML = (pq?.piezas || []).map((z) => piezaHTML(p, z)).join("");
+}
+// Una entrega lista para subir: su vídeo, su portada y sus textos (título, descripción y hashtags).
+function piezaHTML(p, z) {
+  return `
     <article class="pieza ${z.clave === "completo" ? "ancha" : ""}">
       <div class="pieza-media"><video src="${urlMedio(z.video)}" poster="${urlMedio(z.portada)}" controls preload="none"></video></div>
       <div class="pieza-txt">
@@ -1093,8 +1098,76 @@ function pintarPaquete({ p }) {
           <a class="boton" href="${urlMedio(z.portada)}" download="${esc(nombreArchivo(p, `${z.plataforma} portada`, "jpg"))}">Portada</a>
         </div>
       </div>
-    </article>`).join("");
+    </article>`;
 }
+// ============================================================== Desde URL: enlace → 3 formatos, en un panel
+const TRANS_URL = { corte: "Corte", fundido: "Fundido", destello: "Destello" };
+const EFECTO_URL = { ninguno: "Ninguno", cine: "Color cine", grano: "Grano", byn: "Blanco y negro", zoom: "Zoom suave" };
+let videoUrlSubido = null;
+function pintarUrl(p) {
+  const mia = p && p.desde_url;
+  const t = mia ? p.trabajo || {} : {};
+  $("u-trabajo").hidden = !t.ocupado;
+  $("u-fase").textContent = t.ocupado ? `${t.fase || "Procesando"}…` : "";
+  $("u-barra").style.width = `${t.progreso || 5}%`;
+  $("u-error").hidden = !(mia && (t.error || p.entregas_error));
+  $("u-error").textContent = mia ? t.error || (p.entregas_error ? `El vídeo completo está listo, pero Reels y Short fallaron: ${p.entregas_error}` : "") : "";
+  $("u-procesar").disabled = !!t.ocupado;
+  $("u-resultado").hidden = !(mia && p.final);
+  if (!mia || !p.final) return;
+  $("u-titulo").textContent = p.titulo || p.tema;
+  $("u-piezas").innerHTML = (p.entregas?.piezas || []).map((z) => piezaHTML(p, z)).join("")
+    || `<p class="meta">El vídeo completo está listo; los Reels y el Short se preparan al montar.</p>`;
+  const ed = p.edicion || {};
+  $("u-trans").innerHTML = Object.entries(TRANS_URL).map(([k, n]) =>
+    `<label><input type="radio" name="u-trans" value="${k}" ${ed.transicion === k ? "checked" : ""}>${n}</label>`).join("");
+  $("u-efecto").innerHTML = Object.entries(EFECTO_URL).map(([k, n]) =>
+    `<label><input type="radio" name="u-efecto" value="${k}" ${ed.efecto === k ? "checked" : ""}>${n}</label>`).join("");
+  $("u-caratula").checked = ed.caratula !== false;
+  if (document.activeElement !== $("u-inicio")) $("u-inicio").value = ed.inicio || 0;
+  if (document.activeElement !== $("u-final")) $("u-final").value = ed.final || 0;
+  $("u-escenas").innerHTML = p.escenas.map((e) => `<div class="u-escena"><b>Escena ${e.orden}</b><span>${esc(e.texto_voz)}</span>
+    <button class="boton" type="button" data-u-quitar="${e.orden}" ${p.escenas.length < 2 || t.ocupado ? "disabled" : ""}>Quitar</button></div>`).join("");
+  $("u-remontar").disabled = !!t.ocupado;
+}
+$("u-archivo").addEventListener("change", () => {
+  videoUrlSubido = $("u-archivo").files[0] || null;
+  $("u-info").textContent = videoUrlSubido ? `Archivo: ${videoUrlSubido.name}` : "";
+});
+$("u-procesar").addEventListener("click", async () => {
+  const url = $("u-url").value.trim();
+  if (!url && !videoUrlSubido) return alertaError("Pega el enlace del vídeo o sube el archivo.");
+  if (!$("u-derechos").checked) return alertaError("Marca que el vídeo es tuyo o que tienes derechos para reutilizarlo.");
+  $("u-procesar").disabled = true;
+  try {
+    if (videoUrlSubido) {
+      await api("/api/importar/archivo?derechos=1&completo=1", undefined, { method: "POST", body: videoUrlSubido,
+        headers: { "Content-Type": videoUrlSubido.type || "video/mp4", "X-Nombre": encodeURIComponent(videoUrlSubido.name) } });
+    } else {
+      await api("/api/importar", { url, derechos: true, completo: true });
+    }
+    $("u-url").value = ""; videoUrlSubido = null; $("u-info").textContent = ""; $("u-derechos").checked = false;
+    await refrescar();
+  } catch (e) { aviso(e); } finally { $("u-procesar").disabled = false; }
+});
+async function guardarEdicion() {
+  const radio = (n) => document.querySelector(`input[name="${n}"]:checked`)?.value;
+  try {
+    await api("/api/edicion", { transicion: radio("u-trans"), efecto: radio("u-efecto"), caratula: $("u-caratula").checked,
+      inicio: Number($("u-inicio").value || 0), final: Number($("u-final").value || 0) });
+  } catch (e) { aviso(e); }
+}
+$("u-resultado").addEventListener("change", (ev) => { if (ev.target.closest(".u-edicion")) guardarEdicion(); });
+$("u-resultado").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-u-quitar]");
+  if (!b) return;
+  if (!confirm(`¿Quitar la escena ${b.dataset.uQuitar}? Se corta también su trozo de audio; vuelve a montar para verlo.`)) return;
+  try { await api("/api/escena/quitar", { orden: Number(b.dataset.uQuitar) }); await refrescar(); } catch (e) { aviso(e); }
+});
+$("u-remontar").addEventListener("click", async () => {
+  await guardarEdicion();
+  try { await api("/api/render", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 $("pq-preparar").addEventListener("click", async () => {
   try { await api("/api/entregas", {}); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -1469,6 +1542,8 @@ async function refrescar() {
     requestAnimationFrame(() => window.scrollTo({ top: 0 }));
   }
   mostrarVista();
+  siCambia("url", { p: p ? { id: p.id, t: p.trabajo, f: p.final, e: p.entregas, ed: p.edicion, x: p.escenas?.length, err: p.entregas_error } : null },
+    () => pintarUrl(p));
   if (vistaActual() === "tendencias") cargarTendencias();
   if (vistaActual() === "canales" && !firmas.panel) cargarPanel();
   if (!p || !p.guion_aprobado) return;

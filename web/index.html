@@ -41,6 +41,7 @@
   <a class="marca" href="#inicio" title="Inicio"><span class="logo">S4</span><span>Studio 4</span></a>
   <nav class="nav" aria-label="Navegación principal">
     <a href="#crear" class="activo" title="Crear"><svg><use href="#i-crear"/></svg><span>Crear</span></a>
+    <a href="#url" title="Desde URL"><svg><use href="#i-enlace"/></svg><span>Desde URL</span></a>
     <a href="#canales" title="Canales"><svg><use href="#i-canales"/></svg><span>Canales</span></a>
     <a href="#tendencias" title="Tendencias"><svg><use href="#i-tendencias"/></svg><span>Tendencias</span></a>
     <a href="#flow" title="Flow"><svg><use href="#i-escenas"/></svg><span>Flow</span></a>
@@ -197,6 +198,51 @@
       </div>
 
       <p class="aviso-txt" id="aviso-salud" hidden></p>
+    </div>
+    </div>
+  </section>
+
+  <!-- ================================================================ DESDE URL: enlace → 3 formatos listos, en un panel -->
+  <section id="url" class="crear-vista" hidden>
+    <div class="seccion-num">
+      <span class="num-hueco" aria-hidden="true">02</span>
+      <div><span class="sello">Desde un enlace</span><h2 class="display">Del enlace a los <em>3 formatos</em></h2></div>
+    </div>
+    <div class="hero">
+    <div class="hero-fondo" aria-hidden="true"><div class="hero-vivo"><div class="hero-rejilla"></div></div></div>
+    <div class="hero-cuerpo">
+      <div class="crear-opciones">
+        <div class="importar-fila">
+          <input id="u-url" class="campo" type="url" inputmode="url" autocomplete="off" spellcheck="false"
+            placeholder="Enlace del vídeo (YouTube, Instagram, TikTok…)" aria-label="Enlace del vídeo">
+          <label class="boton"><svg width="16" height="16"><use href="#i-entregas"/></svg>Subir archivo<input type="file" id="u-archivo" accept="video/*" hidden></label>
+        </div>
+        <p class="meta" id="u-info" role="status" aria-live="polite"></p>
+        <label class="check"><input type="checkbox" id="u-derechos"> El vídeo es mío o tengo derechos para reutilizarlo</label>
+        <div class="acciones-paso"><button class="primario" id="u-procesar" type="button">Procesar <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
+        <p class="meta">Se descarga, se subtitula y se monta con fundido y color cine; salen el vídeo completo, el Reels y el Short con sus textos.</p>
+      </div>
+      <div id="u-trabajo" class="a-trabajo" role="status" aria-live="polite" hidden>
+        <b id="u-fase"></b><div class="progreso"><div id="u-barra"></div></div>
+      </div>
+      <p id="u-error" class="error" role="alert" hidden></p>
+      <div id="u-resultado" class="crear-opciones" hidden>
+        <div class="fila"><b class="pregunta-txt" id="u-titulo"></b>
+          <button class="boton" type="button" data-abrir="3 Entregas">Abrir carpeta</button></div>
+        <div class="piezas" id="u-piezas"></div>
+        <div class="crear-bloque u-edicion">
+          <b>Edición</b>
+          <div class="fila"><span class="meta">Transición</span><div class="segmentos" role="radiogroup" aria-label="Transición" id="u-trans"></div></div>
+          <div class="fila"><span class="meta">Efecto</span><div class="segmentos" role="radiogroup" aria-label="Efecto" id="u-efecto"></div></div>
+          <div class="fila">
+            <label class="check"><input type="checkbox" id="u-caratula"> Carátula de entrada</label>
+            <label class="meta">Quitar del inicio <input class="campo u-seg" id="u-inicio" type="number" min="0" step="0.5" inputmode="decimal"> s</label>
+            <label class="meta">Quitar del final <input class="campo u-seg" id="u-final" type="number" min="0" step="0.5" inputmode="decimal"> s</label>
+          </div>
+          <div class="u-escenas" id="u-escenas"></div>
+          <div class="acciones-paso"><button class="primario" id="u-remontar" type="button">Volver a montar <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
+        </div>
+      </div>
     </div>
     </div>
   </section>
