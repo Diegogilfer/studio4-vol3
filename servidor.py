@@ -26,7 +26,21 @@ if hasattr(sys.stdout, "reconfigure"):
 from studio4 import (aprender, archivo, canales, carpetas, config, flow, guion, ideas, miniaturas, produccion, referencias, registro,
                      render, subtitulos, tendencias, voz, youtube)  # noqa: E402
 
-logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
+# Todo lo que pasa queda en producciones/servidor.log (y lo grave, también en caidas.log): si Studio 4 se cae,
+# se puede saber por qué. Antes solo se veía en la ventana negra y se perdía al cerrarla.
+import faulthandler  # noqa: E402
+import threading as _hilos  # noqa: E402
+from logging.handlers import RotatingFileHandler  # noqa: E402
+
+config.PRODUCCIONES.mkdir(parents=True, exist_ok=True)
+logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S",
+                    handlers=[logging.StreamHandler(),
+                              RotatingFileHandler(config.PRODUCCIONES / "servidor.log", maxBytes=2_000_000, backupCount=3,
+                                                  encoding="utf-8")], force=True)
+_caidas = open(config.PRODUCCIONES / "caidas.log", "a", encoding="utf-8")  # noqa: SIM115 - abierto mientras viva el proceso
+faulthandler.enable(_caidas)   # una caída del propio Python (memoria, librería nativa) deja aquí su rastro
+_hilos.excepthook = lambda a: logging.getLogger("studio4.hilos").error(
+    "Error no controlado en %s", a.thread.name if a.thread else "?", exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
 logger = logging.getLogger("studio4.servidor")
 
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
@@ -519,8 +533,12 @@ def main() -> None:
     config.token_flow()  # crea el código de emparejamiento la primera vez
     for falta in config.salud():
         print(f"  ⚠ {falta}")
-    if n := produccion.recuperar_trabajos_colgados():
-        print(f"  ↺ {n} producción(es) tenían una fase a medias: quedan libres para relanzarla.")
+    for pid in produccion.recuperar_trabajos_colgados():   # lo que se cortó al cerrar, sigue donde se quedó
+        logger.info("Retomando %s (se cortó al cerrar Studio 4)", pid)
+        try:
+            produccion.retomar(pid)
+        except Exception as e:  # noqa: BLE001 - una que no se pueda retomar queda con «Reintentar»
+            logger.warning("No se pudo retomar %s: %s", pid, e)
     referencias.limpiar_espera()
     for resto in config.PRODUCCIONES.glob("studio4_*"):  # subidas que se cortaron
         resto.unlink(missing_ok=True)

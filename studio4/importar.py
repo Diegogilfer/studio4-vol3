@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -115,9 +116,11 @@ def escenas(palabras: list[dict[str, Any]], cortes: list[float], total: float,
             or (dur >= ideal and coma)
         if cerrar and siguiente is not None:
             fin = round((w["fin"] + siguiente["ini"]) / 2, 3)   # el corte, en medio del hueco entre palabras
+            if fin - ini < 0.3:   # Whisper dio tiempos solapados o desordenados: esta escena sigue con la siguiente
+                continue
             salida.append({"ini": ini, "fin": fin, "palabras": actual})
             ini, actual = fin, []
-    salida.append({"ini": ini, "fin": round(total, 3), "palabras": actual})
+    salida.append({"ini": ini, "fin": round(max(total, ini + 0.3), 3), "palabras": actual})
     if len(salida) > 1 and salida[-1]["fin"] - salida[-1]["ini"] < 1.0:   # un resto mínimo se une al anterior
         ultimo = salida.pop()
         salida[-1].update(fin=ultimo["fin"], palabras=salida[-1]["palabras"] + ultimo["palabras"])
@@ -138,9 +141,18 @@ def preparar(carpeta: Path, avisar: Callable[[str, int], None] = lambda *_: None
     total = medios.info(origen)["duracion"]
     if total > MAX_MINUTOS * 60:
         raise ValueError(f"El vídeo dura más de {MAX_MINUTOS} minutos.")
-    medios.ffmpeg("-i", str(origen), "-vn", "-ac", "2", "-ar", "48000", str(carpeta / "voz.wav"))
-    avisar("Transcribiendo el vídeo palabra por palabra", 25)
-    palabras = transcribir(carpeta / "voz.wav", lambda f: avisar(f, 25))
+    if not (carpeta / "voz.wav").exists():
+        medios.ffmpeg("-i", str(origen), "-vn", "-ac", "2", "-ar", "48000", str(carpeta / "voz.wav"))
+    guardada = carpeta / "transcripcion.json"   # si se cortó después de transcribir, no se repite
+    try:
+        palabras = json.loads(guardada.read_text(encoding="utf-8"))
+        avisar("Usando la transcripción ya hecha", 60)
+    except (OSError, ValueError):
+        avisar("Transcribiendo el vídeo palabra por palabra", 25)
+        palabras = transcribir(carpeta / "voz.wav", lambda f: avisar(f, 25))
+        tmp = guardada.with_suffix(".tmp")
+        tmp.write_text(json.dumps(palabras, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(guardada)
     avisar("Buscando los cambios de plano", 65)
     tramos = escenas(palabras, cortes_de_plano(origen), total)
     tomas = carpeta / "tomas"
@@ -149,8 +161,11 @@ def preparar(carpeta: Path, avisar: Callable[[str, int], None] = lambda *_: None
     for n, t in enumerate(tramos, start=1):
         avisar(f"Preparando la escena {n} de {len(tramos)}", 70 + int(25 * n / len(tramos)))
         archivo = f"tomas/escena_{n:02d}_original.mp4"
-        medios.ffmpeg("-ss", f"{t['ini']:.3f}", "-to", f"{t['fin']:.3f}", "-i", str(origen), "-c:v", "libx264",
-                      "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "160k", str(carpeta / archivo))
+        try:
+            medios.ffmpeg("-ss", f"{t['ini']:.3f}", "-to", f"{t['fin']:.3f}", "-i", str(origen), "-c:v", "libx264",
+                          "-preset", "veryfast", "-crf", "18", "-c:a", "aac", "-b:a", "160k", str(carpeta / archivo))
+        except RuntimeError as e:
+            raise RuntimeError(f"No se pudo cortar la escena {n} ({t['ini']:.1f}-{t['fin']:.1f} s del vídeo): {e}") from e
         texto = " ".join(w["palabra"] for w in t["palabras"])
         lista.append({"orden": n, "texto_voz": texto, "texto_pantalla": "", "tipo_clip": "video", "prompt_flow": "",
                       "segundos": round(t["fin"] - t["ini"], 1), "personajes": [],

@@ -124,25 +124,35 @@ def _portada(p: dict[str, Any]) -> str:
     return ""
 
 
-def recuperar_trabajos_colgados() -> int:
-    """Al arrancar, ninguna fase puede estar en marcha: si el servidor se cerró a mitad, se libera."""
-    n = 0
+RETOMABLES = ("Desde URL", "Importar vídeo")
+
+
+def recuperar_trabajos_colgados() -> list[str]:
+    """Al arrancar, ninguna fase puede estar en marcha: si el servidor se cerró a mitad, se libera. Devuelve las
+    importaciones cortadas, que se retoman solas (no se vuelve a descargar ni a transcribir lo que ya estaba)."""
+    retomar_: list[str] = []
     for f in config.PRODUCCIONES.glob("*/proyecto.json"):
         try:
             p = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         t = p.get("trabajo") or {}
+        if t.get("error") and not t.get("ocupado") and t.get("nombre") in RETOMABLES and not t.get("reintentable"):
+            t["reintentable"] = True   # se puede retomar sin repetir lo que ya estaba hecho
+            guardar(p)
         if t.get("error") and not t.get("ocupado") and "reintentable" not in t:   # errores de antes: frase clara
             t.update(error=_error_legible(t.get("nombre", ""), RuntimeError(t["error"])), reintentable=True)
             guardar(p)
         if p.get("trabajo", {}).get("ocupado"):
-            p["trabajo"].update(ocupado=False, error=f"Se interrumpió «{p['trabajo'].get('fase', '')}» al cerrar STUDIO: vuelve a lanzarlo.")
+            nombre = p["trabajo"].get("nombre", "")
+            p["trabajo"].update(ocupado=False, reintentable=True,
+                                error=f"Se interrumpió «{p['trabajo'].get('fase', '')}» al cerrar STUDIO 4. Pulsa «Reintentar».")
             if p.get("estado") in ("investigando", "escribiendo", "escenas", "renderizando"):
                 p["estado"] = "rodando" if p.get("escenas") else ("guion_listo" if p.get("guion") else "error")
             guardar(p)
-            n += 1
-    return n
+            if nombre in RETOMABLES and p.get("id"):
+                retomar_.append(p["id"])
+    return retomar_
 
 
 def _slug(texto: str) -> str:
@@ -184,6 +194,10 @@ def _error_legible(nombre: str, e: Exception) -> str:
         return texto   # sin facturación o tope alcanzado: el motivo exacto es lo útil
     if isinstance(e, ValueError) and len(texto) < 160 and "Expecting" not in texto:
         return texto   # los ValueError propios ya están escritos para la persona («Primero renderiza…»)
+    if not motivo:   # el motivo en una línea (el detalle técnico completo queda en el trabajo y en servidor.log)
+        linea = next((x.strip() for x in texto.splitlines() if x.strip()), "")
+        tecnico = any(k in linea for k in ("Expecting", "column", "Traceback", "NoneType", "object has no", "KeyError", "Errno"))
+        motivo = "error interno (el detalle queda guardado)" if tecnico else linea[:140] + ("…" if len(linea) > 140 else "")
     return f"{_QUE_FALLO.get(nombre, f'No se pudo completar «{nombre}»')}{f': {motivo}' if motivo else ''}. Pulsa «Reintentar»."
 
 
@@ -196,8 +210,10 @@ def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None], reinten
             fn()
         except Exception as e:  # noqa: BLE001 - el error se muestra en el panel
             logger.exception("%s falló", nombre)
-            for uno in pids:
-                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=_error_legible(nombre, e), fase=nombre,
+            for uno in pids:   # se conserva en qué paso falló y el detalle técnico, para poder diagnosticarlo
+                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=_error_legible(nombre, e),
+                                                             fase_fallida=p["trabajo"].get("fase", ""), fase=nombre,
+                                                             detalle=f"{type(e).__name__}: {e}"[:3000],
                                                              reintentable=reintentable))
         else:
             for uno in pids:
@@ -309,21 +325,38 @@ def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "",
     if archivo:
         importar.subida_a_origen(archivo, carpeta(pid))
     activar(pid)
+    _en_fondo(pid, "Desde URL" if completo else "Importar vídeo", lambda: _fase_importar(pid, url, completo))
+    return pid
 
-    def fase():
+
+MAX_DESCARGAS = 3   # vídeos procesándose a la vez desde un enlace o un archivo; el resto espera su turno
+_cola_descargas = threading.BoundedSemaphore(MAX_DESCARGAS)
+
+
+def _fase_importar(pid: str, url: str, completo: bool) -> None:
+    """Descargar, transcribir y trocear (y, con `completo`, montar los 3 formatos). Se puede repetir sin perder
+    lo hecho: si el vídeo ya está descargado o transcrito, no se vuelve a hacer."""
+    _avisar(pid, "En cola: esperando a que termine otro vídeo", 1)
+    with _cola_descargas:
         datos = {}
-        if url:
+        if url and not (carpeta(pid) / "origen.mp4").exists():
             _avisar(pid, "Leyendo el enlace", 3)
             datos = importar.descargar(url, carpeta(pid), lambda f: _avisar(pid, f, 8))
         campos = importar.preparar(carpeta(pid), lambda f, n: _avisar(pid, f, n))
-        modificar(pid, lambda q: q.update(**campos, estado="rodando", titulo=datos.get("titulo") or q["tema"],
+        modificar(pid, lambda q: q.update(**campos, estado="rodando", titulo=datos.get("titulo") or q.get("titulo") or q["tema"],
                                           tema=datos.get("titulo") or q["tema"],
                                           origen={**q["origen"], **{k: datos[k] for k in ("canal",) if k in datos}}))
         preparar_carpeta(pid)
         if completo:
             _fase_render(pid)
-    _en_fondo(pid, "Desde URL" if completo else "Importar vídeo", fase, reintentable=False)
-    return pid
+
+
+def retomar(pid: str) -> None:
+    """Una importación o un «Desde URL» que se cortó (Studio 4 se cerró a mitad) sigue donde se quedó."""
+    p = cargar(pid)
+    completo = bool(p.get("desde_url"))
+    _en_fondo(pid, "Desde URL" if completo else "Importar vídeo",
+              lambda: _fase_importar(pid, (p.get("origen") or {}).get("url", ""), completo))
 
 
 def editar(pid: str, datos: dict[str, Any]) -> dict[str, Any]:
@@ -461,6 +494,8 @@ def reintentar(pid: str) -> None:
         generar_miniaturas(pid)
     elif nombre == "Vídeo o imagen":
         recomendar_tipos(pid)
+    elif nombre in RETOMABLES:
+        retomar(pid)
     elif nombre == "Tarjetas":
         rellenar_tarjetas(pid)
     elif nombre == "Personajes":

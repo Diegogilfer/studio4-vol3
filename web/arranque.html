@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio 4</title>
+<link rel="icon" href="studio4.ico">
+<!-- Pantalla de carga: se abre al instante desde iniciar.bat (sin servidor) y entra en el panel cuando responde. -->
+<style>
+@font-face { font-family: Serif; src: url("fuentes/instrument-serif-latin-normal.woff2"); }
+@font-face { font-family: Serif; font-style: italic; src: url("fuentes/instrument-serif-latin-italic.woff2"); }
+@font-face { font-family: Sans; src: url("fuentes/geist-latin-wght-normal.woff2"); font-weight: 100 900; }
+:root { --bg: #f4f2fb; --fg: #161827; --suave: #4a4f66; --a: #7c3aed; --b: #0d9488; }
+@media (prefers-color-scheme: dark) { :root { --bg: #07080d; --fg: #eef1f6; --suave: #9aa3b2; --a: #8b5cf6; --b: #2dd4bf; } }
+html, body { margin: 0; height: 100%; }
+body { display: grid; place-items: center; background: radial-gradient(80% 60% at 30% 20%, color-mix(in oklab, var(--a) 18%, var(--bg)), var(--bg) 70%);
+  color: var(--fg); font-family: Sans, system-ui, sans-serif; overflow: hidden; }
+.centro { display: grid; justify-items: center; gap: 22px; text-align: center; padding: 16px; }
+.logo { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 32px; color: #fff; font: 700 34px Sans, sans-serif;
+  background: linear-gradient(135deg, var(--a), var(--b)); box-shadow: 0 24px 60px -20px color-mix(in oklab, var(--a) 80%, transparent),
+  inset 0 1px 0 rgb(255 255 255 / .35); animation: respirar 2.4s ease-in-out infinite; }
+@keyframes respirar { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+h1 { margin: 0; font: 400 clamp(40px, 8vw, 64px)/1 Serif, serif; letter-spacing: -.01em; }
+h1 em { color: var(--a); }
+p { margin: 0; color: var(--suave); font-size: 15px; min-height: 1.4em; }
+.puntos { display: flex; gap: 8px; } .puntos i { width: 8px; height: 8px; border-radius: 999px; background: var(--a); opacity: .3;
+  animation: punto 1.2s ease-in-out infinite; } .puntos i:nth-child(2) { animation-delay: .2s; } .puntos i:nth-child(3) { animation-delay: .4s; }
+@keyframes punto { 50% { opacity: 1; transform: translateY(-3px); } }
+.error .puntos { display: none; } .error p { color: #d97706; }
+@media (prefers-reduced-motion: reduce) { .logo, .puntos i { animation: none; } }
+</style>
+</head>
+<body>
+<main class="centro" id="centro">
+  <div class="logo" aria-hidden="true">S4</div>
+  <h1>Studio <em>4</em></h1>
+  <div class="puntos" aria-hidden="true"><i></i><i></i><i></i></div>
+  <p id="estado" role="status" aria-live="polite">Arrancando el estudio…</p>
+</main>
+<script>
+// Pregunta al servidor cada medio segundo; en cuanto responde, entra en el panel (sin pantallas de error).
+const puerto = new URLSearchParams(location.search).get("puerto") || "8000";
+const panel = `http://127.0.0.1:${puerto}`;
+const inicio = Date.now();
+async function probar() {
+  try {
+    await fetch(`${panel}/api/estado?t=${Date.now()}`, { mode: "no-cors", cache: "no-store" });
+    document.getElementById("estado").textContent = "Listo";
+    location.replace(`${panel}/#inicio`);
+    return;
+  } catch (_) { /* aún no responde */ }
+  const s = Math.round((Date.now() - inicio) / 1000);
+  if (s >= 60) {
+    document.getElementById("centro").classList.add("error");
+    document.getElementById("estado").textContent = "No arranca: mira el mensaje de la ventana negra de STUDIO 4.";
+    setTimeout(probar, 3000);   // sigue probando por si arranca más tarde
+    return;
+  }
+  if (s >= 8) document.getElementById("estado").textContent = "Cargando los módulos del estudio…";
+  setTimeout(probar, 500);
+}
+probar();
+</script>
+</body>
+</html>

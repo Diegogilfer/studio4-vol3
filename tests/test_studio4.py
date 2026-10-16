@@ -160,10 +160,12 @@ def test_recibir_guarda_toma_y_descarta_repetidas_y_miniaturas(aislado):
 
 # --- Producción ---------------------------------------------------------------------------------
 def test_recuperar_trabajos_colgados(aislado):
-    _produccion("p2", trabajo={"ocupado": True, "fase": "Render"}, estado="renderizando")
-    assert produccion.recuperar_trabajos_colgados() == 1
+    _produccion("p2", trabajo={"ocupado": True, "nombre": "Render", "fase": "Render"}, estado="renderizando")
+    _produccion("p2b", trabajo={"ocupado": True, "nombre": "Desde URL", "fase": "Transcribiendo"}, desde_url=True)
+    assert produccion.recuperar_trabajos_colgados() == ["p2b"]   # solo lo importado se retoma solo
     p = produccion.cargar("p2")
     assert not p["trabajo"]["ocupado"] and p["estado"] == "rodando" and "Render" in p["trabajo"]["error"]
+    assert p["trabajo"]["reintentable"]
 
 
 def test_borrar_toma_elegida_reajusta_la_eleccion(aislado):
@@ -1283,3 +1285,55 @@ def test_plataforma_del_enlace():
     assert {u: importar.plataforma(u) for u in casos} == casos
     with pytest.raises(ValueError):
         importar.vista_previa("no es un enlace")
+
+
+
+@hay_ffmpeg
+def test_importacion_cortada_no_repite_descarga_ni_transcripcion(aislado, monkeypatch):
+    """Studio 4 se cerró a mitad: al retomar se usan el vídeo y la transcripción que ya estaban."""
+    from studio4 import importar
+    _produccion("p-ret", escenas=1, version="importado", origen={"url": "https://youtu.be/x"}, desde_url=True)
+    base = produccion.carpeta("p-ret")
+    medios.ffmpeg("-f", "lavfi", "-i", "testsrc=s=320x240:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", str(base / "origen.mp4"))
+    (base / "transcripcion.json").write_text(json.dumps([{"palabra": "hola", "ini": 0.5, "fin": 1.0},
+                                                         {"palabra": "mundo", "ini": 1.2, "fin": 1.8}]), encoding="utf-8")
+    monkeypatch.setattr(importar, "descargar", lambda *a, **k: pytest.fail("no debe volver a descargar"))
+    monkeypatch.setattr(importar, "transcribir", lambda *a, **k: pytest.fail("no debe volver a transcribir"))
+    monkeypatch.setattr(produccion, "_fase_render", lambda pid: None)
+    produccion._fase_importar("p-ret", "https://youtu.be/x", completo=True)
+    q = produccion.cargar("p-ret")
+    assert q["voz"]["palabras"][0]["palabra"] == "hola" and q["escenas"]
+
+
+def test_cola_de_descargas_deja_tres_a_la_vez():
+    assert produccion.MAX_DESCARGAS == 3
+    assert all(produccion._cola_descargas.acquire(blocking=False) for _ in range(3))
+    assert not produccion._cola_descargas.acquire(blocking=False)   # la cuarta espera su turno
+    for _ in range(3):
+        produccion._cola_descargas.release()
+
+
+def test_escenas_con_tiempos_de_whisper_desordenados():
+    """Palabras solapadas o desordenadas: ninguna escena sale con duración cero o negativa."""
+    from studio4 import importar
+    palabras = [{"palabra": "Hola.", "ini": 0.0, "fin": 3.2}, {"palabra": "Otra.", "ini": 3.1, "fin": 3.15},
+                {"palabra": "frase.", "ini": 2.9, "fin": 6.5}, {"palabra": "Fin.", "ini": 6.6, "fin": 9.0}]
+    tramos = importar.escenas(palabras, [], 8.9)
+    assert all(t["fin"] - t["ini"] >= 0.3 for t in tramos)
+    assert tramos[0]["ini"] == 0 and all(a["fin"] == b["ini"] for a, b in zip(tramos, tramos[1:]))
+
+
+def test_error_dice_el_motivo_el_paso_y_guarda_el_detalle(aislado):
+    _produccion("p-err", escenas=1)
+
+    def falla():
+        produccion._avisar("p-err", "Preparando la escena 50 de 120", 77)
+        raise RuntimeError("No se pudo cortar la escena 50 (300.1-299.9 s del vídeo): FFmpeg falló: -to menor que -ss")
+    produccion._en_fondo("p-err", "Desde URL", falla)
+    for _ in range(100):
+        t = produccion.cargar("p-err")["trabajo"]
+        if not t.get("ocupado"):
+            break
+        _time.sleep(0.05)
+    assert "No se pudo cortar la escena 50" in t["error"] and t["fase_fallida"] == "Preparando la escena 50 de 120"
+    assert t["detalle"].startswith("RuntimeError: No se pudo cortar") and t["reintentable"]
