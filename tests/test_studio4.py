@@ -1097,3 +1097,36 @@ def test_enlace_que_redirige_a_tu_pc_se_rechaza(monkeypatch):
     monkeypatch.setattr(referencias.requests, "get", lambda *a, **k: Resp())
     with pytest.raises(ValueError, match="interna"):
         referencias._texto_web("https://ejemplo.com/pagina")
+
+
+def test_reserva_de_texto_cuando_gemini_no_tiene_saldo(monkeypatch):
+    """402 de Google: el paso lo hace DeepSeek con el mismo esquema, y Gemini queda en pausa (sin más esperas)."""
+    from pydantic import BaseModel
+    from studio4 import deepseek, gemini
+
+    class Plan(BaseModel):
+        titulo: str
+        escenas: list[str]
+
+    llamadas = []
+
+    def cliente():
+        llamadas.append(1)
+        raise RuntimeError("402 Your prepayment credits are depleted.")
+    monkeypatch.setattr(gemini, "cliente", lambda: type("C", (), {"models": type("M", (), {
+        "generate_content": staticmethod(lambda **_: cliente())})()})())
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "g")
+    monkeypatch.setattr(gemini, "_bloqueo", {"hasta": 0.0, "motivo": ""})
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    pedidos = []
+    monkeypatch.setattr(deepseek, "generar_json", lambda s, p, **k: pedidos.append(p) or {"titulo": "T", "escenas": ["a", "b"]})
+    monkeypatch.setattr(deepseek, "generar_texto", lambda s, p, **k: "texto de reserva")
+
+    assert json.loads(gemini.generar("Planifica", esquema=Plan, detalle="escenas")) == {"titulo": "T", "escenas": ["a", "b"]}
+    assert '"escenas"' in pedidos[0] and len(llamadas) == 1          # el esquema viaja a la reserva; un solo intento a Google
+    assert gemini.generar("Resume", detalle="x") == "texto de reserva"
+    assert len(llamadas) == 1 and "402" in gemini.bloqueado()          # en pausa: ya no se le pregunta
+    with pytest.raises(RuntimeError, match="402"):                     # con imágenes no hay reserva posible
+        gemini.generar("Mira", imagenes=[b"x"])
+    with pytest.raises(RuntimeError, match="402"):                     # quien ya viene de DeepSeek no vuelve a él
+        gemini.generar("Guion", reserva=False)

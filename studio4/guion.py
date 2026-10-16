@@ -131,7 +131,7 @@ def completar(borrador: str, idea: str, dossier: str, segundos: int, produccion:
             logger.warning("%s: el guion lo completa Gemini.", e)
     if datos is None:
         crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.8,
-                               detalle="guion completado (reserva)", produccion=produccion)
+                               detalle="guion completado (reserva)", produccion=produccion, reserva=False)
         m = re.search(r"\{.*\}", crudo, re.DOTALL)
         datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
     texto = _limpiar(str(datos.get("guion", "")))
@@ -168,7 +168,7 @@ def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str
         logger.warning("Sin DEEPSEEK_API_KEY: el guion lo escribe Gemini.")
     if datos is None:
         crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.9,
-                               detalle="guion (reserva)", produccion=produccion)
+                               detalle="guion (reserva)", produccion=produccion, reserva=False)
         m = re.search(r"\{.*\}", crudo, re.DOTALL)
         datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
 

@@ -70,7 +70,7 @@ def _generar_json(sistema: str, prompt: str, *, temperatura: float, detalle: str
         except RuntimeError as e:
             logger.warning("%s: uso Gemini de reserva.", e)
     crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=sistema, temperatura=temperatura,
-                           detalle=f"{detalle} (reserva)", produccion=produccion)
+                           detalle=f"{detalle} (reserva)", produccion=produccion, reserva=False)
     m = re.search(r"\{.*\}", crudo, re.DOTALL)
     return json.loads(m.group(0) if m else crudo)
 

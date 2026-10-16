@@ -47,6 +47,31 @@ def _en_streaming(cuerpo: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
     return "".join(trozos).strip(), fin, uso
 
 
+def generar_texto(sistema: str, prompt: str, *, temperatura: float = 0.7, detalle: str = "", produccion: str = "") -> str:
+    """Texto libre (sin JSON). Lo usa la reserva cuando Gemini no responde. Reintenta saturación y red."""
+    if not disponible():
+        raise RuntimeError("Falta DEEPSEEK_API_KEY en .env.")
+    cuerpo = {"model": config.DEEPSEEK_MODEL, "temperature": temperatura, "max_tokens": 16000,
+              "messages": [{"role": "system", "content": sistema or "Responde en español."}, {"role": "user", "content": prompt}]}
+    ultimo: Exception | None = None
+    for intento in range(3):
+        try:
+            texto, _fin, uso = _en_streaming(cuerpo)
+            registro.apuntar("DeepSeek", f"{detalle} · {config.DEEPSEEK_MODEL} · {uso.get('total_tokens', 0)} tokens",
+                             cantidad=int(uso.get("total_tokens", 0)), unidad="tokens", produccion=produccion)
+            if texto:
+                return texto
+            ultimo = RuntimeError("respuesta vacía")
+        except ValueError as e:
+            ultimo = e
+            if "respondió 4" in str(e):
+                break
+        except (RuntimeError, requests.RequestException) as e:
+            ultimo = e
+        time.sleep(3 * (intento + 1))
+    raise RuntimeError(f"DeepSeek no respondió: {ultimo}")
+
+
 def generar_json(sistema: str, prompt: str, *, temperatura: float = 0.9, detalle: str = "", produccion: str = "") -> dict[str, Any]:
     """Pide una respuesta en JSON y la devuelve ya decodificada.
     - Saturación o red: reintenta igual (hasta 3 veces).
