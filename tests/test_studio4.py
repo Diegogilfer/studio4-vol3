@@ -378,13 +378,13 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
 def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
     monkeypatch.setattr(produccion, "completar_guion", lambda *_a, **_k: None)   # aquí se aprueba tal cual, sin completar
     [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
-    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None, reparto=None: {
+    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None, reparto=None, bloques=None: {
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
         "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
     recibido = {}
 
-    def locutar(seg, destino, prov, produccion="", direcciones=None, voz_nombre=None):
+    def locutar(seg, destino, prov, produccion="", direcciones=None, voz_nombre=None, estilo_voz=""):
         recibido["direcciones"] = direcciones
         return {"proveedor": prov, "duracion": 3.0, "escenas": [{"ini": 0, "fin": 3.0}], "palabras": []}
     monkeypatch.setattr(voz, "locutar", locutar)
@@ -976,7 +976,7 @@ def test_guion_pegado_corto_se_completa_con_investigacion(aislado, monkeypatch):
     llamadas = []
     monkeypatch.setattr(produccion, "completar_guion", lambda pid, seg: llamadas.append((pid, seg)))
     pid = produccion.crear("Bonnie y Lucía", [], "cinematografico", "gemini", guion_propio="Bonnie nunca disparó. Lucía sí.")[0]
-    assert llamadas == [(pid, 50)]
+    assert llamadas == [(pid, 48)]   # el corto por defecto: 6 clips de 8 s
 
 
 def test_modo_sin_pago_y_ssrf_enlaces(monkeypatch, tmp_path):
@@ -1130,3 +1130,57 @@ def test_reserva_de_texto_cuando_gemini_no_tiene_saldo(monkeypatch):
         gemini.generar("Mira", imagenes=[b"x"])
     with pytest.raises(RuntimeError, match="402"):                     # quien ya viene de DeepSeek no vuelve a él
         gemini.generar("Guion", reserva=False)
+
+
+def test_guion_por_clips_de_flow():
+    """48 s → 6 clips de 8 s; el guion se trocea en bloques de ~18 palabras sin partir frases que caben."""
+    from studio4 import clips
+    assert clips.plan(48) == {"clips": 6, "segundos": 48, "palabras": 108}
+    assert clips.plan(50)["clips"] == 6 and clips.plan(5)["clips"] == 2
+    frase = "Bonnie Parker murió en 1934 en una carretera de Luisiana junto a Clyde."   # 13 palabras
+    bloques = clips.trocear(" ".join([frase] * 4))
+    assert bloques == [frase] * 4                       # dos frases juntas (26) no caben: una por clip
+    largo = "Uno dos tres cuatro cinco seis siete ocho nueve diez, once doce trece catorce quince dieciséis diecisiete dieciocho diecinueve veinte, veintiuno veintidós veintitrés veinticuatro."
+    assert len(clips.trocear(" ".join([largo] * 2))) >= 3                     # una frase enorme se parte por comas
+    assert all(len(b.split()) <= clips.TOPE + 6 for b in clips.trocear(largo))   # (un final diminuto se une al anterior)
+    assert " ".join(clips.trocear(largo)) == largo
+    assert clips.trocear("Una frase con bastantes palabras para llenar casi un clip entero de ocho. Fin.") == [
+        "Una frase con bastantes palabras para llenar casi un clip entero de ocho. Fin."]   # el resto diminuto se une
+
+
+def test_director_una_escena_por_clip(monkeypatch):
+    """Si Gemini junta dos clips en una escena, cada clip sigue teniendo su escena (y continúa el mismo plano)."""
+    bloques = ["Primer clip con su texto.", "Segundo clip con su texto.", "Tercer clip con su texto."]
+    escenas = [{"texto_voz": "[Clip 1] Primer clip con su texto. [Clip 2] Segundo clip con su texto.", "accion_en": "A"},
+               {"texto_voz": "Tercer clip con su texto.", "accion_en": "B"}]
+    salida = director._ajustar_a_bloques([{**e, "texto_voz": director._sin_etiqueta(e["texto_voz"])} for e in escenas], bloques)
+    assert [e["texto_voz"] for e in salida] == bloques
+    assert [e["accion_en"] for e in salida] == ["A", "A", "B"] and [e["continua"] for e in salida] == [False, True, False]
+    assert [e["texto_voz"] for e in director._ajustar_a_bloques(escenas[:1] * 3, bloques)] == bloques
+
+
+def test_identidad_del_canal_llega_al_guion():
+    from studio4 import guion
+    assert guion.identidad_del_canal({"nombre": "X"}) == ""
+    t = guion.identidad_del_canal({"arquetipo": "Monarca de autoridad", "arco": "timidez → autoridad", "cta": "Comenta REINO"})
+    assert "Monarca de autoridad" in t and "timidez → autoridad" in t and "«Comenta REINO»" in t
+    assert "IDENTIDAD DEL CANAL" in guion._peticion("idea", "dossier", {"corto": 48}, identidad=t)
+    assert "6 clips de 8 s" in guion._peticion("idea", "dossier", {"corto": 48})
+
+
+def test_copiar_todo_para_flow_y_estado_de_la_carpeta(aislado):
+    """Un solo texto con personajes y una escena por clip; la carpeta dice cuántos clips hay y a qué escenas van."""
+    from studio4 import carpetas, flow
+    p = _produccion("p-flow", escenas=2)
+    produccion.modificar("p-flow", lambda q: q.update(titulo="Bonnie", fichas=[{"nombre": "LUCIA", "prompt": "portrait of Lucia"}]))
+    p = produccion.cargar("p-flow")
+    texto = flow.todo_para_flow(p)
+    assert "STUDIO 4 · «Bonnie» · 2 escenas" in texto and "- LUCIA: portrait of Lucia" in texto
+    assert texto.index("Escena 1 ·") < texto.index("Escena 2 ·") and p["escenas"][1]["prompt_flow"] in texto
+    produccion.preparar_carpeta("p-flow")
+    p = produccion.cargar("p-flow")
+    clips_dir = carpetas.ruta(p) / carpetas.subcarpeta(p, carpetas.CLIPS)
+    (clips_dir / "Bonnie - escena 02.mp4").write_bytes(b"x")
+    (clips_dir / "notas.txt").write_text("no es un clip")
+    e = carpetas.estado(p)
+    assert (e["archivos"], e["escenas_en_carpeta"], e["total"]) == (1, 1, 2)

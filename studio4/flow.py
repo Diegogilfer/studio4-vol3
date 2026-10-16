@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from . import config, medios, produccion, registro
+from . import config, director, medios, produccion, registro
 
 logger = logging.getLogger("studio4.flow")
 CONECTADA_S = 90          # la extensión saluda cada pocos segundos mientras Flow está abierto
@@ -200,6 +200,26 @@ def prompt_animar(esc: dict[str, Any]) -> str:
     return (f"Bring this exact image to life as a {segundos}-second shot. {esc['prompt_flow']} "
             "Keep the same framing, faces, hair, clothes and lighting as the image; natural, fluid motion; "
             "no text, no new characters.")
+
+
+def todo_para_flow(p: dict[str, Any]) -> str:
+    """Toda la producción en un solo texto para pegarlo en Flow (Flow Agent): primero los personajes, que se crean
+    una vez como ingredientes, y después una escena por clip, en orden, con su prompt completo."""
+    if not p.get("escenas"):
+        raise ValueError("Primero aprueba el guion: hacen falta las escenas.")
+    aspecto = config.FORMATOS[p["formato"]]["aspecto"]
+    lineas = [f"STUDIO 4 · «{p.get('titulo') or p['tema']}» · {len(p['escenas'])} escenas · formato {aspecto}", "",
+              f"Genera UN vídeo por escena, en orden y en formato {aspecto}. Mantén idénticos a los personajes usando sus "
+              "ingredientes. Sin texto en pantalla, sin voz ni música (solo sonido ambiente). "
+              "Nombra cada clip «Escena N» con su número.", ""]
+    if p.get("fichas"):
+        lineas += ["PERSONAJES (crea primero su imagen y guárdala como ingrediente):"]
+        lineas += [f"- {f['nombre']}: {f['prompt']}" for f in p["fichas"]] + [""]
+    for e in p["escenas"]:
+        tipo = "imagen" if e.get("tipo_clip") == "imagen" else f"vídeo de {director.duracion_clip(e.get('segundos') or 8)} s"
+        lineas += [f"Escena {e['orden']} · {tipo} · voz: «{e['texto_voz']}»",
+                   prompt_animar(e) if por_animar(e) else e["prompt_flow"], ""]
+    return "\n".join(lineas).strip()
 
 
 def sesion_para_extension() -> dict[str, Any]:

@@ -57,7 +57,7 @@ YOUTUBE_CANAL = os.getenv("YOUTUBE_CANAL", "").strip()   # @usuario o id UC… d
 
 # Duración de cada versión: el corto sirve para Shorts y Reels; el largo, para YouTube.
 VERSIONES = {
-    "corto": {"nombre": "Corto · Shorts y Reels", "formato": "vertical", "segundos": 50},
+    "corto": {"nombre": "Corto · Shorts y Reels", "formato": "vertical", "segundos": 48},   # 6 clips de 8 s
     "largo": {"nombre": "Largo · YouTube", "formato": "horizontal", "segundos": 300},
 }
 

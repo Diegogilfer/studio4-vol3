@@ -18,7 +18,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (aprender, archivo, canales, carpetas, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas,
+from . import (aprender, archivo, canales, carpetas, clips, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas,
                referencias, registro, render, subtitulos, tarjetas, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -371,7 +371,8 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     p0 = cargar(pids[0])
     escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0],
                              tono=p0.get("tono", ""), publico=p0.get("publico", ""), youtube=dossier.get("youtube"),
-                             referencias=referencias.para_guion(refs), manual=aprender.para_guion(p0["canal"]))
+                             referencias=referencias.para_guion(refs), manual=aprender.para_guion(p0["canal"]),
+                             identidad=guion.identidad_del_canal(canales.de_produccion(p0)))
     for pid in pids:
         v = cargar(pid)["version"]
         modificar(pid, lambda p: p.update(
@@ -478,7 +479,8 @@ def completar_guion(pid: str, segundos: int | None = None) -> None:
         _avisar(pid, "Completando la historia", 50)
         hecho = guion.completar(q["guion"], q["tema"], dossier.get("dossier", ""), objetivo, produccion=pid,
                                 tono=q.get("tono", ""), referencias=referencias.para_guion(_material([pid])),
-                                manual=aprender.para_guion(q["canal"]))
+                                manual=aprender.para_guion(q["canal"]),
+                                identidad=guion.identidad_del_canal(canales.de_produccion(q)))
         modificar(pid, lambda r: r.update(
             guion_original=r.get("guion_original") or r["guion"], guion=hecho["guion"], investigacion=dossier,
             autor_guion=f"Tú + {hecho['autor']}", reparto=r.get("reparto") or hecho["reparto"], segundos=objetivo,
@@ -538,9 +540,11 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
         _avisar(pid, "Creando las escenas para Flow", 20)
         q = cargar(pid)
         competencia = ((q.get("investigacion") or {}).get("youtube") or {}).get("competencia") or []
+        bloques = clips.trocear(q["guion"])   # una escena por clip de Flow (8 s): el guion manda el corte
         plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid,
                                    titulos_existentes=[v["titulo"] for v in competencia],
-                                   referencias_visuales=referencias.visuales(refs), reparto=q.get("reparto") or [])
+                                   referencias_visuales=referencias.visuales(refs), reparto=q.get("reparto") or [],
+                                   bloques=bloques)
 
         def aplicar(r):
             r.update(titulo=r.get("titulo") or plan["titulo"],   # el título del guionista manda; Gemini solo si no hay
@@ -560,9 +564,11 @@ def _generar_voz(pid: str) -> None:
     _avisar(pid, f"Locución con {voz.PROVEEDORES[p['proveedor_voz']]}", 70)
     segmentos = [e["texto_voz"] for e in p["escenas"]]
     direcciones = [{"tono": e.get("tono_voz", "narrativo"), "ritmo": e.get("ritmo_voz", "normal")} for e in p["escenas"]]
+    arquetipo = canales.de_produccion(p).get("arquetipo", "")   # la voz fija del canal dirige también la locución
+    estilo_voz = f"{config.ESTILO_VOZ}. Interpreta a este narrador: {arquetipo}" if arquetipo else ""
     try:
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
-                              direcciones=direcciones, voz_nombre=p.get("voz_nombre"))
+                              direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz)
     except RuntimeError as e:
         # Cupo diario de Gemini TTS agotado (o ElevenLabs sin créditos): se prueba con la otra voz si existe.
         otra = voz.reserva(p["proveedor_voz"])

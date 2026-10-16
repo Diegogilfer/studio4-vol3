@@ -290,16 +290,62 @@ def _plan_tramo(base: str, guion: str, tramo: str, k: int, total: int, biblia: d
     return parte
 
 
+def _etiquetar(bloques: list[str], desde: int = 1) -> str:
+    return "\n".join(f"[Clip {i}] {b}" for i, b in enumerate(bloques, desde))
+
+
+def _tramos_de_bloques(bloques: list[str], n: int = TRAMO_PALABRAS) -> list[str]:
+    """Guion largo por clips: tramos de ~n palabras que nunca parten un clip (la numeración sigue entre tramos)."""
+    partes, actual, desde = [], [], 1
+    for i, b in enumerate(bloques, 1):
+        actual.append(b)
+        if sum(len(x.split()) for x in actual) >= n:
+            partes.append(_etiquetar(actual, desde))
+            actual, desde = [], i + 1
+    if actual:
+        partes.append(_etiquetar(actual, desde))
+    return partes
+
+
+def _sin_etiqueta(texto: str) -> str:
+    return re.sub(r"\[Clip \d+\]\s*", "", texto).strip()
+
+
+def _ajustar_a_bloques(escenas: list[dict[str, Any]], bloques: list[str]) -> list[dict[str, Any]]:
+    """Una escena por clip, pase lo que pase: si Gemini juntó o partió clips, cada bloque toma lo que se ve en la
+    escena que cubre su mitad (y si repite escena, continúa el mismo plano)."""
+    if len(escenas) == len(bloques):
+        return [{**e, "texto_voz": b} for e, b in zip(escenas, bloques)]
+    total_e = sum(len(_sin_etiqueta(e["texto_voz"]).split()) for e in escenas) or 1
+    total_b = sum(len(b.split()) for b in bloques) or 1
+    limites, acum = [], 0
+    for e in escenas:
+        acum += len(_sin_etiqueta(e["texto_voz"]).split())
+        limites.append(acum)
+    salida, previa, pos = [], -1, 0
+    for b in bloques:
+        mitad = (pos + len(b.split()) / 2) * total_e / total_b
+        k = next((i for i, lim in enumerate(limites) if mitad <= lim), len(escenas) - 1)
+        salida.append({**escenas[k], "texto_voz": b, "continua": k == previa})
+        previa, pos = k, pos + len(b.split())
+    return salida
+
+
 def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
                titulos_existentes: list[str] | None = None, referencias_visuales: list[str] | None = None,
-               reparto: list[dict[str, str]] | None = None) -> dict[str, Any]:
+               reparto: list[dict[str, str]] | None = None, bloques: list[str] | None = None) -> dict[str, Any]:
+    """Con `bloques` (guion por clips de Flow), una escena exacta por bloque: Gemini decide lo que se ve."""
     estilo_en = config.ESTILOS.get(estilo, estilo)
     aspecto = config.FORMATOS[formato]["aspecto"]
+    texto = _etiquetar(bloques) if bloques else guion
     prompt = (
         f"ESTILO VISUAL: {estilo_en}\nFORMATO: {aspecto} "
         f"({'sujeto centrado y alto' if aspecto == '9:16' else 'deja aire a los lados'})\n\n"
-        f"--- GUION ---\n{guion}\n--- FIN ---"
+        f"--- GUION ---\n{texto}\n--- FIN ---"
     )
+    if bloques:
+        prompt += (f"\n\nEL GUION VIENE EN {len(bloques)} CLIPS DE {config.SEGUNDOS_CLIP} s ([Clip n]). Devuelve EXACTAMENTE una "
+                   "escena por clip, en orden, sin juntar ni partir clips; texto_voz = el texto del clip tal cual, sin la etiqueta.")
     fijos = personajes_de_reparto(reparto, guion, produccion) if reparto else []
     if fijos:
         prompt += ("\n\nPERSONAJES FIJOS (copia esta lista tal cual en biblia.personajes y usa estos nombres en las escenas):\n"
@@ -311,9 +357,9 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
     if titulos_existentes:
         prompt += ("\n\nTÍTULOS QUE YA EXISTEN EN YOUTUBE SOBRE ESTO (el tuyo tiene que ser claramente distinto, "
                    "con otro ángulo o un detalle concreto del guion):\n" + "\n".join(f"- {t}" for t in titulos_existentes[:8]))
-    partes = tramos(guion)
+    partes = _tramos_de_bloques(bloques) if bloques else tramos(guion)
     if len(partes) > 1:   # guion largo: el primer tramo fija título y biblia; los demás la respetan
-        prompt = prompt.replace(f"--- GUION ---\n{guion}\n--- FIN ---",
+        prompt = prompt.replace(f"--- GUION ---\n{texto}\n--- FIN ---",
                                 f"--- GUION COMPLETO (contexto para título y biblia) ---\n{guion}\n--- FIN ---\n\n"
                                 f"Reparte en escenas SOLO el TRAMO 1 de {len(partes)} (aquí «el guion» es este tramo):\n"
                                 f"--- TRAMO ---\n{partes[0]}\n--- FIN DEL TRAMO ---")
@@ -334,6 +380,10 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
 
     if not plan["escenas"]:
         raise RuntimeError("Gemini no devolvió escenas.")
+    for e in plan["escenas"]:
+        e["texto_voz"] = _sin_etiqueta(e["texto_voz"])
+    if bloques:
+        plan["escenas"] = _ajustar_a_bloques(plan["escenas"], bloques)
     if _palabras(" ".join(e["texto_voz"] for e in plan["escenas"])) != _palabras(guion):
         # La voz lee las escenas, no el guion original: así la sincronía con los clips siempre cuadra.
         logger.warning("Las escenas no reproducen el guion palabra por palabra; la narración será la de las escenas.")

@@ -133,6 +133,16 @@ def numero_de_escena(p: dict[str, Any], nombre_archivo: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def estado(p: dict[str, Any]) -> dict[str, Any]:
+    """Lo que hay en «1 Clips de Flow»: la ruta, cuántos clips hay y a cuántas escenas corresponden."""
+    carpeta = ruta(p) / subcarpeta(p, CLIPS)
+    total = len(p.get("escenas") or [])
+    archivos = [f for f in carpeta.iterdir() if f.is_file() and f.suffix.lower() in EXTENSIONES] if carpeta.is_dir() else []
+    con_escena = {numero_de_escena(p, f.name) for f in archivos} & set(range(1, total + 1))
+    return {"ruta": str(carpeta), "archivos": len(archivos), "escenas_en_carpeta": len(con_escena),
+            "escenas_con_clip": sum(1 for e in p.get("escenas") or [] if e.get("elegida") is not None), "total": total}
+
+
 def importar(p: dict[str, Any], recibir) -> list[str]:
     """Mira «1 Clips de Flow» y entrega a su escena lo que aún no se había importado. Devuelve las claves nuevas."""
     carpeta = ruta(p) / subcarpeta(p, CLIPS)

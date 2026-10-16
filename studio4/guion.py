@@ -10,7 +10,7 @@ import logging
 import re
 from typing import Any
 
-from . import deepseek, gemini
+from . import config, deepseek, gemini
 
 logger = logging.getLogger("studio4.guion")
 
@@ -75,8 +75,10 @@ donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste).
 
 
 def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = "", publico: str = "",
-              youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "") -> str:
+              youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "", identidad: str = "") -> str:
     partes = [f"Tema: {idea}"]
+    if identidad:   # la voz fija del canal: arquetipo, arco y la llamada a la acción de siempre
+        partes += ["", identidad]
     if manual:   # cómo cuentan los vídeos que funcionan en el nicho: manda sobre el estilo genérico
         partes += ["", manual, ""]
     if tono:
@@ -102,18 +104,21 @@ def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = ""
               "--- FIN DEL DOSSIER ---", "", "Escribe estas versiones:"]
     for v, seg in versiones.items():
         nombre = "CORTO (Shorts y Reels, vertical)" if v == "corto" else "LARGO (YouTube, horizontal)"
+        clips = max(2, round(seg / config.SEGUNDOS_CLIP))
         partes.append(f"- \"{v}\": {nombre}, {seg} segundos: {int(seg * PALABRAS_POR_SEGUNDO)} palabras (±10 %; "
-                      f"si te quedas corto, la voz no llena el vídeo).")
+                      f"si te quedas corto, la voz no llena el vídeo). Se cortará en {clips} clips de {config.SEGUNDOS_CLIP} s "
+                      f"de unas {int(config.SEGUNDOS_CLIP * PALABRAS_POR_SEGUNDO)} palabras: cada tramo de ese tamaño tiene que "
+                      "poder verse en un solo plano, así que usa frases cortas y una imagen clara por frase.")
     return "\n".join(partes)
 
 
 def completar(borrador: str, idea: str, dossier: str, segundos: int, produccion: str = "", tono: str = "",
-              referencias: str = "", manual: str = "") -> dict[str, Any]:
+              referencias: str = "", manual: str = "", identidad: str = "") -> dict[str, Any]:
     """Un guion del autor que se queda corto: con la investigación se convierte en la historia verdadera y completa,
     conservando su ángulo, su tono y sus mejores frases. Devuelve {"titulo_provisional", "reparto", "guion", "autor"}."""
     objetivo = int(segundos * PALABRAS_POR_SEGUNDO)
     prompt = "\n".join([
-        f"Tema: {idea}", f"Tono: {tono}" if tono else "", manual,
+        f"Tema: {idea}", f"Tono: {tono}" if tono else "", manual, identidad,
         "", "--- GUION DEL AUTOR (punto de partida: respeta su ángulo, su tono y sus frases buenas) ---", borrador,
         "--- FIN DEL GUION DEL AUTOR ---",
         "", f"Es demasiado corto o le faltan pasos de la historia. Con el dossier, conviértelo en la historia verdadera y "
@@ -143,6 +148,18 @@ def completar(borrador: str, idea: str, dossier: str, segundos: int, produccion:
                         for r in datos.get("reparto") or [] if isinstance(r, dict) and r.get("nombre")][:4]}
 
 
+def identidad_del_canal(canal: dict[str, Any]) -> str:
+    """La voz fija del canal para el guionista ("" si el canal no la tiene definida)."""
+    lineas = []
+    if canal.get("arquetipo"):
+        lineas.append(f"- El narrador es: {canal['arquetipo']}. Habla siempre así.")
+    if canal.get("arco"):
+        lineas.append(f"- Arco emocional de cada vídeo: {canal['arco']}.")
+    if canal.get("cta"):
+        lineas.append(f"- Termina SIEMPRE con esta llamada a la acción, dicha de forma natural: «{canal['cta']}».")
+    return ("IDENTIDAD DEL CANAL (manda sobre el estilo genérico):\n" + "\n".join(lineas)) if lineas else ""
+
+
 def corto_de_mas(texto: str, segundos: int) -> bool:
     """¿El guion pegado no llega a contar la historia? (menos del 70 % de las palabras que pide su duración)."""
     return len(texto.split()) < 0.7 * segundos * PALABRAS_POR_SEGUNDO
@@ -155,9 +172,10 @@ def _limpiar(texto: str) -> str:
 
 
 def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "", tono: str = "",
-             publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "") -> dict[str, Any]:
+             publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "",
+             identidad: str = "") -> dict[str, Any]:
     """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
-    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias, manual)
+    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias, manual, identidad)
     datos = None
     if deepseek.disponible():
         try:

@@ -227,6 +227,11 @@ class Panel(BaseHTTPRequestHandler):
             if not pid:
                 raise Error(404, "No hay producción activa")
             return self._archivo(render.vista_subtitulos(produccion.cargar(pid), produccion.carpeta(pid)))
+        if ruta == "/api/flow/todo":   # toda la producción en un texto para pegar en Flow (Flow Agent)
+            pid = produccion.activa()
+            if not pid:
+                raise Error(400, "No hay ninguna producción abierta.")
+            return self._json({"texto": flow.todo_para_flow(produccion.cargar(pid))})
         if ruta == "/api/sesion-flow":  # lo mismo que ve la extensión, para la vista lateral
             return self._json(flow.sesion_para_extension())
         raise Error(404, "No existe")
@@ -236,6 +241,10 @@ class Panel(BaseHTTPRequestHandler):
         p = produccion.cargar(pid) if pid else None
         if p:
             p["ia_detectada"] = guion.frases_prohibidas(p.get("guion", ""))
+            try:   # la carpeta de clips, a la vista: cuántos hay y a cuántas escenas van
+                p["carpeta_clips"] = carpetas.estado(p) if p.get("carpeta") else None
+            except OSError:
+                p["carpeta_clips"] = None
             p["hermanas"] = [x for x in produccion.listar() if p.get("familia") and x["familia"] == p["familia"]]
         canal = canales.activo()
         return {
