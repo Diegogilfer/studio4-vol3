@@ -52,6 +52,27 @@ cortes de plano y se rehace por escenas).
 | fal.ai | Imágenes Nano Banana (0,04 $/imagen) y vídeo Veo 3.1 Fast | Saldo prepagado | Opcional. Con `FAL_KEY` en `.env` se usa en lugar de la API de Google |
 | ElevenLabs | Otra voz | Opcional | El plan gratis no permite uso comercial |
 
+## 3 bis. Mapa: qué genera cada paso, qué hace tu código y dónde entra Google
+
+| Paso | Qué sale | Tu código (en tu PC) | Servicio externo y dónde se llama | Si ese servicio falla |
+|---|---|---|---|---|
+| Investigación | Dossier con hechos, fechas y fuentes | `investigacion.py`, `fuentes.py` (lee webs de confianza, robots.txt) | **Gemini + Búsqueda de Google** (`investigacion.py:_con_google`); Gemini resume Wikipedia y tus fuentes | Wikipedia; los resúmenes los hace DeepSeek (reserva) |
+| Contexto de YouTube | Competencia, tu canal, tendencias | `youtube.py`, `tendencias.py` | **YouTube Data API v3** (`youtube.py`, `API = googleapis.com/youtube/v3`); Gemini escribe el informe | El informe lo hace DeepSeek; sin YouTube no hay datos |
+| Aprender del nicho | Manual del canal | `aprender.py` (lee subtítulos con yt-dlp, mide ritmo) | YouTube Data API para elegir vídeos; **DeepSeek** analiza | Gemini de reserva |
+| Guion / Completar | Texto de la voz | `guion.py` (reglas, longitud, limpieza) | **DeepSeek** escribe | Gemini de reserva |
+| Escenas | Plano, cámara, acción, personajes, prompts | `director.py` (arma el prompt final con fichas, luz y estilo) | **Gemini** planifica | DeepSeek (reserva) |
+| Voz | `voz.wav` y tiempos de cada palabra | `voz.py` (une, corta por silencios, reparte palabras) | **Gemini TTS** (`voz.py:_gemini`); Gemini escucha si leyó etiquetas (`voz.py:_leyo_etiquetas`) | ElevenLabs si hay clave; si no, **no hay voz** |
+| Visuales | Clip o imagen por escena | `flow.py` + `extension-flow/` (recoge), `archivo.py`, `tarjetas.py` (Edge local) | **Google Flow** a mano (`labs.google`); API de imagen/Veo de Google (`visuales_api.py`, exige facturación); fal.ai | Fotos de Commons, tarjetas o subir tus archivos |
+| Revisión de imágenes | ¿Mismo personaje? ¿Cuenta la escena? | `visuales_api.py:revisar` | **Gemini** (ve imágenes) | Se da por buena (sin reserva) |
+| Montaje | `final.mp4` con carátula y subtítulos | `render.py`, `subtitulos.py`, `medios.py` (FFmpeg) | — | — |
+| Sonidos subtitulados | Rótulos de ruidos | `sonidos.py` (FFmpeg mide silencios) | **Gemini** escucha el audio | Sale sin rótulos de ruido |
+| Entregas | Reels, Short, portadas, textos | `entregas.py`, `miniaturas.py` (recorta y compone) | **Gemini** elige momentos (texto) y analiza fotogramas (imagen) | Momentos: DeepSeek; análisis de imagen: sin reserva |
+| Referencias tuyas | Lo que aportan fotos, PDF y enlaces | `referencias.py` (enlaces de Maps sin API) | **Gemini** ve fotos y PDF | Sin reserva para fotos y PDF |
+| Importar vídeo | Escenas con texto y trozo de vídeo | `importar.py` (yt-dlp, faster-whisper y FFmpeg, todo local) | — | — |
+
+Cortocircuito: tras un 402 o con el cupo del día agotado, Gemini queda en pausa (30/60 min) y los pasos de texto
+van directos a la reserva sin esperas.
+
 ## 4. Cómo conectar todo lo gratis de Google
 
 1. **Gemini** → en Google AI Studio, *API keys* → *Crear clave de API* en un **proyecto nuevo sin facturación**.
