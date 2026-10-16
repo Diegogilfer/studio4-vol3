@@ -273,6 +273,36 @@ function pintarResumen() {
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 $("a-guion").addEventListener("input", pintarResumen);
+// Ideas en tendencia: lo que más crece esta semana en el nicho; «Inspirarme» lee el vídeo y propone una idea original.
+let videosVivo = [];
+function pintarIdeasVivo() {
+  $("ideas-vivo-lista").innerHTML = videosVivo.map((v, i) => `<div class="idea-vivo">
+      <b>${esc(v.titulo)}</b><span class="meta">${esc(v.canal)} · ${compactoNum(v.vistas)} vistas · ${compactoNum(v.vistas_hora)}/hora</span>
+      <button class="primario" type="button" data-inspirar="${i}">Inspirarme</button></div>`).join("");
+}
+$("ideas-vivo").addEventListener("click", async (ev) => {
+  const b = ev.currentTarget;
+  b.disabled = true; b.textContent = "Buscando…";
+  try {
+    videosVivo = (await api("/api/ideas/vivo", {})).videos;
+    if (!videosVivo.length) aviso("No encontré vídeos de tu nicho esta semana.");
+    pintarIdeasVivo();
+  } catch (e) { aviso(e); } finally { b.disabled = false; b.textContent = "Buscar en vivo"; }
+});
+$("ideas-vivo-lista").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-inspirar]");
+  if (!b) return;
+  b.disabled = true; b.textContent = "Leyendo el vídeo…";
+  try {
+    const d = await api("/api/ideas/inspirar", videosVivo[Number(b.dataset.inspirar)]);
+    $("a-idea").value = d.idea; crecer($("a-idea"));
+    $("ref-datos").value = d.texto;   // el detalle llega al guionista como material prioritario
+    if (["corto", "largo"].includes(d.formato)) { $("a-corto").checked = d.formato === "corto"; $("a-largo").checked = d.formato === "largo"; }
+    pintarResumen();
+    $("a-idea").focus();
+    b.textContent = d.leido ? "Idea lista ↑" : "Idea lista (sin subtítulos) ↑";
+  } catch (e) { aviso(e); b.textContent = "Inspirarme"; } finally { b.disabled = false; }
+});
 document.querySelectorAll('input[name="velocidad"]').forEach((r) => r.addEventListener("change", () => {
   const audio = $("oir-voz");
   audio.defaultPlaybackRate = audio.playbackRate = velocidadVoz();   // la muestra que suena cambia al momento

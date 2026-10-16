@@ -1206,3 +1206,16 @@ def test_velocidad_de_la_voz(tmp_path):
         medios.ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=2", str(wav))
         voz.acelerar(wav, 1.2)
         assert abs(medios.duracion(wav) - 2 / 1.2) < 0.1
+
+
+def test_idea_en_tendencia_es_original_y_detallada(aislado, monkeypatch):
+    from studio4 import aprender, ideas
+    monkeypatch.setattr(aprender, "transcripcion", lambda url: {"texto": "¿Recuerdan a este youtuber? " * 5, "palabras": 25})
+    pedidos = []
+    monkeypatch.setattr(aprender, "_generar_json", lambda s, p, **k: pedidos.append(p) or {
+        "idea": "Dinamarca en Minecraft", "por_que": "contraste", "original": "una habitación copiada",
+        "gancho": "¿Sabes quién lo hizo?", "estructura": ["gancho", "dato", "apuesta"], "detalles": ["2014", "1:1"], "formato": "corto"})
+    d = ideas.inspirar("fourlevel", {"titulo": "SON IGUALES", "canal": "MrRelevante", "vistas": 6000000, "url": "https://youtu.be/x"})
+    assert d["leido"] and "¿Recuerdan a este youtuber?" in pedidos[0] and "6.000.000 vistas" in pedidos[0]
+    t = ideas.como_texto(d)
+    assert "Inspirada en «SON IGUALES» (MrRelevante)" in t and "gancho → dato → apuesta" in t and "- 1:1" in t

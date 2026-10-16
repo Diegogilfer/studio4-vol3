@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import (aprender, archivo, canales, carpetas, config, flow, guion, miniaturas, produccion, referencias, registro,
+from studio4 import (aprender, archivo, canales, carpetas, config, flow, guion, ideas, miniaturas, produccion, referencias, registro,
                      render, subtitulos, tendencias, voz, youtube)  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
@@ -340,6 +340,11 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/manual":
             aprender.lanzar(canales.activo()["id"])
             return self._json({"ok": True})
+        if ruta == "/api/ideas/vivo":   # lo que más crece esta semana en el nicho del canal
+            return self._json({"videos": ideas.en_vivo(canales.activo()["id"])})
+        if ruta == "/api/ideas/inspirar":   # una idea original a partir de un vídeo en tendencia
+            d = ideas.inspirar(canales.activo()["id"], self._cuerpo_json())
+            return self._json({**d, "texto": ideas.como_texto(d)})
         if ruta == "/api/canales/parecidos":   # canales del mismo nicho para tomarlos de referencia
             c = canales.obtener(str(self._cuerpo_json().get("id", "")) or canales.activo()["id"])
             return self._json({"canales": tendencias.parecidos(c)})

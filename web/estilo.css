@@ -1231,6 +1231,10 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .crear-opciones, .crear-bloque { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; } .crear-opciones { gap: 18px; }
 .paso { grid-template-columns: minmax(0, 1fr); }   /* en el móvil nada empuja la tarjeta más allá de la pantalla */
 .crear-bloque > .meta:first-child { margin: 0; }
+.ideas-vivo-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+.idea-vivo { display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--r-caja); background: var(--caja);
+  border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.idea-vivo b { font-size: 14px; line-height: 1.35; } .idea-vivo .primario, .idea-vivo .boton { justify-self: start; }
 .importar { display: grid; gap: 12px; }
 .importar-fila { display: flex; gap: 10px; flex-wrap: wrap; }
 .importar-fila .campo { flex: 1 1 320px; height: 48px; font-size: 15px; }
