@@ -84,16 +84,20 @@ van directos a la reserva sin esperas.
    `studio4-vol3\extension-flow` (versión 2.2.0). Si el panel avisa de una versión vieja, recárgala desde esa carpeta.
 4. Arranca Studio 4 con el acceso directo «STUDIO 4».
 
-## 5. El camino más fácil para un vídeo (y solo con lo gratis de Google)
+## 5. El camino más fácil para un vídeo (Gemini gestiona, Flow genera)
 
-1. **Crear** → escribe la idea (o pega tu guion) → elige *Corto* (vertical, 50 s) o *Largo* (horizontal, 300 s).
-2. Revisa el **guion** → «Aprobar guion y crear escenas». Opciones: «Escribir otra versión», «Completar la historia».
-3. **Flow** → cada escena trae su prompt (con la ficha de cada personaje, la luz y el estilo, y la duración del clip).
-   Genera en Flow; la extensión trae el clip a su escena. Puedes «Añadir escena después», «Quitar escena» o «Subir clip».
-4. **Render** → «Renderizar»: monta el vídeo completo con carátula, subtítulos y sonido.
-5. **Entregas** → vídeo completo, Reels y Short con portadas y textos, en tu carpeta de Vídeos.
+1. **Crear** (una sola tarjeta): escribe la idea (o pega tu guion, o un enlace de vídeo), elige la duración
+   (el corto por defecto: 48 s = 6 clips de 8 s), estilo y voz → «Investigar y escribir».
+2. Revisa el **guion** → «Aprobar guion y crear escenas». Cada escena es exactamente un clip de 8 s.
+3. **Flow** → «Copiar todo para Flow»: un solo texto con los personajes (para crearlos como ingredientes) y
+   todas las escenas en orden. Pégalo en Flow (Flow Agent) y genera.
+4. Descarga los clips en «1 Clips de Flow» con el número de escena en el nombre («escena 3»): llegan solos a su
+   escena (o los trae la extensión). La tarjeta dice cuántos hay.
+5. «Ensamblar vídeo» → montaje con carátula, subtítulos y sonido, y las entregas (vídeo completo, Reels y Short
+   con portadas y descripciones).
 
-Coste con esta ruta: 0 $ fuera de los créditos de tu suscripción de Flow (y céntimos si el guion lo escribe DeepSeek).
+Coste con esta ruta: 0 $ fuera de los créditos de Flow de tu Google AI Pro (y céntimos si el guion lo escribe DeepSeek).
+La identidad del canal (narrador, arco emocional y llamada a la acción fija) se define una vez en la ficha del canal.
 
 ## 6. Reglas del proyecto (decididas por el autor)
 
