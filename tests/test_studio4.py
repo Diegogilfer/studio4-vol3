@@ -31,18 +31,22 @@ def aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(carpetas, "RAIZ_USUARIO", tmp_path / "Videos")
     monkeypatch.setattr(config, "YOUTUBE_API_KEY", "")
     monkeypatch.setattr(config, "FAL_KEY", "")   # nunca se gasta saldo de fal en una prueba
+    monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "")
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "")
     from studio4 import tarjetas   # las pruebas no abren el navegador: el render sale sin carátula
 
     def sin_navegador(*_a, **_k):
         raise RuntimeError("sin navegador en las pruebas")
     monkeypatch.setattr(tarjetas, "dibujar_caratula", sin_navegador)
     monkeypatch.setattr(youtube, "TOKEN", tmp_path / "youtube_token.json")
-    # Las pruebas nunca salen a internet: lo que necesite Gemini lo simula cada prueba.
-    from studio4 import gemini, sonidos
+    # Las pruebas nunca salen a internet: lo que necesite Gemini o la investigación lo simula cada prueba.
+    from studio4 import gemini, investigacion, sonidos
 
     def sin_red(*_a, **_k):
         raise RuntimeError("sin red en las pruebas")
     monkeypatch.setattr(gemini, "generar", sin_red)
+    monkeypatch.setattr(gemini, "cliente", sin_red)
+    monkeypatch.setattr(investigacion, "investigar", sin_red)
     monkeypatch.setattr(sonidos, "detectar", lambda *_a, **_k: [])
     return tmp_path
 
@@ -236,6 +240,9 @@ def test_servidor_rechaza_host_origen_y_extension_sin_codigo(servidor):
     pedir, puerto = servidor
     assert pedir("GET", "/api/estado", {"Host": "evil.com"})[0] == 403
     assert pedir("POST", "/api/producciones", {"Origin": "https://evil.com"}, b"{}")[0] == 403
+    assert pedir("POST", "/api/producciones", {"Origin": "null"}, b"{}")[0] == 403
+    assert pedir("POST", "/api/producciones", {"Sec-Fetch-Site": "cross-site"}, b"{}")[0] == 403
+    assert pedir("POST", "/api/producciones", {"Referer": "https://evil.com/ataque"}, b"{}")[0] == 403
     assert pedir("POST", "/api/flow/hola")[0] == 401
     estado, cuerpo = pedir("POST", "/api/flow/hola", {"X-Studio4-Token": "codigo-de-prueba"})
     assert estado == 200 and json.loads(cuerpo)["ok"]
@@ -335,7 +342,7 @@ def _esperar(pid, segundos=10):
 
 def test_tu_guion_se_respeta_tal_cual_y_espera_aprobacion(aislado):
     texto = "El faro de Cabo Sur siguió encendido cuarenta años.   Nadie subía a cambiar la lámpara. Y aun así, cada noche, giraba."
-    [pid] = produccion.crear("", [], "documental", "gemini", guion_propio=texto, formato_propio="horizontal")
+    [pid] = produccion.crear("", [], "documental", "gemini", segundos={"largo": 8}, guion_propio=texto, formato_propio="horizontal")
     p = produccion.cargar(pid)
     assert p["guion"] == " ".join(texto.split()) and p["autor_guion"] == "Tú"
     assert p["estado"] == "guion_listo" and not p["guion_aprobado"] and p["formato"] == "horizontal"
@@ -659,7 +666,8 @@ def test_referencias_suben_se_copian_y_llegan_al_guion(aislado, tmp_path):
     with pytest.raises(ValueError):
         referencias.preparar({}, [{"id": "0" * 16, "tipo": "foto", "nombre": "x"}])   # subida que ya no existe
 
-    pids = produccion.crear("", [], "documental", "gemini", guion_propio="Un guion propio con más de diez palabras para probar las referencias.",
+    pids = produccion.crear("", [], "documental", "gemini", segundos={"corto": 4},
+                            guion_propio="Un guion propio con más de diez palabras para probar las referencias.",
                             refs=refs)
     p = produccion.cargar(pids[0])
     assert p["referencias"]["items"][0]["archivo"].startswith("referencias/")
@@ -699,6 +707,16 @@ def test_error_legible_y_reintentar(aislado, monkeypatch):
     assert llamadas == [(["20261013-100000-corto-faro"], {"corto": 20}, {"dossier": "d"})]   # aprovecha la investigación
     with pytest.raises(ValueError):
         produccion.reintentar(p["id"])   # ya salió bien: no hay nada que reintentar
+    hechos = []
+    monkeypatch.setattr(produccion, "rellenar_tarjetas", lambda pid: hechos.append(("tarjetas", pid)))
+    monkeypatch.setattr(produccion, "afinar_personajes", lambda pid: hechos.append(("personajes", pid)))
+    monkeypatch.setattr(produccion, "completar_guion", lambda pid, seg: hechos.append(("completar", pid, seg)))
+    for paso in ("Tarjetas", "Personajes"):
+        produccion.modificar(p["id"], lambda q, s=paso: q["trabajo"].update(ocupado=False, nombre=s, error="x", reintentable=True))
+        produccion.reintentar(p["id"])
+    produccion.modificar(p["id"], lambda q: q.update(version="propio", trabajo={"ocupado": False, "nombre": "Guion", "error": "x"}))
+    produccion.reintentar(p["id"])
+    assert hechos == [("tarjetas", p["id"]), ("personajes", p["id"]), ("completar", p["id"], 20)]
 
 
 def test_deepseek_sin_espacio_reintenta_una_vez_con_mas_margen(aislado, monkeypatch):
@@ -925,6 +943,8 @@ def test_caratula_lleva_titulo_marca_y_las_dos_imagenes(tmp_path):
     h = tarjetas.html_caratula("Bonnie nunca disparó", "Lo que GTA 6 le debe", "FourLevel", tmp_path / "a.jpg", tmp_path / "b.png", 1080, 1920)
     assert "Bonnie nunca <em>disparó</em>" in h and "FOURLEVEL" in h and "GTA 6" in h
     assert (tmp_path / "a.jpg").as_uri() in h and (tmp_path / "b.png").as_uri() in h
+    ht = tarjetas.html_tarjeta({"titular": "El caso FOURLEVEL"}, 1, 1080, 1920, marca="Arigab")
+    assert "El caso FOURLEVEL" in ht and '<div class="marca">ARIGAB</div>' in ht
 
 
 def test_anadir_y_quitar_escena_a_mano(aislado):
@@ -957,3 +977,88 @@ def test_guion_pegado_corto_se_completa_con_investigacion(aislado, monkeypatch):
     monkeypatch.setattr(produccion, "completar_guion", lambda pid, seg: llamadas.append((pid, seg)))
     pid = produccion.crear("Bonnie y Lucía", [], "cinematografico", "gemini", guion_propio="Bonnie nunca disparó. Lucía sí.")[0]
     assert llamadas == [(pid, 50)]
+
+
+def test_modo_sin_pago_y_ssrf_enlaces(monkeypatch, tmp_path):
+    from studio4 import referencias, visuales_api as v
+    monkeypatch.setattr(config, "FAL_KEY", "clave-fal")
+    monkeypatch.setattr(config, "SIN_PAGO", True)
+    assert not v.con_fal()
+    with pytest.raises(v.SinFacturacion, match="STUDIO4_SIN_PAGO"):
+        v.imagen("un faro", "9:16", tmp_path / "a.png", v.Presupuesto(1))
+    with pytest.raises(v.SinFacturacion, match="STUDIO4_SIN_PAGO"):
+        v.video("un faro", "9:16", tmp_path / "a.mp4", v.Presupuesto(1))
+    for interna in ("http://127.0.0.1:8000/api/estado", "http://localhost:8000/", "http://192.168.1.1/admin", "file:///etc/passwd"):
+        with pytest.raises(ValueError):
+            referencias._url_publica(interna)
+
+
+def test_fiabilidad_timeouts_y_voz_402_429(aislado, monkeypatch):
+    import subprocess
+    from studio4 import gemini
+    monkeypatch.setattr(medios.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(subprocess.TimeoutExpired(a[0], 5)))
+    with pytest.raises(RuntimeError, match="tardó más"):
+        medios.ffmpeg("-version", timeout=5)
+    with pytest.raises(ValueError, match="tardó demasiado"):
+        medios.info("x.mp4", timeout=5)
+
+    esperas, intentos = [], []
+    monkeypatch.setattr("time.sleep", lambda s: esperas.append(s))
+
+    class Part:
+        inline_data = type("D", (), {"data": b"\x00\x00" * 100})()
+
+    class Resp:
+        candidates = [type("C", (), {"content": type("Ct", (), {"parts": [Part()]})()})()]
+
+    def gen(model, contents, config):
+        intentos.append(model)
+        if len(intentos) == 1:
+            raise RuntimeError("429 RESOURCE_EXHAUSTED. Please retry in 3.5s.")
+        return Resp()
+
+    monkeypatch.setattr(gemini, "cliente", lambda: type("Cli", (), {"models": type("M", (), {"generate_content": staticmethod(gen)})()})())
+    voz._gemini("Hola mundo", aislado / "v.wav", "p1")
+    assert intentos == [config.MODELO_TTS, config.MODELO_TTS] and esperas == [pytest.approx(4.5)]
+
+    monkeypatch.setattr(gemini, "cliente", lambda: type("Cli", (), {"models": type("M", (), {
+        "generate_content": staticmethod(lambda **_: (_ for _ in ()).throw(RuntimeError("402 Out of prepayment credits")))})()})())
+    with pytest.raises(RuntimeError, match="SIN facturación"):
+        voz._gemini("Hola", aislado / "v2.wav", "p1")
+
+
+def test_aprender_con_reserva_gemini_y_foto_archivo(servidor, monkeypatch):
+    from studio4 import aprender, archivo, canales, gemini, youtube
+    pedir, _ = servidor
+    canales.guardar({**canales.obtener("fourlevel"), "nicho": "videojuegos"})
+    monkeypatch.setattr(youtube, "disponible", lambda: True)
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "g-key")
+    monkeypatch.setattr(aprender, "elegir_videos", lambda _c: [{
+        "id": "v1", "titulo": "El secreto de GTA", "canal": "Ref", "vistas": 50000, "segundos": 60, "url": "https://youtu.be/v1"}])
+    monkeypatch.setattr(aprender, "transcripcion", lambda _u: {"texto": " ".join(["palabra"] * 40), "palabras": 40, "segundos": 20, "ritmo": 2.0})
+    respuestas = [
+        json.dumps({"gancho": "Nadie miró detrás de la puerta.", "por_que_engancha": "curiosidad", "voz": "cercana",
+                    "presenta_lo_desconocido": "con dato", "estructura": ["1", "2"], "recursos": ["giro"], "cierre": "fin", "temas": "gta"}),
+        json.dumps({"resumen": "Arrancan en la escena.", "voz": "directa", "ganchos": [{"patron": "dato", "ejemplo": "Nadie miró", "de": "Ref"}],
+                    "presentar": "en acción", "estructuras": [{"nombre": "corto", "para": "corto", "pasos": ["a", "b"]}],
+                    "recursos": ["cifra"], "cierres": ["seco"], "temas_que_funcionan": ["gta"], "evitar": ["saludos"],
+                    "reglas": ["Entra directo al plano."]}),
+    ]
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: respuestas.pop(0))
+    datos = aprender.estudiar("fourlevel")
+    assert datos["manual"]["reglas"] == ["Entra directo al plano."]
+    assert "MANUAL DEL CANAL" in aprender.para_guion("fourlevel")
+    st, body = pedir("GET", "/api/manual")
+    assert st == 200 and json.loads(body)["datos"]["manual"]["resumen"] == "Arrancan en la escena."
+
+    p = _produccion("p-archivo", escenas=2)
+    monkeypatch.setattr(archivo, "buscar", lambda q: [{"titulo": "File:Faro.jpg", "url": "https://x/f.jpg", "ancho": 800, "alto": 600, "fecha": "1920"}])
+    monkeypatch.setattr(archivo, "toma", lambda titulo, carp, orden, an, al: {
+        "archivo": "tomas/escena_01_archivo.png", "tipo": "imagen", "origen": "archivo", "fuente": titulo, "sha": "abc"})
+    st, body = pedir("GET", "/api/archivo?q=faro")
+    assert st == 200 and json.loads(body)["fotos"][0]["titulo"] == "File:Faro.jpg"
+    st, body = pedir("POST", "/api/escena/archivo", {"Content-Type": "application/json"}, json.dumps({"orden": 1, "titulo": "File:Faro.jpg"}).encode())
+    assert st == 200 and produccion.cargar(p["id"])["escenas"][0]["tomas"][0]["origen"] == "archivo"
+
+
+

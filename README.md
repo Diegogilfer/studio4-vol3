@@ -1,39 +1,39 @@
-# STUDIO #4 Vol. 3
+# STUDIO #4 Vol. 4
 
-Vídeos cortos hechos solo con Google: lo **gratis** de Gemini y tu **suscripción** de Google Flow.
-El montaje final se hace en tu PC con FFmpeg, también gratis.
+Estudio de vídeo local (Windows) que convierte una idea, un guion o un vídeo existente en **tres entregas listas para publicar** (vídeo completo, Reels y Shorts, con portadas y textos), organizado por **canal**.
 
 ```
- Tema ─► Gemini (gratis) ─► guion
+ Tema ─► Fuentes del canal + Wikipedia + YouTube ─► Dossier
                 │
                 ▼
-         Gemini (gratis) ─► escenas: texto de voz + prompt para Flow (biblia visual fija)
+         DeepSeek (o Gemini gratis) ─► Guion con las reglas y el manual del canal
+                │
+                ▼
+         Gemini (gratis) ─► Escenas: texto de voz + prompt para Flow (biblia visual fija)
                 │                                   │
                 ▼                                   ▼
-   Gemini TTS (gratis) o ElevenLabs        Google Flow / Veo (tu suscripción)
-   una sola llamada por vídeo              tú pegas el prompt y generas;
-   + tiempo de cada escena y palabra       la extensión trae el clip a su escena
+   Gemini TTS (gratis) o ElevenLabs        Google Flow (extensión), tarjetas gratis,
+   una sola llamada por vídeo              fotos de archivo (Wikimedia) o API con tope
+   + tiempo de cada escena y palabra
                 │                                   │
                 └──────────────► FFmpeg (tu PC) ◄───┘
-                     cada clip se ajusta a su trozo de voz,
-                     sonido ambiente de Veo bajo la voz,
-                     subtítulos palabra a palabra, −14 LUFS
+                     carátula de entrada, cada clip a su trozo de voz,
+                     sonido ambiente bajo la voz, subtítulos ASS, −14 LUFS
                                    │
                                    ▼
-                     producciones/<id>/final.mp4
+                     Vídeo completo + Reels + Shorts + Portadas
 ```
 
 ## Qué es gratis y qué no
 
 | Paso | Servicio | Coste |
 |---|---|---|
-| Guion y escenas | Gemini API (AI Studio), nivel gratis | 0 $ (2 llamadas por vídeo) |
-| Voz | Gemini TTS, nivel gratis | 0 $ (1 llamada por vídeo; en preview hay ~50 al día) |
-| Voz (opcional) | ElevenLabs, plan gratis | 0 $, pero 10.000 créditos/mes, **sin uso comercial** y hay que citarlo |
-| Vídeo | Google Flow (Veo) en el navegador | tus créditos del plan; Flow **no tiene API**, por eso va con la extensión |
-| Render | FFmpeg en tu PC | 0 $ |
-
-La generación de imagen y de vídeo **por API** (Imagen/Veo) se cobra aparte, así que STUDIO no la usa.
+| Investigación, escenas, entregas | Gemini API (AI Studio), nivel gratis + Wikipedia + YouTube Data API v3 | 0 $ |
+| Guion | DeepSeek (`deepseek-v4-flash`) o Gemini gratis (`STUDIO4_SIN_PAGO=1`) | Céntimos o 0 $ |
+| Voz | Gemini TTS, nivel gratis (ElevenLabs opcional) | 0 $ |
+| Visuales gratis | Google Flow en el navegador (con la extensión), tarjetas de diseño (Edge headless) y fotos de dominio público (Wikimedia Commons) | 0 $ / tu suscripción |
+| Visuales por API (opcional) | fal.ai o Google Imagen/Veo con tope de gasto por producción (`Presupuesto`) | Prepago con tope |
+| Render y transcripción | FFmpeg, yt-dlp y faster-whisper en tu PC | 0 $ |
 
 ## Instalar
 
@@ -96,20 +96,33 @@ servidor.py            panel local (solo 127.0.0.1; solo sirve web/ y los medios
 iniciar.bat            arranca el panel y abre el navegador
 studio4/
   config.py            claves, modelos, formatos, estilos y el código de vinculación con Flow
+  canales.py           canales (nicho, tono, público, voz, referentes y fuentes de confianza)
+  tendencias.py        tendencias de YouTube y análisis de canales referentes
+  aprender.py          estudia transcripciones del nicho y escribe el manual del canal
+  fuentes.py           lee las webs de confianza del canal (respeta robots.txt)
+  investigacion.py     dossier con hechos verificados (Wikipedia ES/EN o Google)
+  referencias.py       fotos, documentos, enlaces y lugares de Google Maps aportados por el autor
+  youtube.py           YouTube Data API v3 (solo lectura)
+  deepseek.py          cliente de DeepSeek en streaming
   gemini.py            cliente de Gemini con modelos de reserva y reintentos
-  investigacion.py     fase 0: dossier con fuentes (Google o Wikipedia)
-  deepseek.py          cliente de DeepSeek
-  guion.py             fase 1: guion corto y largo (DeepSeek; Gemini de reserva)
-  director.py          fase 2: escenas + biblia visual + prompt de Flow por escena
-  voz.py               fase 3: Gemini TTS / ElevenLabs y tiempos de cada escena y palabra
-  flow.py              fase 4: recibe los clips de la extensión y los coloca en su escena
-  render.py            fase 5: FFmpeg
-  subtitulos.py        subtítulos ASS palabra a palabra
+  guion.py             guion corto y largo (DeepSeek; Gemini de reserva)
+  director.py          escenas + biblia visual + fichas de personajes + prompt de Flow
+  voz.py               Gemini TTS / ElevenLabs y tiempos de cada escena y palabra
+  flow.py              recibe los clips de la extensión y los coloca en su escena
+  archivo.py           fotos históricas de dominio público (Wikimedia Commons)
+  tarjetas.py          tarjetas de diseño y carátula de entrada con Edge headless
+  visuales_api.py      imágenes y vídeo por API (fal.ai / Google) con presupuesto máximo
+  importar.py          importa un vídeo propio (yt-dlp + faster-whisper + cortes de plano)
+  render.py            montaje con FFmpeg y vista previa de subtítulos
+  subtitulos.py        subtítulos ASS palabra a palabra (viral o cine) y sonidos
+  sonidos.py           detecta ruidos y música en las tomas para los subtítulos
+  entregas.py          paquete de 3 formatos (completo, Reels y Shorts)
   miniaturas.py        miniaturas de YouTube, Shorts, Reels y feed (Gemini elige, Pillow compone)
+  carpetas.py          estructura en Vídeos\STUDIO 4\<canal>\
   produccion.py        guarda cada producción en producciones/<id>/proyecto.json y lanza las fases
-  medios.py            utilidades de FFmpeg/FFprobe
-  registro.py          consumo del mes (llamadas a Gemini, tomas de Flow, créditos de ElevenLabs)
-web/                   el panel, con el diseño del STUDIO #4 original
+  medios.py            utilidades de FFmpeg/FFprobe con tiempos límite
+  registro.py          consumo del mes (llamadas, tokens y gasto en $)
+web/                   el panel web (Inicio, Crear, Canales, Tendencias, Flow, Render, Entregas)
 extension-flow/        extensión de Chrome/Edge para Google Flow
 producciones/          tus vídeos (no se suben a git)
 ```

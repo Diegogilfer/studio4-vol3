@@ -277,8 +277,11 @@ def actualizar(cid: str) -> dict[str, Any]:
                              "videos": [{k: v[k] for k in ("titulo", "vistas", "vistas_hora", "segundos")} for v in r["videos"][:8]]}
                             for r in referentes],
              "rapidos": sorted(videos, key=lambda v: -v["vistas_hora"])[:12]}
-    _archivo(cid).parent.mkdir(parents=True, exist_ok=True)
-    _archivo(cid).write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    ruta = _archivo(cid)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ruta.with_suffix(".tmp")
+    tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(ruta)
     return datos
 
 

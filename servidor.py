@@ -23,8 +23,8 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import (canales, carpetas, config, flow, guion, miniaturas, produccion, referencias, registro, render, subtitulos,
-                     tendencias, voz, youtube)  # noqa: E402
+from studio4 import (aprender, archivo, canales, carpetas, config, flow, guion, miniaturas, produccion, referencias, registro,
+                     render, subtitulos, tendencias, voz, youtube)  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("studio4.servidor")
@@ -101,6 +101,12 @@ class Panel(BaseHTTPRequestHandler):
     def _solo_panel(self) -> None:
         origen = self.headers.get("Origin")
         if origen is not None and origen not in ORIGENES_PANEL:
+            raise Error(403, "Solo el panel de STUDIO 4 puede hacer esto")
+        sitio = self.headers.get("Sec-Fetch-Site")
+        if sitio is not None and sitio not in ("same-origin", "none"):
+            raise Error(403, "Solo el panel de STUDIO 4 puede hacer esto")
+        ref = self.headers.get("Referer")
+        if ref is not None and not any(ref == o or ref.startswith(o + "/") for o in ORIGENES_PANEL):
             raise Error(403, "Solo el panel de STUDIO 4 puede hacer esto")
 
     def _solo_extension(self) -> None:
@@ -202,6 +208,11 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(produccion.listar(canales.activo()["id"]))
         if ruta == "/api/tendencias":
             return self._json(tendencias.estado(canales.activo()["id"]))
+        if ruta == "/api/manual":
+            return self._json(aprender.estado(canales.activo()["id"]))
+        if ruta == "/api/archivo":
+            q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0].strip()
+            return self._json({"fotos": archivo.buscar(q) if len(q) >= 2 else []})
         if ruta == "/api/panel":   # panel de control: todos los canales con sus redes y su YouTube
             leer = youtube.canal if youtube.disponible() else (lambda _u: None)
             return self._json({"activo": canales.activo()["id"],
@@ -226,9 +237,11 @@ class Panel(BaseHTTPRequestHandler):
         if p:
             p["ia_detectada"] = guion.frases_prohibidas(p.get("guion", ""))
             p["hermanas"] = [x for x in produccion.listar() if p.get("familia") and x["familia"] == p["familia"]]
+        canal = canales.activo()
         return {
             "produccion": p,
-            "canal": canales.activo(),
+            "canal": canal,
+            "manual_fecha": (aprender.leer(canal["id"]) or {}).get("fecha", ""),
             "canales": [{"id": c["id"], "nombre": c["nombre"]} for c in canales.listar()],
             "extension": flow.estado_extension(),
             "codigo": config.token_flow(),
@@ -313,6 +326,9 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"ok": True, "canal": canales.guardar(self._cuerpo_json())})
         if ruta == "/api/tendencias":
             tendencias.lanzar(canales.activo()["id"])
+            return self._json({"ok": True})
+        if ruta == "/api/manual":
+            aprender.lanzar(canales.activo()["id"])
             return self._json({"ok": True})
         if ruta == "/api/canales/parecidos":   # canales del mismo nicho para tomarlos de referencia
             c = canales.obtener(str(self._cuerpo_json().get("id", "")) or canales.activo()["id"])
@@ -399,6 +415,9 @@ class Panel(BaseHTTPRequestHandler):
             d = self._cuerpo_json()
             produccion.editar_escena(pid, int(d.pop("orden")), d)
             return self._json({"ok": True})
+        if ruta == "/api/escena/archivo":   # foto histórica de dominio público (Wikimedia Commons)
+            d = self._cuerpo_json()
+            return self._json({"ok": True, "toma": produccion.poner_foto_archivo(pid, int(d.get("orden", 0)), str(d.get("titulo", "")))})
         if ruta == "/api/escena/activa":
             flow.marcar_activa(int(self._cuerpo_json().get("escena", 0)))
             return self._json({"ok": True})

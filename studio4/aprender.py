@@ -10,15 +10,19 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import canales, config, deepseek, registro, tendencias, youtube
+from . import canales, config, deepseek, gemini, registro, tendencias, youtube
 
 logger = logging.getLogger("studio4.aprender")
+_lock = threading.Lock()
+_estado: dict[str, dict[str, Any]] = {}
 
 POR_REFERENTE = 3          # vídeos más vistos de cada referente
 DEL_NICHO = 3              # y los más vistos de la semana en el nicho
@@ -57,6 +61,18 @@ def leer(cid: str) -> dict[str, Any] | None:
         return json.loads(_archivo(cid).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+
+
+def _generar_json(sistema: str, prompt: str, *, temperatura: float, detalle: str, produccion: str) -> dict[str, Any]:
+    if deepseek.disponible():
+        try:
+            return deepseek.generar_json(sistema, prompt, temperatura=temperatura, detalle=detalle, produccion=produccion)
+        except RuntimeError as e:
+            logger.warning("%s: uso Gemini de reserva.", e)
+    crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=sistema, temperatura=temperatura,
+                           detalle=f"{detalle} (reserva)", produccion=produccion)
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    return json.loads(m.group(0) if m else crudo)
 
 
 def transcripcion(url: str) -> dict[str, Any] | None:
@@ -109,20 +125,20 @@ def _analizar(v: dict[str, Any], t: dict[str, Any], cid: str) -> dict[str, Any]:
     muestra = " ".join(palabras[:PALABRAS_POR_VIDEO])
     if len(palabras) > PALABRAS_POR_VIDEO:   # y el final, para ver cómo cierra
         muestra += " […] " + " ".join(palabras[-250:])
-    a = deepseek.generar_json(SISTEMA_VIDEO, f"Vídeo: «{v['titulo']}» de {v['canal']} · {v['vistas']:,} vistas · "
-                              f"{v['segundos']} s · {t['ritmo']} palabras por segundo\n\nTRANSCRIPCIÓN:\n{muestra}".replace(",", "."),
-                              temperatura=0.3, detalle=f"aprender · {v['canal']}", produccion=cid)
+    a = _generar_json(SISTEMA_VIDEO, f"Vídeo: «{v['titulo']}» de {v['canal']} · {v['vistas']:,} vistas · "
+                      f"{v['segundos']} s · {t['ritmo']} palabras por segundo\n\nTRANSCRIPCIÓN:\n{muestra}".replace(",", "."),
+                      temperatura=0.3, detalle=f"aprender · {v['canal']}", produccion=cid)
     return {**a, "titulo": v["titulo"], "canal": v["canal"], "vistas": v["vistas"], "segundos": v["segundos"],
             "ritmo": t["ritmo"], "url": v["url"]}
 
 
 def estudiar(cid: str, avisar: Callable[[str, int], None] = lambda *_: None) -> dict[str, Any]:
-    """Lee los vídeos que funcionan en el nicho del canal y escribe su manual. Gratis salvo DeepSeek (céntimos)."""
+    """Lee los vídeos que funcionan en el nicho del canal y escribe su manual. Usa DeepSeek o Gemini (gratis)."""
     canal = canales.obtener(cid)
     if not youtube.disponible():
         raise RuntimeError("Hace falta la conexión con YouTube (clave o cuenta) para buscar los vídeos del nicho.")
-    if not deepseek.disponible():
-        raise RuntimeError("Hace falta DEEPSEEK_API_KEY para estudiar los guiones.")
+    if not deepseek.disponible() and not config.GEMINI_API_KEY:
+        raise RuntimeError("Hace falta DEEPSEEK_API_KEY o GEMINI_API_KEY para estudiar los guiones.")
     if not canal.get("referentes") and not canal.get("nicho"):
         raise ValueError("Pon en el canal su nicho o algún canal referente para saber qué estudiar.")
     avisar("Buscando los vídeos que mejor funcionan en tu nicho", 5)
@@ -143,22 +159,48 @@ def estudiar(cid: str, avisar: Callable[[str, int], None] = lambda *_: None) -> 
             if t:
                 estudiados.append(_analizar(v, t, cid))
                 cache[v["id"]] = estudiados[-1]
-                cache_ruta.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+                tmp_c = cache_ruta.with_suffix(".tmp")
+                tmp_c.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+                tmp_c.replace(cache_ruta)
         except Exception as e:  # noqa: BLE001 - un vídeo sin subtítulos o que falla no para el resto
             logger.warning("No pude estudiar %s: %s", v["url"], e)
     if not estudiados:
         raise RuntimeError("Ningún vídeo del nicho tenía subtítulos que leer. Prueba con otros referentes.")
     avisar(f"Escribiendo el manual con {len(estudiados)} vídeos estudiados", 85)
-    manual = deepseek.generar_json(
+    manual = _generar_json(
         SISTEMA_MANUAL, f"Canal: {canal['nombre']} · nicho: {canal.get('nicho') or '—'} · tono: {canal.get('tono') or '—'}\n\n"
         "ANÁLISIS DE LOS VÍDEOS QUE FUNCIONAN:\n" + json.dumps(estudiados, ensure_ascii=False),
         temperatura=0.4, detalle="manual del canal", produccion=cid)
     datos = {"canal": cid, "fecha": time.strftime("%Y-%m-%d %H:%M"), "manual": manual,
              "videos": [{k: e[k] for k in ("titulo", "canal", "vistas", "segundos", "ritmo", "url", "gancho")} for e in estudiados],
              "ritmo": round(sum(e["ritmo"] for e in estudiados) / len(estudiados), 2)}
-    _archivo(cid).write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    ruta = _archivo(cid)
+    tmp = ruta.with_suffix(".tmp")
+    tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(ruta)
     registro.apuntar("Aprender del nicho", f"{len(estudiados)} vídeos estudiados para {canal['nombre']}", unidad="manuales")
     return datos
+
+
+def lanzar(cid: str) -> None:
+    canales.obtener(cid)
+    with _lock:
+        if _estado.get(cid, {}).get("ocupado"):
+            return
+        _estado[cid] = {"ocupado": True, "fase": "Empezando", "error": ""}
+
+    def correr():
+        try:
+            estudiar(cid, avisar=lambda f, _n=0: _estado[cid].update(fase=f))
+            _estado[cid].update(ocupado=False, fase="")
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Manual de %s", cid)
+            _estado[cid].update(ocupado=False, error=str(e))
+    threading.Thread(target=correr, name=f"studio4-manual-{cid}", daemon=True).start()
+
+
+def estado(cid: str) -> dict[str, Any]:
+    return {"datos": leer(cid), **_estado.get(cid, {"ocupado": False, "fase": "", "error": ""})}
 
 
 def para_guion(cid: str) -> str:

@@ -11,21 +11,27 @@ from pathlib import Path
 logger = logging.getLogger("studio4.medios")
 
 
-def ffmpeg(*args: str, cwd: str | Path | None = None) -> str:
+def ffmpeg(*args: str, cwd: str | Path | None = None, timeout: int = 600) -> str:
     """Ejecuta ffmpeg y devuelve stderr (ahí escribe ffmpeg sus análisis). Lanza error con el final del log."""
     cmd = ["ffmpeg", "-hide_banner", "-y", *args]
-    r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    try:
+        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(f"FFmpeg tardó más de {timeout} s y se detuvo para no bloquear la producción.") from e
     if r.returncode != 0:
         raise RuntimeError(f"FFmpeg falló: {r.stderr.strip()[-800:]}")
     return r.stderr
 
 
-def info(ruta: str | Path) -> dict:
-    r = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
-         "-of", "json", str(ruta)],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-    )
+def info(ruta: str | Path, timeout: int = 30) -> dict:
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height",
+             "-of", "json", str(ruta)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise ValueError(f"FFprobe tardó demasiado al leer: {Path(ruta).name}") from e
     if r.returncode != 0:
         raise ValueError(f"No es un archivo de vídeo/imagen/audio válido: {Path(ruta).name}")
     d = json.loads(r.stdout or "{}")

@@ -44,7 +44,7 @@ FAL_PRECIO_IMAGEN, FAL_PRECIO_VIDEO_SEGUNDO = 0.04, 0.15
 
 
 def con_fal() -> bool:
-    return bool(config.FAL_KEY)
+    return bool(config.FAL_KEY) and not config.SIN_PAGO
 
 
 def precios() -> tuple[float, float]:
@@ -161,6 +161,8 @@ def estimar(escenas: list[dict], personajes: int = 0) -> dict:
 
 def imagen(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, referencia: Optional[Path] = None,
            produccion: str = "", referencias: Optional[list[Path]] = None) -> Path:
+    if config.SIN_PAGO:
+        raise SinFacturacion("STUDIO4_SIN_PAGO=1 está activo: las imágenes y vídeos por API de pago están apagados.")
     refs = [r for r in ([referencia] if referencia else []) + list(referencias or []) if r and r.exists()][:3]
     if con_fal():
         return _imagen_fal(prompt, aspecto, destino, presupuesto, refs, produccion)
@@ -252,6 +254,8 @@ def _video_fal(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuest
 
 def video(prompt: str, aspecto: str, destino: Path, presupuesto: Presupuesto, imagen_inicial: Optional[Path] = None,
           produccion: str = "", segundos: int = SEGUNDOS_VIDEO) -> Path:
+    if config.SIN_PAGO:
+        raise SinFacturacion("STUDIO4_SIN_PAGO=1 está activo: las imágenes y vídeos por API de pago están apagados.")
     if con_fal():
         return _video_fal(prompt, aspecto, destino, presupuesto, imagen_inicial, produccion, segundos)
     coste = segundos * PRECIO_VIDEO_SEGUNDO

@@ -111,23 +111,34 @@ def _gemini(texto: str, destino: Path, produccion: str, voz_nombre: str | None =
             )
         ),
     )
+    import time
     ultimo: Exception | None = None
     for modelo in dict.fromkeys([config.MODELO_TTS, *config.MODELOS_TTS_RESERVA]):
-        try:
-            estilo = (config.ESTILO_VOZ + ". Las indicaciones entre corchetes son dirección de actor: interprétalas, "
-                      "nunca las leas en voz alta") if "[" in texto else config.ESTILO_VOZ
-            r = cliente().models.generate_content(model=modelo, contents=f"{estilo}:\n\n{texto}", config=cfg)
-            pcm = next(p.inline_data.data for p in r.candidates[0].content.parts if p.inline_data and p.inline_data.data)
-            with wave.open(str(destino), "wb") as w:
-                w.setnchannels(1)
-                w.setsampwidth(2)
-                w.setframerate(24000)
-                w.writeframes(pcm)
-            registro.apuntar("Gemini TTS", f"{len(texto)} caracteres · {modelo}", produccion=produccion)
-            return
-        except Exception as e:  # noqa: BLE001
-            ultimo = e
-            logger.warning("Gemini TTS %s: %s", modelo, e)
+        for intento in range(2 if modelo == config.MODELO_TTS else 1):
+            try:
+                estilo = (config.ESTILO_VOZ + ". Las indicaciones entre corchetes son dirección de actor: interprétalas, "
+                          "nunca las leas en voz alta") if "[" in texto else config.ESTILO_VOZ
+                r = cliente().models.generate_content(model=modelo, contents=f"{estilo}:\n\n{texto}", config=cfg)
+                pcm = next(p.inline_data.data for p in r.candidates[0].content.parts if p.inline_data and p.inline_data.data)
+                with wave.open(str(destino), "wb") as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(24000)
+                    w.writeframes(pcm)
+                registro.apuntar("Gemini TTS", f"{len(texto)} caracteres · {modelo}", produccion=produccion)
+                return
+            except Exception as e:  # noqa: BLE001
+                ultimo = e
+                if "402" in str(e) or "prepayment credits" in str(e):
+                    raise RuntimeError("Tu proyecto de Google se quedó sin saldo de prepago (402): crea una clave de API en un "
+                                       "proyecto SIN facturación para volver al nivel gratuito.") from e
+                logger.warning("Gemini TTS %s: %s", modelo, e)
+                if intento == 0 and ("429" in str(e) or "RESOURCE_EXHAUSTED" in str(e)) and "limit: 0" not in str(e):
+                    m = re.search(r"retry in (\d+(?:\.\d+)?)s", str(e), re.IGNORECASE)
+                    espera = min(40.0, float(m.group(1)) + 1.0) if m else 6.0
+                    time.sleep(espera)
+                    continue
+                break
     raise RuntimeError(f"Gemini TTS no generó audio: {ultimo}")
 
 

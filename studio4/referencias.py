@@ -132,10 +132,35 @@ def _jpeg(ruta: Path) -> bytes:
         return buf.getvalue()
 
 
+def _url_publica(url: str) -> str:
+    """Impide que un enlace apunte al propio PC o a una red interna."""
+    import ipaddress
+    import socket
+    p = urllib.parse.urlparse(url)
+    host = (p.hostname or "").strip().lower()
+    if p.scheme not in ("http", "https") or not host or host in ("localhost", "localhost.localdomain"):
+        raise ValueError("El enlace debe ser una página web pública.")
+    try:
+        ips = [ipaddress.ip_address(host)]
+    except ValueError:
+        ips = [ipaddress.ip_address(info[4][0]) for info in socket.getaddrinfo(host, None)]
+    if any(ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved for ip in ips):
+        raise ValueError("El enlace no puede apuntar a una dirección interna.")
+    return url
+
+
 def _texto_web(url: str) -> str:
-    r = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (STUDIO 4)"})
-    r.raise_for_status()
-    t = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer|header)[^>]*>.*?</\1>", " ", r.text)
+    _url_publica(url)
+    with requests.get(url, timeout=20, stream=True, headers={"User-Agent": "Mozilla/5.0 (STUDIO 4)"}) as r:
+        r.raise_for_status()
+        trozos, total = [], 0
+        for b in r.iter_content(65536):
+            trozos.append(b)
+            total += len(b)
+            if total >= 2 * 1024 * 1024:
+                break
+        crudo = b"".join(trozos).decode(r.encoding or "utf-8", errors="replace")
+    t = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer|header)[^>]*>.*?</\1>", " ", crudo)
     t = html.unescape(re.sub(r"(?s)<[^>]+>", " ", t))
     return re.sub(r"\s+", " ", t).strip()[:15000]
 

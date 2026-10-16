@@ -616,7 +616,7 @@ function pintarTrabajo(t) {
   const enCrear = p && !p.guion_aprobado && !empezarOtro;   // en Crear, solo los del guion que estás revisando
   for (const id of ["t-error", "aviso-panel"]) {
     $(id).hidden = !t.error || (id === "aviso-panel" && !enCrear);
-    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${!t.ocupado
+    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${!t.ocupado && t.reintentable !== false
       ? `<button class="boton" type="button" data-reintentar="1"><svg width="14" height="14"><use href="#i-renovar"/></svg>Reintentar</button>` : ""}` : "";
   }
 }
@@ -743,7 +743,8 @@ function pintarEscenas({ escenas, activa }) {
             ${importado ? `<button class="boton" data-guardar-texto="${e.orden}">Guardar texto</button>`
               : `<button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>`}
             <label class="boton">Subir clip<input type="file" accept="video/*,image/*" data-subir="${e.orden}"></label>
-            ${importado ? "" : `<button class="boton" data-anadir-tras="${e.orden}">Añadir escena después</button>
+            ${importado ? "" : `<button class="boton" type="button" data-archivo="${e.orden}" title="Buscar foto histórica de dominio público en Wikimedia Commons">Foto de archivo</button>
+            <button class="boton" data-anadir-tras="${e.orden}">Añadir escena después</button>
             <button class="boton" data-quitar-escena="${e.orden}">Quitar escena</button>`}
           </div>
         </div>
@@ -773,6 +774,16 @@ $("escenas").addEventListener("click", async (ev) => {
       await api("/api/escena/anadir", { despues: Number(t.dataset.crearEscena), texto_voz: $("nueva-voz").value,
         que_se_ve: $("nueva-ve").value, tipo_clip: document.querySelector('input[name="nueva-tipo"]:checked').value });
       anadirTras = null;
+    } else if (t.dataset.archivo) {
+      const n = Number(t.dataset.archivo);
+      const q = prompt("Buscar foto de dominio público (Wikimedia Commons):", p.escenas[n - 1]?.accion_en || p.tema || "");
+      if (!q || q.trim().length < 2) return;
+      t.disabled = true; t.textContent = "Buscando…";
+      try {
+        const { fotos } = await api(`/api/archivo?q=${encodeURIComponent(q.trim())}`);
+        if (!fotos.length) { aviso("No encontré fotos de dominio público para esa búsqueda."); return; }
+        await api("/api/escena/archivo", { orden: n, titulo: fotos[0].titulo });
+      } finally { t.disabled = false; t.textContent = "Foto de archivo"; }
     } else if (t.dataset.quitarEscena) {
       const n = Number(t.dataset.quitarEscena);
       if (!confirm(`¿Quitar la escena ${n}? Su texto sale del guion y la voz se rehace.`)) return;
@@ -1192,9 +1203,9 @@ $("pc-lista").addEventListener("click", async (ev) => {
 // ============================================================== Tendencias
 const minSeg = (s) => (s >= 60 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} min` : `${s} s`);
 async function cargarTendencias() {
-  let t;
-  try { t = await api("/api/tendencias"); } catch (e) { return aviso(e); }
-  siCambia("tendencias", { t, c: estado?.canal }, () => pintarTendencias(t));
+  let t, man;
+  try { [t, man] = await Promise.all([api("/api/tendencias"), api("/api/manual")]); } catch (e) { return aviso(e); }
+  siCambia("tendencias", { t, man, c: estado?.canal }, () => pintarTendencias(t, man));
 }
 // Gráficas de barras de una serie (color del tema), con el dato al pasar el ratón.
 function barras(titulo, filas, opciones = {}) {
@@ -1204,12 +1215,25 @@ function barras(titulo, filas, opciones = {}) {
       <span class="barra-pista"><i style="width:${Math.max(2, (100 * f.valor) / max)}%"></i></span><b>${esc(f.texto)}</b></li>`).join("")}</ol></figure>`;
 }
 const compactoNum = (n) => new Intl.NumberFormat("es-ES", { notation: "compact", maximumFractionDigits: 1 }).format(n);
-function pintarTendencias(t) {
+function pintarTendencias(t, man = {}) {
   const c = estado?.canal || {};
   $("td-canal").textContent = ["Tendencias", c.nombre, t.datos ? fecha(t.datos.fecha) : ""].filter(Boolean).join(" · ");
-  $("td-trabajo").hidden = !t.ocupado; $("td-fase").textContent = t.fase ? `${t.fase}…` : "";
-  $("td-actualizar").disabled = t.ocupado;
-  $("td-error").hidden = !t.error; $("td-error").textContent = t.error ? `No se pudieron actualizar: ${t.error}` : "";
+  const ocupado = t.ocupado || man.ocupado;
+  const faseTxt = t.ocupado ? t.fase : man.ocupado ? man.fase : "";
+  $("td-trabajo").hidden = !ocupado; $("td-fase").textContent = faseTxt ? `${faseTxt}…` : "";
+  $("td-actualizar").disabled = ocupado;
+  if ($("td-aprender")) $("td-aprender").disabled = ocupado;
+  const err = t.error || man.error;
+  $("td-error").hidden = !err; $("td-error").textContent = err ? `No se pudieron actualizar: ${err}` : "";
+  if ($("td-manual-bloque")) {
+    const md = man.datos?.manual;
+    $("td-manual-bloque").hidden = !md;
+    if (md) {
+      $("td-manual-sum").textContent = `Manual aprendido del canal · ${man.datos.fecha || ""} (${(man.datos.videos || []).length} vídeos estudiados)`;
+      $("td-manual").innerHTML = `<p>${esc(md.resumen || "")}</p><p class="meta"><b>Voz:</b> ${esc(md.voz || "")}</p>
+        <ul>${(md.reglas || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
+    }
+  }
   $("td-nicho").hidden = !!c.nicho;
   const d = t.datos;
   $("td-cuerpo").hidden = !d;
@@ -1260,6 +1284,9 @@ function pintarTendencias(t) {
 $("td-nicho").addEventListener("click", () => { $("abrir-ajustes").click(); });
 $("td-actualizar").addEventListener("click", async () => {
   try { await api("/api/tendencias", {}); await cargarTendencias(); } catch (e) { aviso(e); }
+});
+$("td-aprender")?.addEventListener("click", async () => {
+  try { await api("/api/manual", {}); await cargarTendencias(); } catch (e) { aviso(e); }
 });
 // Un clic: la idea (de Tendencias, de un nicho o de Inicio) se convierte en producción con lo de siempre del canal.
 async function crearRapido(idea, version = "corto", boton = null) {

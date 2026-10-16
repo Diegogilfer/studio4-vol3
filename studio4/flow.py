@@ -90,17 +90,21 @@ def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = 
         for bloque in iter(lambda: f.read(1 << 20), b""):
             h.update(bloque)
     sha = h.hexdigest()
-    for e in p["escenas"]:
-        if any(t.get("sha") == sha for t in e["tomas"]):
-            return {"ok": True, "repetida": True, "escena": e["orden"]}
-
     ext = _EXT_POR_MIME.get(mime.split(";")[0].strip(), ".mp4" if tipo == "video" else ".png")
     if (pista is None and p.get("recoger_para") == "miniatura") or pista == 0:
+        for e in p["escenas"]:
+            if any(t.get("sha") == sha for t in e["tomas"]):
+                return {"ok": True, "repetida": True, "escena": e["orden"]}
         return _recibir_miniatura(pid, temporal, tipo, sha, origen)
-    orden = _escena_destino(p, pista, prompt)
     (produccion.carpeta(pid) / "tomas").mkdir(exist_ok=True)
+    resultado: dict[str, Any] = {}
 
     def cambio(q):
+        for e in q["escenas"]:
+            if any(t.get("sha") == sha for t in e["tomas"]):
+                resultado.update(ok=True, repetida=True, escena=e["orden"])
+                return
+        orden = _escena_destino(q, pista, prompt)
         esc = q["escenas"][orden - 1]
         nombre_video = re.sub(r"[^a-z0-9]+", "-", q.get("titulo", "").lower()).strip("-")[:40] or "video"
         archivo = f"tomas/{nombre_video}_escena_{orden:02d}_toma_{len(esc['tomas']) + 1:02d}_{sha[:6]}{ext}"
@@ -111,13 +115,17 @@ def recibir(temporal: Path, mime: str, prompt: str = "", pista: Optional[int] = 
         elegida = esc["tomas"][esc["elegida"]] if esc["elegida"] is not None else None
         if elegida is None or (elegida["tipo"] == "imagen" and tipo == "video"):
             esc["elegida"] = len(esc["tomas"]) - 1
+        resultado.update(ok=True, escena=orden, tipo=tipo)
 
     produccion.modificar(pid, cambio)
+    if resultado.get("repetida"):
+        return resultado
+    orden = resultado["escena"]
     servicio = {"api": "Imágenes por API", "carpeta": "Carpeta importada", "subida": "Subida a mano"}.get(origen, "Google Flow")
     registro.apuntar(servicio, f"{tipo} para escena {orden} ({inf['ancho']}x{inf['alto']})",
                      unidad="tomas", produccion=pid)
     logger.info("Flow → escena %d: %s %dx%d", orden, tipo, inf["ancho"], inf["alto"])
-    return {"ok": True, "escena": orden, "tipo": tipo}
+    return resultado
 
 
 def _recibir_miniatura(pid: str, temporal: Path, tipo: str, sha: str, origen: str) -> dict[str, Any]:

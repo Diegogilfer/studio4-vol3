@@ -217,10 +217,12 @@
     <div class="panel-cab">
       <div><span class="sello" id="td-canal">Tendencias</span><h2 class="display">Lo que se ve <em>hoy</em></h2></div>
       <div class="fila"><button class="boton" id="td-nicho" hidden>Definir nicho del canal</button>
+        <button class="boton" id="td-aprender" type="button" title="Estudia cómo cuentan tus referentes y escribe el manual del canal">Aprender del nicho</button>
         <button class="primario" id="td-actualizar">Actualizar tendencias <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
     </div>
     <div id="td-trabajo" class="trabajo" role="status" aria-live="polite" hidden><div class="trabajo-txt"><span id="td-fase"></span></div><div class="progreso"><div style="width:60%"></div></div></div>
     <p id="td-error" class="error" role="alert" hidden></p>
+    <details id="td-manual-bloque" class="tarjeta" hidden style="margin-bottom:14px"><summary id="td-manual-sum">Manual aprendido del canal</summary><div id="td-manual" style="display:grid;gap:8px;margin-top:8px"></div></details>
     <div id="td-cuerpo" hidden>
       <div class="kpis" id="td-kpis"></div>
       <div class="graficas" id="td-graficas"></div>

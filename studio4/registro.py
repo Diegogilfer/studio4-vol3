@@ -40,7 +40,9 @@ def apuntar(servicio: str, detalle: str, cantidad: int = 1, unidad: str = "llama
         fila["total"] += int(cantidad)
         if usd:
             fila["usd"] = round(fila.get("usd", 0.0) + usd, 4)
-        _CONSUMO.write_text(json.dumps(consumo, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp = _CONSUMO.with_suffix(".tmp")
+        tmp.write_text(json.dumps(consumo, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(_CONSUMO)
         linea = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), "servicio": servicio, "detalle": detalle,
                  "cantidad": int(cantidad), "unidad": unidad, "produccion": produccion, "usd": round(usd, 4)}
         with _MOVIMIENTOS.open("a", encoding="utf-8") as f:

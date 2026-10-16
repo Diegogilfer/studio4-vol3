@@ -62,7 +62,7 @@ def _uri(ruta: Path) -> str:
     return ruta.resolve().as_uri()
 
 
-def html_tarjeta(t: dict[str, Any], n: int, ancho: int, alto: int) -> str:
+def html_tarjeta(t: dict[str, Any], n: int, ancho: int, alto: int, marca: str = "FOURLEVEL") -> str:
     f1, f2, acento, luz = PALETAS[(n - 1) % len(PALETAS)]
     vertical = alto > ancho
     base = min(ancho, alto)
@@ -105,7 +105,7 @@ p {{ font: 400 {int(base * .042)}px/1.4 Sans; color: rgba(244,241,255,.82); marg
 <div class="num">{n:02d}</div>
 <div class="caja">{f'<span class="ante">{esc(t.get("antetitulo"))}</span>' if t.get("antetitulo") else ""}{grande}{comillas}
 <h1>{titular}</h1>{f"<p>{esc(t.get('dato'))}</p>" if t.get("dato") else ""}</div>
-<div class="marca">FOURLEVEL</div><div class="grano"></div></body></html>"""
+<div class="marca">{esc(marca.upper())}</div><div class="grano"></div></body></html>"""
 
 
 def html_caratula(titulo: str, subtitulo: str, marca: str, arriba: Path, abajo: Path, ancho: int, alto: int) -> str:
@@ -183,7 +183,7 @@ def _edge() -> str:
 def dibujar(t: dict[str, Any], n: int, ancho: int, alto: int, destino: Path, marca: str = "") -> Path:
     with tempfile.TemporaryDirectory() as d:
         pagina = Path(d) / "tarjeta.html"
-        pagina.write_text(html_tarjeta(t, n, ancho, alto).replace("FOURLEVEL", html.escape(marca.upper())), encoding="utf-8")
+        pagina.write_text(html_tarjeta(t, n, ancho, alto, marca), encoding="utf-8")
         # Perfil propio y temporal: con el de tu Edge abierto, cada dibujo esperaba a tu navegador (minutos por tarjeta).
         subprocess.run([_edge(), "--headless=new", f"--user-data-dir={Path(d) / 'perfil'}", "--no-first-run",
                         "--no-default-browser-check", "--disable-extensions", "--disable-gpu", "--hide-scrollbars", f"--window-size={ancho},{alto}",

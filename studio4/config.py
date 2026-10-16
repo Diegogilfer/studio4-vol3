@@ -67,12 +67,13 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
 ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_v3")   # el más natural; eleven_multilingual_v2 como alternativa
 ELEVENLABS_CREDITOS_MES = int(os.getenv("ELEVENLABS_CREDITOS_MES", "10000"))
 
-# --- Modo sin coste: STUDIO4_SIN_PAGO=1 apaga todo lo que se cobra (DeepSeek, ElevenLabs).
+# --- Modo sin coste: STUDIO4_SIN_PAGO=1 apaga todo lo que se cobra (DeepSeek, ElevenLabs, fal.ai).
 # El guion lo escribe Gemini y la voz es Gemini TTS: sirve para probar la secuencia entera gratis.
 SIN_PAGO = os.getenv("STUDIO4_SIN_PAGO", "").strip().lower() in ("1", "true", "si", "sí")
 if SIN_PAGO:
     DEEPSEEK_API_KEY = ""
     ELEVENLABS_API_KEY = ""
+    FAL_KEY = ""
 
 # --- Render -----------------------------------------------------------------------------------
 FORMATOS = {

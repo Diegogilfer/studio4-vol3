@@ -18,8 +18,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (aprender, canales, carpetas, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas, referencias, render,
-               subtitulos, tarjetas, tendencias, visuales_api, voz, youtube)
+from . import (aprender, archivo, canales, carpetas, config, director, entregas, fuentes, guion, importar, investigacion, miniaturas,
+               referencias, registro, render, subtitulos, tarjetas, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
 _lock = threading.RLock()
@@ -187,7 +187,7 @@ def _error_legible(nombre: str, e: Exception) -> str:
     return f"{_QUE_FALLO.get(nombre, f'No se pudo completar «{nombre}»')}{f': {motivo}' if motivo else ''}. Pulsa «Reintentar»."
 
 
-def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None]) -> None:
+def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None], reintentable: bool = True) -> None:
     """Lanza `fn` en un hilo. Con varias producciones (corto y largo de la misma idea), todas quedan ocupadas."""
     pids = [pid] if isinstance(pid, str) else pid
 
@@ -198,7 +198,7 @@ def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None]) -> None
             logger.exception("%s falló", nombre)
             for uno in pids:
                 modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=_error_legible(nombre, e), fase=nombre,
-                                                             reintentable=True))
+                                                             reintentable=reintentable))
         else:
             for uno in pids:
                 modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100, reintentable=False))
@@ -311,7 +311,7 @@ def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "")
                                           tema=datos.get("titulo") or q["tema"],
                                           origen={**q["origen"], **{k: datos[k] for k in ("canal",) if k in datos}}))
         preparar_carpeta(pid)
-    _en_fondo(pid, "Importar vídeo", fase)
+    _en_fondo(pid, "Importar vídeo", fase, reintentable=False)
     return pid
 
 
@@ -409,6 +409,9 @@ def reintentar(pid: str) -> None:
         raise ValueError("No hay nada que reintentar.")
     nombre = t.get("nombre", "")
     if nombre in ("Investigación y guion", "Guion"):
+        if p.get("version") == "propio":
+            completar_guion(pid, p.get("segundos"))
+            return
         # Corto y largo de la misma idea fallan juntos: se reintentan juntos, aprovechando la investigación si ya estaba.
         pids = [x["id"] for x in listar() if p.get("familia") and x["familia"] == p["familia"]
                 and not cargar(x["id"]).get("guion")] or [pid]
@@ -428,6 +431,10 @@ def reintentar(pid: str) -> None:
         generar_miniaturas(pid)
     elif nombre == "Vídeo o imagen":
         recomendar_tipos(pid)
+    elif nombre == "Tarjetas":
+        rellenar_tarjetas(pid)
+    elif nombre == "Personajes":
+        afinar_personajes(pid)
     else:
         raise ValueError("Ese paso se relanza desde su propio botón.")
 
@@ -578,7 +585,7 @@ def muestras_voz(pid: str, voces: list[str]) -> None:
             hechas.append({"voz": v, "descripcion": config.VOCES_GEMINI[v], "archivo": f"muestras/{v}.wav",
                            "generada": time.strftime("%H%M%S")})
         modificar(pid, lambda q: q.update(muestras_voz=hechas))
-    _en_fondo(pid, "Muestras de voz", fase)
+    _en_fondo(pid, "Muestras de voz", fase, reintentable=False)
 
 
 def elegir_voz(pid: str, voz_nombre: str) -> None:
@@ -690,6 +697,23 @@ def rellenar_tarjetas(pid: str) -> None:
     _en_fondo(pid, "Tarjetas", fase)
 
 
+def poner_foto_archivo(pid: str, orden: int, titulo: str) -> dict[str, Any]:
+    """Descarga una foto de dominio público de Wikimedia Commons y la pone como toma de la escena."""
+    p = cargar(pid)
+    if not 1 <= orden <= len(p["escenas"]):
+        raise ValueError(f"No existe la escena {orden}")
+    fmt = config.FORMATOS[p["formato"]]
+    toma = archivo.toma(titulo, carpeta(pid), orden, fmt["ancho"], fmt["alto"])
+
+    def cambio(q):
+        esc = q["escenas"][orden - 1]
+        esc["tomas"].append({**toma, "ancho": fmt["ancho"], "alto": fmt["alto"], "recibida": time.strftime("%H:%M:%S")})
+        esc["elegida"] = len(esc["tomas"]) - 1
+    modificar(pid, cambio)
+    registro.apuntar("Archivo (Wikimedia Commons)", f"escena {orden} · {titulo[:60]}", unidad="tomas", produccion=pid)
+    return toma
+
+
 def estimar_visuales_api(pid: str) -> dict[str, Any]:
     p = cargar(pid)
     return visuales_api.estimar(p["escenas"], personajes=len(p.get("fichas") or []))
@@ -718,7 +742,7 @@ def generar_visuales_api(pid: str, limite_usd: float, con_video: list[int] | Non
             modificar(pid, lambda q: q.update(revision_api=res["revisiones"], fallidas_api=res["fallidas"]))
         finally:   # lo gastado se apunta aunque algo falle a mitad
             modificar(pid, lambda q: q.update(gasto_api=round(q.get("gasto_api", 0.0) + presupuesto.gastado, 4)))
-    _en_fondo(pid, "Imágenes por API", fase)
+    _en_fondo(pid, "Imágenes por API", fase, reintentable=False)
 
 
 # --- Miniaturas --------------------------------------------------------------------------------
