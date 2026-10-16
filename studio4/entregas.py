@@ -67,7 +67,9 @@ def _ajustar(p: dict, m: dict, minimo: float, maximo: float) -> dict:
 def elegir(p: dict[str, Any]) -> dict[str, Any]:
     linea = "\n".join(f"Escena {e['orden']} ({t['ini']:.1f}-{t['fin']:.1f} s): {e['texto_voz']}"
                       for e, t in zip(p["escenas"], p["voz"]["escenas"]))
-    crudo = gemini.generar(f"Título del vídeo: {p.get('titulo') or p['tema']}\nDuración total: {p['voz']['duracion']:.0f} s\n\n{linea}",
+    publico = p.get("publico") or ""   # títulos, descripciones y hashtags pensados para ese público
+    para = f"\nPúblico: {publico}: escribe los títulos, descripciones y hashtags para él." if publico and publico != "todos" else ""
+    crudo = gemini.generar(f"Título del vídeo: {p.get('titulo') or p['tema']}\nDuración total: {p['voz']['duracion']:.0f} s{para}\n\n{linea}",
                            sistema=SISTEMA, esquema=Paquete, temperatura=0.5, detalle="momentos para Reels y Shorts",
                            produccion=p["id"])
     m = re.search(r"\{.*\}", crudo, re.DOTALL)

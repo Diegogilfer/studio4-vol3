@@ -7,6 +7,20 @@
 const POR_DEFECTO = { servidor: "http://127.0.0.1:8000", codigo: "", activo: true };
 const VERSION = chrome.runtime.getManifest().version;
 
+// Latido cada 30 s desde el fondo: Chrome frena los temporizadores de una pestaña que no estás mirando, y la
+// conexión parpadeaba («conectado / desconectado») cada vez que mirabas STUDIO en vez de Flow.
+chrome.alarms.create("latido", { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener(async (alarma) => {
+  if (alarma.name !== "latido") return;
+  const a = await ajustes();
+  if (!a.codigo) return;
+  const flow = await chrome.tabs.query({ url: "https://labs.google/*" }).catch(() => []);
+  fetch(`${a.servidor.replace(/\/+$/, "")}/api/flow/hola`, {
+    method: "POST",
+    headers: { "X-Studio4-Token": a.codigo, "X-Flow-Version": VERSION, "X-Flow-Abierto": flow.length ? "1" : "0" },
+  }).catch(() => {});   // STUDIO cerrado: nada que hacer hasta el próximo latido
+});
+
 // El icono S4 abre STUDIO en el panel lateral de Chrome, al lado de Flow (los ajustes están abajo del panel).
 chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 

@@ -378,13 +378,13 @@ def test_idea_investiga_una_vez_y_escribe_corto_y_largo(aislado, monkeypatch):
 def test_aprobar_guion_crea_escenas_y_voz(aislado, monkeypatch):
     monkeypatch.setattr(produccion, "completar_guion", lambda *_a, **_k: None)   # aquí se aprueba tal cual, sin completar
     [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Una frase que se ve. Otra frase que también se ve en un plano.")
-    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None, reparto=None, bloques=None: {
+    monkeypatch.setattr(director, "planificar", lambda texto, estilo, formato, produccion="", titulos_existentes=None, referencias_visuales=None, reparto=None, bloques=None, publico="": {
         "titulo": "T", "descripcion": "D", "hashtags": ["#a"], "biblia": {}, "estilo_en": "x",
         "avisos": [{"frase": "Otra", "problema": "abstracta", "sugerencia": "muéstralo"}],
         "escenas": [{"orden": 1, "texto_voz": texto, "prompt_flow": "p", "texto_pantalla": ""}]})
     recibido = {}
 
-    def locutar(seg, destino, prov, produccion="", direcciones=None, voz_nombre=None, estilo_voz=""):
+    def locutar(seg, destino, prov, produccion="", direcciones=None, voz_nombre=None, estilo_voz="", velocidad=1.0):
         recibido["direcciones"] = direcciones
         return {"proveedor": prov, "duracion": 3.0, "escenas": [{"ini": 0, "fin": 3.0}], "palabras": []}
     monkeypatch.setattr(voz, "locutar", locutar)
@@ -1193,3 +1193,16 @@ def test_guardar_canal_no_borra_lo_que_el_formulario_no_trae(aislado):
     canales.guardar({"id": "fourlevel", "nombre": c["nombre"], "nicho": "videojuegos", "cta": "Comenta tu juego"})
     g = canales.obtener("fourlevel")
     assert (g["tono"], g["voz_nombre"], g["arquetipo"], g["nicho"], g["cta"]) == ("cómplice", "Charon", "gamer veterano", "videojuegos", "Comenta tu juego")
+
+
+def test_velocidad_de_la_voz(tmp_path):
+    """1,1×: caben más palabras por clip; FFmpeg acelera la voz sin cambiar el tono."""
+    from studio4 import clips
+    assert clips.palabras_por_clip(1.0) == 18 and clips.palabras_por_clip(1.1) == 20 and clips.palabras_por_clip(0.9) == 16
+    texto = " ".join(["Una frase de siete palabras para medir."] * 12)
+    assert len(clips.trocear(texto, 1.2)) < len(clips.trocear(texto, 0.9))
+    if shutil.which("ffmpeg"):
+        wav = tmp_path / "v.wav"
+        medios.ffmpeg("-f", "lavfi", "-i", "sine=frequency=440:duration=2", str(wav))
+        voz.acelerar(wav, 1.2)
+        assert abs(medios.duracion(wav) - 2 / 1.2) < 0.1

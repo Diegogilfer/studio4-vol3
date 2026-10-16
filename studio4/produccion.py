@@ -234,20 +234,21 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
 def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
           segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical",
           tono: str = "", publico: str = "", voz_nombre: str = "", refs: dict[str, Any] | None = None,
-          reparto: list[dict[str, str]] | None = None) -> list[str]:
+          reparto: list[dict[str, str]] | None = None, velocidad_voz: float = 1.0) -> list[str]:
     """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
     Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
     if proveedor_voz not in voz.PROVEEDORES:
         raise ValueError(f"Voz desconocida: {proveedor_voz}")
     sello = time.strftime("%Y%m%d-%H%M%S")
     voz_nombre = voz_nombre if voz_nombre in config.VOCES_GEMINI else config.VOZ_GEMINI
+    velocidad_voz = min(config.VELOCIDADES, key=lambda v: abs(v - float(velocidad_voz or 1.0)))
     if guion_propio.strip():
         if formato_propio not in config.FORMATOS:
             raise ValueError(f"Formato desconocido: {formato_propio}")
         texto = " ".join(guion_propio.split())
         pid = f"{sello}-{_slug(idea or texto[:40])}"
         _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
-               voz_nombre=voz_nombre,
+               voz_nombre=voz_nombre, velocidad_voz=velocidad_voz,
                version="propio", guion=texto, autor_guion="Tú", reparto=list(reparto or [])[:6],
                segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO), tono=tono.strip()[:80])
         _guardar_referencias([pid], refs)
@@ -268,6 +269,7 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
         pid = f"{sello}-{v}-{_slug(idea)}"
         _nueva(pid, tema=idea.strip(), formato=config.VERSIONES[v]["formato"], version=v, familia=sello,
                estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando", voz_nombre=voz_nombre,
+               velocidad_voz=velocidad_voz,
                tono=tono.strip()[:80], publico=publico.strip()[:80])
         pids.append(pid)
     _guardar_referencias(pids, refs)
@@ -285,7 +287,8 @@ def crear_rapido(idea: str, version: str = "corto") -> list[str]:
         raise ValueError(f"Versión desconocida: {version}")
     c = canales.activo()
     return crear(idea.strip(), [version], c.get("estilo") or "cinematografico", "gemini",
-                 tono=c.get("tono", ""), publico=c.get("publico", ""), voz_nombre=c.get("voz_nombre", ""))
+                 tono=c.get("tono", ""), publico=c.get("publico", ""), voz_nombre=c.get("voz_nombre", ""),
+                 velocidad_voz=float(c.get("velocidad") or 1.0))
 
 
 def importar_video(url: str = "", archivo: Path | None = None, nombre: str = "") -> str:
@@ -372,7 +375,8 @@ def _investigar_y_escribir(pids: list[str], idea: str, segundos: dict[str, int],
     escrito = guion.escribir(idea, dossier.get("dossier", ""), versiones, produccion=pids[0],
                              tono=p0.get("tono", ""), publico=p0.get("publico", ""), youtube=dossier.get("youtube"),
                              referencias=referencias.para_guion(refs), manual=aprender.para_guion(p0["canal"]),
-                             identidad=guion.identidad_del_canal(canales.de_produccion(p0)))
+                             identidad=guion.identidad_del_canal(canales.de_produccion(p0)),
+                             velocidad=float(p0.get("velocidad_voz") or 1.0))
     for pid in pids:
         v = cargar(pid)["version"]
         modificar(pid, lambda p: p.update(
@@ -540,11 +544,11 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
         _avisar(pid, "Creando las escenas para Flow", 20)
         q = cargar(pid)
         competencia = ((q.get("investigacion") or {}).get("youtube") or {}).get("competencia") or []
-        bloques = clips.trocear(q["guion"])   # una escena por clip de Flow (8 s): el guion manda el corte
+        bloques = clips.trocear(q["guion"], float(q.get("velocidad_voz") or 1.0))   # una escena por clip de Flow (8 s)
         plan = director.planificar(q["guion"], q["estilo"], q["formato"], produccion=pid,
                                    titulos_existentes=[v["titulo"] for v in competencia],
                                    referencias_visuales=referencias.visuales(refs), reparto=q.get("reparto") or [],
-                                   bloques=bloques)
+                                   bloques=bloques, publico=q.get("publico", ""))
 
         def aplicar(r):
             r.update(titulo=r.get("titulo") or plan["titulo"],   # el título del guionista manda; Gemini solo si no hay
@@ -568,7 +572,8 @@ def _generar_voz(pid: str) -> None:
     estilo_voz = f"{config.ESTILO_VOZ}. Interpreta a este narrador: {arquetipo}" if arquetipo else ""
     try:
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
-                              direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz)
+                              direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz,
+                              velocidad=float(p.get("velocidad_voz") or 1.0))
     except RuntimeError as e:
         # Cupo diario de Gemini TTS agotado (o ElevenLabs sin créditos): se prueba con la otra voz si existe.
         otra = voz.reserva(p["proveedor_voz"])
@@ -577,7 +582,7 @@ def _generar_voz(pid: str) -> None:
         logger.warning("Voz %s falló (%s); probando %s", p["proveedor_voz"], e, otra)
         _avisar(pid, f"{voz.PROVEEDORES[p['proveedor_voz']]} falló; uso {voz.PROVEEDORES[otra]}", 75)
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones,
-                              voz_nombre=p.get("voz_nombre"))
+                              voz_nombre=p.get("voz_nombre"), velocidad=float(p.get("velocidad_voz") or 1.0))
     def con_voz(q):
         q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")})
         director.poner_duraciones(q["escenas"], tiempos["escenas"], q.get("biblia") or {}, q.get("estilo_en", ""),

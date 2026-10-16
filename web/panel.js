@@ -107,6 +107,7 @@ document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("aj
 
 // Escuchar una voz antes de elegirla: frase de presentación (la primera vez se graba; después, al instante).
 let botonSonando = null;
+const velocidadVoz = () => Number(document.querySelector('input[name="velocidad"]:checked')?.value || 1);
 function oirVoz(boton, voz) {
   const audio = $("oir-voz");
   if (botonSonando === boton && !audio.paused) { audio.pause(); return; }
@@ -114,6 +115,8 @@ function oirVoz(boton, voz) {
   botonSonando = boton;
   boton.classList.add("cargando");
   audio.src = `/api/voz/oir?voz=${encodeURIComponent(voz)}`;
+  audio.preservesPitch = true;   // a la velocidad elegida, sin voz de ardilla
+  audio.defaultPlaybackRate = audio.playbackRate = velocidadVoz();
   audio.play().then(() => { boton.classList.remove("cargando"); boton.classList.add("sonando"); })
     .catch(() => { boton.classList.remove("cargando"); alertaError("No se pudo reproducir la voz."); });
 }
@@ -148,8 +151,9 @@ function pintarFlow(d) {
   const b = $("flow-boton");
   b.href = "/flow/emparejar#c=" + encodeURIComponent(d.codigo);
   const conectada = d.extension.conectada;
+  const texto = !conectada ? "Flow: conectar" : d.extension.flow_abierto ? "Flow conectado" : "Extensión lista · abre Flow";
   b.className = `pildora ${conectada ? "ok" : "aviso"}`;
-  b.innerHTML = `<span class="piloto"></span><span>${conectada ? "Flow conectado" : "Flow: conectar"}</span>`;
+  b.innerHTML = `<span class="piloto"></span><span>${texto}</span>`;
 }
 $("flow-renovar").addEventListener("click", async () => {
   try {
@@ -257,17 +261,23 @@ function pintarResumen() {
     ? { vertical: "vertical 9:16", horizontal: "horizontal 16:9", cuadrado: "cuadrado 1:1" }[document.querySelector('input[name="formato"]:checked').value]
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s en ${Math.round($("a-corto-s").value / CLIP_S)} clips (Shorts y Reels)`,
        $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
-  const voz = $("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "";
+  const vel = velocidadVoz() === 1 ? "" : ` a ${String(velocidadVoz()).replace(".", ",")}×`;
+  const voz = ($("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "") + vel;
   const nRefs = refs.items.length + refs.enlaces.length + ($("ref-datos").value.trim() ? 1 : 0);
   const conRefs = nRefs ? `${nRefs} ${nRefs === 1 ? "referencia" : "referencias"}` : "";
   const palabras = $("a-guion").value.trim().split(/\s+/).filter(Boolean).length;
-  const clipsGuion = palabras >= 10 ? `${Math.max(2, Math.round(palabras / PALABRAS_CLIP))} clips de ${CLIP_S} s` : "";
+  const clipsGuion = palabras >= 10 ? `${Math.max(2, Math.round(palabras / (PALABRAS_CLIP * velocidadVoz())))} clips de ${CLIP_S} s` : "";
   const partes = propio ? [formatos, clipsGuion, ESTILOS[estiloElegido][0], voz, conRefs]
-    : [formatos, elegido("publico"), ESTILOS[estiloElegido][0], voz, conRefs];
+    : [formatos, elegido("publico") === "todos" ? "para todos" : `para ${elegido("publico")}`, ESTILOS[estiloElegido][0], voz, conRefs];
   $("a-resumen").innerHTML = partes.filter(Boolean).map((x) => `<b>${esc(x)}</b>`).join(" · ");
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 $("a-guion").addEventListener("input", pintarResumen);
+document.querySelectorAll('input[name="velocidad"]').forEach((r) => r.addEventListener("change", () => {
+  const audio = $("oir-voz");
+  audio.defaultPlaybackRate = audio.playbackRate = velocidadVoz();   // la muestra que suena cambia al momento
+  pintarResumen();
+}));
 
 $("a-crear").addEventListener("click", async () => {
   const falta = faltaParaCrear();
@@ -278,7 +288,7 @@ $("a-crear").addEventListener("click", async () => {
     versiones: ["corto", "largo"].filter((v) => $(`a-${v}`).checked),
     segundos: { corto: Number($("a-corto-s").value), largo: Math.round(Number($("a-largo-m").value) * 60) },
     formato: document.querySelector('input[name="formato"]:checked').value,
-    publico: elegido("publico"), voz_nombre: vozElegida,
+    publico: elegido("publico"), voz_nombre: vozElegida, velocidad_voz: velocidadVoz(),
     referencias: { items: refs.items.map(({ id, tipo, nombre }) => ({ id, tipo, nombre })), enlaces: refs.enlaces, datos: $("ref-datos").value },
     reparto: propio ? repartoDelArchivo : [],
   };

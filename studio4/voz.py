@@ -272,9 +272,18 @@ def muestra(texto: str, voz_nombre: str, destino: Path, produccion: str = "") ->
     return destino
 
 
+def acelerar(wav: Path, velocidad: float) -> None:
+    """Cambia la velocidad de la locución sin cambiar el tono (atempo de FFmpeg)."""
+    if abs(float(velocidad) - 1.0) < 0.01:
+        return
+    tmp = wav.with_name(wav.stem + "_vel.wav")
+    medios.ffmpeg("-i", str(wav), "-filter:a", f"atempo={float(velocidad):.2f}", str(tmp))
+    tmp.replace(wav)
+
+
 def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
             direcciones: list[dict[str, str]] | None = None, voz_nombre: str | None = None,
-            estilo_voz: str = "") -> dict[str, Any]:
+            estilo_voz: str = "", velocidad: float = 1.0) -> dict[str, Any]:
     """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
     Con `direcciones` (tono y ritmo por escena), Gemini TTS interpreta cada escena como toca."""
     limpios = [" ".join(s.split()) for s in segmentos]
@@ -293,6 +302,9 @@ def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", prod
             # Si la voz pronunció alguna etiqueta, se repite la toma sin dirección por escena.
             _gemini(texto, destino, produccion, voz_nombre, estilo_voz)
             dirigida = False
+    if abs(float(velocidad) - 1.0) >= 0.01:   # los tiempos se miden después, sobre la voz ya acelerada
+        acelerar(destino, velocidad)
+        alineacion = None
     total = medios.duracion(destino)
 
     try:

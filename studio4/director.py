@@ -333,7 +333,8 @@ def _ajustar_a_bloques(escenas: list[dict[str, Any]], bloques: list[str]) -> lis
 
 def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
                titulos_existentes: list[str] | None = None, referencias_visuales: list[str] | None = None,
-               reparto: list[dict[str, str]] | None = None, bloques: list[str] | None = None) -> dict[str, Any]:
+               reparto: list[dict[str, str]] | None = None, bloques: list[str] | None = None,
+               publico: str = "") -> dict[str, Any]:
     """Con `bloques` (guion por clips de Flow), una escena exacta por bloque: Gemini decide lo que se ve."""
     estilo_en = config.ESTILOS.get(estilo, estilo)
     aspecto = config.FORMATOS[formato]["aspecto"]
@@ -354,6 +355,8 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
         prompt += ("\n\nFOTOS DE REFERENCIA DEL AUTOR: copia en la biblia la IDENTIDAD (rostro, pelo, edad, complexión, ropa) "
                    "de las personas y el aspecto de lugares y objetos. NUNCA copies su pose, gesto ni encuadre: cada escena "
                    "tiene su propio plano.\n" + "\n".join(f"- Foto {i}: {d}" for i, d in enumerate(referencias_visuales, 1)))
+    if publico and publico != "todos":   # el título, la descripción y los hashtags, pensados para ese público
+        prompt += f"\n\nPÚBLICO: {publico}. Escribe el título, la descripción y los hashtags para él."
     if titulos_existentes:
         prompt += ("\n\nTÍTULOS QUE YA EXISTEN EN YOUTUBE SOBRE ESTO (el tuyo tiene que ser claramente distinto, "
                    "con otro ángulo o un detalle concreto del guion):\n" + "\n".join(f"- {t}" for t in titulos_existentes[:8]))

@@ -76,6 +76,7 @@ def _limpio(c: dict[str, Any]) -> dict[str, Any]:
             "nicho": str(c.get("nicho", "")).strip()[:80], "tono": str(c.get("tono", ""))[:80],
             "arquetipo": str(c.get("arquetipo", "")).strip()[:100], "arco": str(c.get("arco", "")).strip()[:140],
             "cta": str(c.get("cta", "")).strip()[:100],
+            "velocidad": min((0.9, 1.0, 1.1, 1.2), key=lambda v: abs(v - float(c.get("velocidad") or 1.0))),
             "fuentes": [u.strip() for u in (c.get("fuentes") or []) if re.match(r"https?://\S+$", str(u).strip())][:6],
             "referentes": list(dict.fromkeys(_usuario(str(u)) for u in (c.get("referentes") or []) if str(u).strip()))[:5], "publico": str(c.get("publico", ""))[:80]}
 

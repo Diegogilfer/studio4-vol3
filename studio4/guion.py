@@ -75,7 +75,8 @@ donde "ganchos" son 3 primeras frases alternativas (distintas de la que usaste).
 
 
 def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = "", publico: str = "",
-              youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "", identidad: str = "") -> str:
+              youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "", identidad: str = "",
+              velocidad: float = 1.0) -> str:
     partes = [f"Tema: {idea}"]
     if identidad:   # la voz fija del canal: arquetipo, arco y la llamada a la acción de siempre
         partes += ["", identidad]
@@ -105,9 +106,10 @@ def _peticion(idea: str, dossier: str, versiones: dict[str, int], tono: str = ""
     for v, seg in versiones.items():
         nombre = "CORTO (Shorts y Reels, vertical)" if v == "corto" else "LARGO (YouTube, horizontal)"
         clips = max(2, round(seg / config.SEGUNDOS_CLIP))
-        partes.append(f"- \"{v}\": {nombre}, {seg} segundos: {int(seg * PALABRAS_POR_SEGUNDO)} palabras (±10 %; "
+        pps = PALABRAS_POR_SEGUNDO * float(velocidad or 1.0)   # una voz más rápida dice más palabras en el mismo tiempo
+        partes.append(f"- \"{v}\": {nombre}, {seg} segundos: {int(seg * pps)} palabras (±10 %; "
                       f"si te quedas corto, la voz no llena el vídeo). Se cortará en {clips} clips de {config.SEGUNDOS_CLIP} s "
-                      f"de unas {int(config.SEGUNDOS_CLIP * PALABRAS_POR_SEGUNDO)} palabras: cada tramo de ese tamaño tiene que "
+                      f"de unas {round(config.SEGUNDOS_CLIP * pps)} palabras: cada tramo de ese tamaño tiene que "
                       "poder verse en un solo plano, así que usa frases cortas y una imagen clara por frase.")
     return "\n".join(partes)
 
@@ -173,9 +175,9 @@ def _limpiar(texto: str) -> str:
 
 def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str = "", tono: str = "",
              publico: str = "", youtube: dict[str, Any] | None = None, referencias: str = "", manual: str = "",
-             identidad: str = "") -> dict[str, Any]:
+             identidad: str = "", velocidad: float = 1.0) -> dict[str, Any]:
     """Devuelve {"titulo_provisional", "autor", "<versión>": {"guion", "ganchos"}} para cada versión pedida."""
-    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias, manual, identidad)
+    prompt = _peticion(idea, dossier, versiones, tono, publico, youtube, referencias, manual, identidad, velocidad)
     datos = None
     if deepseek.disponible():
         try:
@@ -198,7 +200,7 @@ def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str
         texto = _limpiar(str(bloque.get("guion", "")))
         if len(texto.split()) < 15:
             raise RuntimeError(f"{autor} no devolvió el guion {v}. Vuelve a intentarlo.")
-        texto = _ajustar_largo(texto, int(seg * PALABRAS_POR_SEGUNDO), produccion)
+        texto = _ajustar_largo(texto, int(seg * PALABRAS_POR_SEGUNDO * float(velocidad or 1.0)), produccion)
         salida[v] = {"guion": texto, "ganchos": [_limpiar(str(g)) for g in bloque.get("ganchos", [])][:3]}
     return salida
 

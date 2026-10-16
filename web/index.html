@@ -131,11 +131,18 @@
           </div>
         </div>
         <div class="crear-bloque"><p class="meta">Estilo</p><div class="estilos" id="a-estilos"></div></div>
-        <div class="crear-bloque"><div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select></div>
+        <div class="crear-bloque"><div class="fila"><span class="meta">Voz</span><select id="a-voz" class="campo"></select>
+            <span class="meta">Velocidad</span>
+            <div class="segmentos" role="radiogroup" aria-label="Velocidad de la voz">
+              <label><input type="radio" name="velocidad" value="0.9">0,9×</label>
+              <label><input type="radio" name="velocidad" value="1" checked>1×</label>
+              <label><input type="radio" name="velocidad" value="1.1">1,1×</label>
+              <label><input type="radio" name="velocidad" value="1.2">1,2×</label>
+            </div></div>
           <div class="voces-lista" id="a-voces"></div></div>
         <div class="solo-idea opciones">
           <div><p class="meta">¿Para quién?</p><div class="chips" data-grupo="publico">
-            <button data-v="público general" class="si">Público general</button><button data-v="curiosos de la ciencia y la historia">Curiosos</button>
+            <button data-v="todos" class="si">Para todos</button><button data-v="curiosos de la ciencia y la historia">Curiosos</button>
             <button data-v="jóvenes de 16 a 25 años">Jóvenes</button><button data-v="niños y familias">Familias</button><button data-v="gente que ya sabe del tema">Expertos</button></div></div>
         </div>
         <div class="referencias" id="referencias">

@@ -18,19 +18,22 @@ from typing import Any, Optional
 from . import config, director, medios, produccion, registro
 
 logger = logging.getLogger("studio4.flow")
-CONECTADA_S = 90          # la extensión saluda cada pocos segundos mientras Flow está abierto
+CONECTADA_S = 100         # el fondo de la extensión late cada 30 s (y la pestaña de Flow, cada 4 s si la miras)
 LADO_MINIMO = 256
 
 _extension: dict[str, Any] = {"ultima": 0.0, "version": ""}
 _eventos: list[dict[str, Any]] = []   # lo último que vio, mandó o falló la extensión (para diagnosticar)
-VERSION_EXTENSION = "2.2.0"           # la del manifest: si la cargada es más vieja, el panel pide recargarla
+VERSION_EXTENSION = "2.3.0"           # la del manifest: si la cargada es más vieja, el panel pide recargarla
 
 _EXT_POR_MIME = {"video/mp4": ".mp4", "video/webm": ".webm", "video/quicktime": ".mov",
                  "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 
 
-def latido(version: str = "") -> None:
+def latido(version: str = "", flow_abierto: bool = True) -> None:
+    """Saludo de la extensión. Desde la pestaña de Flow, Flow está abierto; desde el fondo, lo dice la cabecera."""
     _extension["ultima"] = time.time()
+    if flow_abierto:
+        _extension["flow_visto"] = time.time()
     if version:
         _extension["version"] = version[:20]
 
@@ -45,6 +48,7 @@ def anotar_evento(tipo: str, detalle: str) -> None:
 def estado_extension() -> dict[str, Any]:
     ultima = _extension["ultima"]
     return {"conectada": bool(ultima) and time.time() - ultima < CONECTADA_S,
+            "flow_abierto": time.time() - _extension.get("flow_visto", 0) < CONECTADA_S,
             "version": _extension["version"], "ultima": ultima, "eventos": _eventos[:25],
             "desactualizada": bool(_extension["version"]) and _extension["version"] != VERSION_EXTENSION}
 

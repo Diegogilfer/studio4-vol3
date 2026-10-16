@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "STUDIO #4 · Recoger de Google Flow",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Te muestra en Google Flow el prompt de cada escena de STUDIO #4 y le manda los vídeos e imágenes que generas. No pulsa nada en Flow ni lee tu cuenta.",
   "permissions": [
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "alarms"
   ],
   "host_permissions": [
     "https://labs.google/*",

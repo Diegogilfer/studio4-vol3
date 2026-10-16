@@ -276,7 +276,7 @@ class Panel(BaseHTTPRequestHandler):
         # --- extensión de Flow (con código de emparejamiento) ---
         if ruta.startswith("/api/flow/") and ruta != "/api/flow/renovar":
             self._solo_extension()
-            flow.latido(self.headers.get("X-Flow-Version", ""))
+            flow.latido(self.headers.get("X-Flow-Version", ""), self.headers.get("X-Flow-Abierto", "1") != "0")
             if ruta == "/api/flow/hola":
                 return self._json({"ok": True, "estudio": "STUDIO 4", "sesion": flow.sesion_para_extension()})
             if ruta == "/api/flow/activa":
@@ -325,6 +325,7 @@ class Panel(BaseHTTPRequestHandler):
                                     d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
                                     formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
                                     publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")),
+                                    velocidad_voz=float(d.get("velocidad_voz") or 1.0),
                                     reparto=[{"nombre": str(r.get("nombre", ""))[:40], "ficha": str(r.get("ficha", ""))[:600]}
                                              for r in d.get("reparto") or [] if isinstance(r, dict) and r.get("nombre")],
                                     refs=referencias.preparar(d.get("referencias"), [
