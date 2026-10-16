@@ -1274,3 +1274,12 @@ def test_video_modelo_manda_en_el_guion_y_en_la_voz(aislado, monkeypatch):
     assert texto.startswith("VÍDEO MODELO DEL AUTOR (https://youtu.be/m)") and "Nota del autor: nota nueva" in texto
     assert texto.count("VÍDEO MODELO") == 1 and "- Usa narrador no humano" in texto
     assert aprender.voz_modelo("fourlevel") == "Voz sintética estilo Loquendo"
+
+
+def test_plataforma_del_enlace():
+    from studio4 import importar
+    casos = {"https://www.youtube.com/watch?v=a": "youtube", "https://youtu.be/a": "youtube", "https://fb.watch/a": "facebook",
+             "https://www.tiktok.com/@a/video/1": "tiktok", "https://www.instagram.com/reel/a": "instagram", "https://ejemplo.org/v": ""}
+    assert {u: importar.plataforma(u) for u in casos} == casos
+    with pytest.raises(ValueError):
+        importar.vista_previa("no es un enlace")

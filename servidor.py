@@ -210,6 +210,10 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(tendencias.estado(canales.activo()["id"]))
         if ruta == "/api/manual":
             return self._json(aprender.estado(canales.activo()["id"]))
+        if ruta == "/api/importar/vista":   # qué hay detrás del enlace, para confirmar antes de procesar
+            from studio4 import importar
+            q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("url") or [""])[0].strip()
+            return self._json(importar.vista_previa(q))
         if ruta == "/api/archivo":
             q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0].strip()
             return self._json({"fotos": archivo.buscar(q) if len(q) >= 2 else []})

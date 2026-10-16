@@ -1232,6 +1232,15 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .paso { grid-template-columns: minmax(0, 1fr); }   /* en el móvil nada empuja la tarjeta más allá de la pantalla */
 .crear-bloque > .meta:first-child { margin: 0; }
 /* Desde URL */
+.u-logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--caja);
+  border: 1px solid var(--caja-borde); color: var(--fg-muted); }
+.u-logo svg { width: 22px; height: 22px; } .u-logo.leyendo svg { animation: latir 1s var(--ease) infinite alternate; }
+@keyframes latir { from { transform: scale(.85); opacity: .55; } to { transform: scale(1.1); opacity: 1; } }
+.u-vista { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 16px; align-items: center; padding: 14px;
+  border-radius: var(--r-caja); background: var(--caja); border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.u-vista img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 14px; background: #000; }
+.u-vista div { display: grid; gap: 4px; min-width: 0; } .u-vista b { font-size: 15px; line-height: 1.35; }
+@media (max-width: 600px) { .u-vista { grid-template-columns: 1fr; } }
 .u-seg { width: 84px; height: 36px; margin: 0 4px; }
 .u-escenas { display: grid; gap: 6px; max-height: none; }
 .u-escena { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 14px; background: var(--caja);

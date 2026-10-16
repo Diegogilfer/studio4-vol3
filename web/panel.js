@@ -1105,7 +1105,7 @@ const TRANS_URL = { corte: "Corte", fundido: "Fundido", destello: "Destello" };
 const EFECTO_URL = { ninguno: "Ninguno", cine: "Color cine", grano: "Grano", byn: "Blanco y negro", zoom: "Zoom suave" };
 let videoUrlSubido = null;
 function pintarUrl(p) {
-  const mia = p && p.desde_url;
+  const mia = p && (p.desde_url || p.version === "importado");   // cualquier vídeo importado se termina aquí
   const t = mia ? p.trabajo || {} : {};
   $("u-trabajo").hidden = !t.ocupado;
   $("u-fase").textContent = t.ocupado ? `${t.fase || "Procesando"}…` : "";
@@ -1113,8 +1113,9 @@ function pintarUrl(p) {
   $("u-error").hidden = !(mia && (t.error || p.entregas_error));
   $("u-error").textContent = mia ? t.error || (p.entregas_error ? `El vídeo completo está listo, pero Reels y Short fallaron: ${p.entregas_error}` : "") : "";
   $("u-procesar").disabled = !!t.ocupado;
-  $("u-resultado").hidden = !(mia && p.final);
-  if (!mia || !p.final) return;
+  $("u-resultado").hidden = !(mia && (p.final || (!t.ocupado && p.escenas?.length)));
+  $("u-sin-montar").hidden = !(mia && !p.final && !t.ocupado);
+  if (!mia || !(p.final || p.escenas?.length)) return;
   $("u-titulo").textContent = p.titulo || p.tema;
   $("u-piezas").innerHTML = (p.entregas?.piezas || []).map((z) => piezaHTML(p, z)).join("")
     || `<p class="meta">El vídeo completo está listo; los Reels y el Short se preparan al montar.</p>`;
@@ -1130,6 +1131,37 @@ function pintarUrl(p) {
     <button class="boton" type="button" data-u-quitar="${e.orden}" ${p.escenas.length < 2 || t.ocupado ? "disabled" : ""}>Quitar</button></div>`).join("");
   $("u-remontar").disabled = !!t.ocupado;
 }
+// Al pegar el enlace: el logo de la plataforma al momento y, en un par de segundos, qué vídeo es (para confirmar).
+const LOGOS = { youtube: "l-youtube", tiktok: "l-tiktok", instagram: "l-instagram", facebook: "l-facebook" };
+const plataformaDe = (u) => { const h = (() => { try { return new URL(u).hostname; } catch (_) { return ""; } })();
+  return /youtu/.test(h) ? "youtube" : /tiktok/.test(h) ? "tiktok" : /instagram/.test(h) ? "instagram" : /facebook|fb\./.test(h) ? "facebook" : ""; };
+let vistaUrl = "", temporizadorVista = 0;
+const minutos = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+$("u-url").addEventListener("input", () => {
+  const url = $("u-url").value.trim();
+  const pl = plataformaDe(url);
+  $("u-logo").innerHTML = `<svg><use href="#${LOGOS[pl] || "i-enlace"}"/></svg>`;
+  clearTimeout(temporizadorVista);
+  if (!/^https?:\/\/\S+\.\S+/.test(url)) { $("u-vista").hidden = true; vistaUrl = ""; return; }
+  temporizadorVista = setTimeout(async () => {
+    $("u-logo").classList.add("leyendo"); $("u-info").textContent = "Leyendo el enlace…";
+    try {
+      const v = await api(`/api/importar/vista?url=${encodeURIComponent(url)}`);
+      if ($("u-url").value.trim() !== url) return;   // cambiaste el enlace mientras se leía
+      vistaUrl = url;
+      $("u-vista").hidden = false;
+      $("u-vista").innerHTML = `${v.miniatura ? `<img src="${esc(v.miniatura)}" alt="" referrerpolicy="no-referrer">` : ""}
+        <div><b>${esc(v.titulo || "Vídeo sin título")}</b><span class="meta">${esc(v.canal)}${v.duracion ? ` · ${minutos(v.duracion)}` : ""}${
+          v.vistas ? ` · ${compactoNum(v.vistas)} vistas` : ""}</span>
+        ${v.demasiado_largo ? `<span class="error">Dura más de ${v.max_minutos} minutos: no se puede procesar.</span>` : ""}</div>`;
+      $("u-info").textContent = "¿Es este? Marca que tienes derechos y pulsa «Procesar».";
+    } catch (e) { $("u-vista").hidden = true; $("u-info").textContent = `No pude leer el enlace: ${e.message || e}`; }
+    finally { $("u-logo").classList.remove("leyendo"); }
+  }, 600);
+});
+$("u-montar").addEventListener("click", async () => {   // un vídeo importado sin sus 3 formatos: se monta con la edición
+  try { await guardarEdicion(); await api("/api/render", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 $("u-archivo").addEventListener("change", () => {
   videoUrlSubido = $("u-archivo").files[0] || null;
   $("u-info").textContent = videoUrlSubido ? `Archivo: ${videoUrlSubido.name}` : "";
@@ -1147,6 +1179,7 @@ $("u-procesar").addEventListener("click", async () => {
       await api("/api/importar", { url, derechos: true, completo: true });
     }
     $("u-url").value = ""; videoUrlSubido = null; $("u-info").textContent = ""; $("u-derechos").checked = false;
+    $("u-vista").hidden = true; $("u-logo").innerHTML = `<svg><use href="#i-enlace"/></svg>`;
     await refrescar();
   } catch (e) { aviso(e); } finally { $("u-procesar").disabled = false; }
 });

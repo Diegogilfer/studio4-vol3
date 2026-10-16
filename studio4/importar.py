@@ -26,6 +26,31 @@ MODELO_WHISPER = os.getenv("STUDIO4_WHISPER", "small")   # tiny, base, small, me
 _whisper = None
 
 
+PLATAFORMAS = {"youtube": "YouTube", "tiktok": "TikTok", "instagram": "Instagram", "facebook": "Facebook",
+               "twitter": "X", "x": "X", "vimeo": "Vimeo", "twitch": "Twitch"}
+
+
+def plataforma(url: str) -> str:
+    """«youtube», «tiktok»… a partir del enlace (sin preguntar a nadie)."""
+    m = re.match(r"https?://(?:[\w-]+\.)*?([\w-]+)\.(?:com|be|tv|net|co)\b", url or "")
+    host = (m.group(1) if m else "").lower()
+    return {"youtu": "youtube", "fb": "facebook"}.get(host, host if host in PLATAFORMAS else "")
+
+
+def vista_previa(url: str) -> dict[str, Any]:
+    """Lo que hay detrás del enlace, sin descargar nada: título, canal, duración y miniatura (para confirmar)."""
+    import yt_dlp
+    if not re.match(r"https?://\S+$", url or ""):
+        raise ValueError("Pega un enlace completo al vídeo (https://…).")
+    with yt_dlp.YoutubeDL({"quiet": True, "noplaylist": True, "skip_download": True, "socket_timeout": 20}) as ydl:
+        info = ydl.extract_info(url, download=False)
+    duracion = int(info.get("duration") or 0)
+    return {"titulo": info.get("title") or "", "canal": info.get("uploader") or info.get("channel") or "",
+            "duracion": duracion, "miniatura": info.get("thumbnail") or "", "plataforma": plataforma(url),
+            "vistas": int(info.get("view_count") or 0), "url": url,
+            "demasiado_largo": duracion > MAX_MINUTOS * 60, "max_minutos": MAX_MINUTOS}
+
+
 def descargar(url: str, carpeta: Path, avisar: Callable[[str], None] = lambda _f: None) -> dict[str, Any]:
     """Descarga el vídeo (hasta 1080p) a carpeta/origen.mp4 y devuelve {titulo, canal, url}."""
     import yt_dlp

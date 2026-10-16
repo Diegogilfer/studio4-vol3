@@ -213,11 +213,13 @@
     <div class="hero-cuerpo">
       <div class="crear-opciones">
         <div class="importar-fila">
+          <span class="u-logo" id="u-logo" aria-hidden="true"><svg><use href="#i-enlace"/></svg></span>
           <input id="u-url" class="campo" type="url" inputmode="url" autocomplete="off" spellcheck="false"
             placeholder="Enlace del vídeo (YouTube, Instagram, TikTok…)" aria-label="Enlace del vídeo">
           <label class="boton"><svg width="16" height="16"><use href="#i-entregas"/></svg>Subir archivo<input type="file" id="u-archivo" accept="video/*" hidden></label>
         </div>
         <p class="meta" id="u-info" role="status" aria-live="polite"></p>
+        <div class="u-vista" id="u-vista" hidden></div>
         <label class="check"><input type="checkbox" id="u-derechos"> El vídeo es mío o tengo derechos para reutilizarlo</label>
         <div class="acciones-paso"><button class="primario" id="u-procesar" type="button">Procesar <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
         <p class="meta">Se descarga, se subtitula y se monta con fundido y color cine; salen el vídeo completo, el Reels y el Short con sus textos.</p>
@@ -229,6 +231,8 @@
       <div id="u-resultado" class="crear-opciones" hidden>
         <div class="fila"><b class="pregunta-txt" id="u-titulo"></b>
           <button class="boton" type="button" data-abrir="3 Entregas">Abrir carpeta</button></div>
+        <div class="fila" id="u-sin-montar" hidden><span class="meta">Este vídeo está importado pero aún no tiene sus 3 formatos.</span>
+          <button class="primario" type="button" id="u-montar">Montar los 3 formatos</button></div>
         <div class="piezas" id="u-piezas"></div>
         <div class="crear-bloque u-edicion">
           <b>Edición</b>
