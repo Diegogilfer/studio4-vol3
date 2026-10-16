@@ -408,6 +408,9 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/escena/quitar":
             produccion.quitar_escena(pid, int(self._cuerpo_json().get("orden", 0)))
             return self._json({"ok": True})
+        if ruta == "/api/guion/original":   # deshace «Completar la historia»: tu texto tal cual
+            produccion.volver_guion_original(pid)
+            return self._json({"ok": True})
         if ruta == "/api/guion/completar":   # tu guion se queda corto: investigar y contar la historia completa
             produccion.completar_guion(pid)
             return self._json({"ok": True})

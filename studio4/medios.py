@@ -11,13 +11,35 @@ from pathlib import Path
 logger = logging.getLogger("studio4.medios")
 
 
-def ffmpeg(*args: str, cwd: str | Path | None = None, timeout: int = 600) -> str:
+def _limite(args: tuple[str, ...], cwd: str | Path | None) -> int:
+    """Tiempo máximo para un ffmpeg: 10 min de base y 40 s más por cada segundo del medio más largo que entra.
+    Así nunca se corta un montaje largo en un PC lento, pero un FFmpeg colgado no bloquea la producción para siempre."""
+    largo = 0.0
+    for i, a in enumerate(args[:-1]):
+        if a == "-i":
+            ruta = Path(args[i + 1])
+            ruta = ruta if ruta.is_absolute() or cwd is None else Path(cwd) / ruta
+            if ruta.suffix.lower() in (".mp4", ".mov", ".mkv", ".webm", ".wav", ".mp3", ".m4a", ".txt") and ruta.exists():
+                try:
+                    largo = max(largo, duracion(ruta) if ruta.suffix.lower() != ".txt" else 0.0)
+                except (ValueError, RuntimeError):
+                    pass
+        if a == "-t":
+            try:
+                largo = max(largo, float(args[i + 1]))
+            except ValueError:
+                pass
+    return int(600 + 40 * largo)
+
+
+def ffmpeg(*args: str, cwd: str | Path | None = None, timeout: int | None = None) -> str:
     """Ejecuta ffmpeg y devuelve stderr (ahí escribe ffmpeg sus análisis). Lanza error con el final del log."""
     cmd = ["ffmpeg", "-hide_banner", "-y", *args]
+    timeout = timeout or _limite(args, cwd)
     try:
         r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"FFmpeg tardó más de {timeout} s y se detuvo para no bloquear la producción.") from e
+        raise RuntimeError(f"FFmpeg tardó más de {timeout // 60} min y se detuvo para no bloquear la producción.") from e
     if r.returncode != 0:
         raise RuntimeError(f"FFmpeg falló: {r.stderr.strip()[-800:]}")
     return r.stderr

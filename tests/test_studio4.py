@@ -1062,3 +1062,38 @@ def test_aprender_con_reserva_gemini_y_foto_archivo(servidor, monkeypatch):
 
 
 
+
+
+def test_tope_de_ffmpeg_crece_con_la_duracion(monkeypatch, tmp_path):
+    """Un FFmpeg colgado no bloquea para siempre, pero un largo de 5 min nunca se corta por el tope."""
+    video = tmp_path / "largo.mp4"
+    video.write_bytes(b"x")
+    monkeypatch.setattr(medios, "duracion", lambda _r: 300.0)
+    assert medios._limite(("-i", str(video), "salida.mp4"), None) == 600 + 40 * 300
+    assert medios._limite(("-loop", "1", "-i", "foto.png", "-t", "2.5", "s.mp4"), None) == 600 + 100
+    assert medios._limite(("-f", "lavfi", "-i", "color=c=black", "s.mp4"), None) == 600
+
+
+def test_volver_a_mi_guion_deshace_completar(aislado, monkeypatch):
+    monkeypatch.setattr(produccion, "completar_guion", lambda *_a, **_k: None)
+    [pid] = produccion.crear("", [], "documental", "gemini", guion_propio="Bonnie nunca disparó. Lucía sí. Y eso lo cambia todo.")
+    with pytest.raises(ValueError, match="ya es el tuyo"):
+        produccion.volver_guion_original(pid)
+    produccion.modificar(pid, lambda p: p.update(guion_original=p["guion"], guion="Historia completa y larga.", autor_guion="Tú + DeepSeek"))
+    produccion.volver_guion_original(pid)
+    p = produccion.cargar(pid)
+    assert p["guion"].startswith("Bonnie nunca disparó") and p["autor_guion"] == "Tú"
+
+
+def test_enlace_que_redirige_a_tu_pc_se_rechaza(monkeypatch):
+    from studio4 import referencias
+
+    class Resp:
+        is_redirect, headers = True, {"Location": "http://127.0.0.1:8000/api/estado"}
+
+        def close(self):
+            pass
+    monkeypatch.setattr(referencias, "_url_publica", lambda u: (_ for _ in ()).throw(ValueError("interna")) if "127.0.0.1" in u else u)
+    monkeypatch.setattr(referencias.requests, "get", lambda *a, **k: Resp())
+    with pytest.raises(ValueError, match="interna"):
+        referencias._texto_web("https://ejemplo.com/pagina")

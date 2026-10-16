@@ -190,6 +190,7 @@
             <button class="primario" id="g-aprobar">Aprobar guion y crear escenas <svg width="16" height="16"><use href="#i-flecha"/></svg></button>
             <button class="boton" id="g-guardar">Guardar cambios</button>
             <button class="boton" id="g-otra" title="Otra versión con la misma investigación">Escribir otra versión</button>
+            <button class="boton" id="g-original" hidden title="Deja el guion como lo escribiste tú">Volver a mi guion</button>
             <button class="boton" id="g-completar" title="Investiga el tema y lo convierte en la historia verdadera y completa, con tus frases">Completar la historia</button>
             <span class="meta" id="g-estado" role="status" aria-live="polite"></span>
           </div>
@@ -222,7 +223,7 @@
     </div>
     <div id="td-trabajo" class="trabajo" role="status" aria-live="polite" hidden><div class="trabajo-txt"><span id="td-fase"></span></div><div class="progreso"><div style="width:60%"></div></div></div>
     <p id="td-error" class="error" role="alert" hidden></p>
-    <details id="td-manual-bloque" class="tarjeta" hidden style="margin-bottom:14px"><summary id="td-manual-sum">Manual aprendido del canal</summary><div id="td-manual" style="display:grid;gap:8px;margin-top:8px"></div></details>
+    <section id="td-manual-bloque" class="tarjeta manual-canal" hidden><h3 id="td-manual-sum">Manual aprendido del canal</h3><div id="td-manual"></div></section>
     <div id="td-cuerpo" hidden>
       <div class="kpis" id="td-kpis"></div>
       <div class="graficas" id="td-graficas"></div>

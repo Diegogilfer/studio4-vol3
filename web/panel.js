@@ -472,7 +472,13 @@ function pintarGuion({ p }) {
   $("g-otra").hidden = !["corto", "largo"].includes(p.version);
   $("g-otra").disabled = ocupado;
   $("g-completar").disabled = ocupado || !p.guion;
+  $("g-original").hidden = !p.guion_original || p.guion_original === p.guion;
+  $("g-original").disabled = ocupado;
 }
+$("g-original").addEventListener("click", async () => {
+  if (!confirm("¿Dejar el guion como lo escribiste tú? Se pierde la versión completada.")) return;
+  try { await api("/api/guion/original", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 $("g-completar").addEventListener("click", async () => {
   try { await api("/api/guion/completar", {}); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -690,6 +696,23 @@ $("fichas").addEventListener("click", async (ev) => {
 const duracionEscena = (e) => (e.tipo_clip === "imagen" ? `${String(e.segundos).replace(".", ",")} s en pantalla`
   : `clip de ${Math.min(8, Math.max(4, Math.ceil(e.segundos)))} s`);
 let anadirTras = null;   // escena tras la que se está escribiendo una nueva (0 = al principio)
+let archivoPara = null;  // escena para la que se busca foto de archivo
+let fotosArchivo = [];   // resultados de la última búsqueda
+const formArchivo = (n) => `
+      <article class="escena nueva-escena">
+        <div class="escena-cuerpo">
+          <b>Foto de archivo para la escena ${n}</b>
+          <div class="acciones">
+            <input class="campo" id="archivo-q" aria-label="Buscar foto de dominio público" placeholder="Qué buscar (personas, lugar, año…)">
+            <button class="primario" type="button" data-buscar-archivo="${n}">Buscar</button>
+            <button class="boton" type="button" data-cancelar-archivo>Cerrar</button>
+          </div>
+          <div class="fotos-archivo" id="archivo-res">${fotosArchivo.map((f, i) => `
+            <button type="button" data-usar-foto="${i}" data-orden="${n}" title="${esc(f.titulo)}">
+              <img src="${esc(f.url)}" alt="" loading="lazy"><span>${esc(f.fecha || "Sin fecha")} · usar</span></button>`).join("")}</div>
+          <p class="meta">Solo fotos de dominio público de Wikimedia Commons.</p>
+        </div>
+      </article>`;
 const formNueva = (tras) => `
       <article class="escena nueva-escena">
         <div class="escena-cuerpo">
@@ -748,7 +771,7 @@ function pintarEscenas({ escenas, activa }) {
             <button class="boton" data-quitar-escena="${e.orden}">Quitar escena</button>`}
           </div>
         </div>
-      </article>${anadirTras === e.orden ? formNueva(e.orden) : ""}`;
+      </article>${anadirTras === e.orden ? formNueva(e.orden) : ""}${archivoPara === e.orden ? formArchivo(e.orden) : ""}`;
   }).join("") || `<p class="meta">Gemini está convirtiendo el guion en escenas…</p>`;
   if (escenas.length && !importado) {
     $("escenas").insertAdjacentHTML("afterbegin", anadirTras === 0 ? formNueva(0)
@@ -774,16 +797,30 @@ $("escenas").addEventListener("click", async (ev) => {
       await api("/api/escena/anadir", { despues: Number(t.dataset.crearEscena), texto_voz: $("nueva-voz").value,
         que_se_ve: $("nueva-ve").value, tipo_clip: document.querySelector('input[name="nueva-tipo"]:checked').value });
       anadirTras = null;
-    } else if (t.dataset.archivo) {
-      const n = Number(t.dataset.archivo);
-      const q = prompt("Buscar foto de dominio público (Wikimedia Commons):", p.escenas[n - 1]?.accion_en || p.tema || "");
-      if (!q || q.trim().length < 2) return;
+    } else if (t.dataset.archivo) {   // abre la búsqueda de fotos de archivo bajo la escena
+      archivoPara = Number(t.dataset.archivo); fotosArchivo = [];
+      pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
+      $("archivo-q")?.focus();
+      return;
+    } else if (t.dataset.cancelarArchivo !== undefined) {
+      archivoPara = null; fotosArchivo = [];
+      pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
+      return;
+    } else if (t.dataset.buscarArchivo) {
+      const q = $("archivo-q").value.trim();
+      if (q.length < 2) return;
       t.disabled = true; t.textContent = "Buscando…";
-      try {
-        const { fotos } = await api(`/api/archivo?q=${encodeURIComponent(q.trim())}`);
-        if (!fotos.length) { aviso("No encontré fotos de dominio público para esa búsqueda."); return; }
-        await api("/api/escena/archivo", { orden: n, titulo: fotos[0].titulo });
-      } finally { t.disabled = false; t.textContent = "Foto de archivo"; }
+      try { fotosArchivo = (await api(`/api/archivo?q=${encodeURIComponent(q)}`)).fotos; }
+      finally { t.disabled = false; t.textContent = "Buscar"; }
+      if (!fotosArchivo.length) aviso("No encontré fotos de dominio público para esa búsqueda.");
+      pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
+      $("archivo-q").value = q;
+      return;
+    } else if (t.closest("[data-usar-foto]")) {
+      const b = t.closest("[data-usar-foto]");
+      b.disabled = true;
+      await api("/api/escena/archivo", { orden: Number(b.dataset.orden), titulo: fotosArchivo[Number(b.dataset.usarFoto)].titulo });
+      archivoPara = null; fotosArchivo = [];
     } else if (t.dataset.quitarEscena) {
       const n = Number(t.dataset.quitarEscena);
       if (!confirm(`¿Quitar la escena ${n}? Su texto sale del guion y la voz se rehace.`)) return;
@@ -1229,9 +1266,11 @@ function pintarTendencias(t, man = {}) {
     const md = man.datos?.manual;
     $("td-manual-bloque").hidden = !md;
     if (md) {
-      $("td-manual-sum").textContent = `Manual aprendido del canal · ${man.datos.fecha || ""} (${(man.datos.videos || []).length} vídeos estudiados)`;
+      $("td-manual-sum").textContent = `Manual del canal · ${(man.datos.videos || []).length} vídeos estudiados · ${man.datos.fecha || ""}`;
       $("td-manual").innerHTML = `<p>${esc(md.resumen || "")}</p><p class="meta"><b>Voz:</b> ${esc(md.voz || "")}</p>
-        <ul>${(md.reglas || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
+        ${(md.ganchos || []).length ? `<p class="meta"><b>Ganchos que funcionan</b></p><ul>${md.ganchos.map((g) =>
+          `<li>${esc(g.patron || "")}${g.ejemplo ? ` — «${esc(g.ejemplo)}» <span class="meta">(${esc(g.de || "")})</span>` : ""}</li>`).join("")}</ul>` : ""}
+        <p class="meta"><b>Reglas para el guion</b></p><ul>${(md.reglas || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul>`;
     }
   }
   $("td-nicho").hidden = !!c.nicho;

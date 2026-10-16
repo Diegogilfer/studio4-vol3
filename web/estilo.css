@@ -99,6 +99,14 @@ main { max-width: 1500px; margin: 0 auto; padding: 20px 24px 60px; display: grid
 .prod, .hero-cuerpo, .paso, .tarjeta, .escenas, .ajustes-render, .final, .dos, .entregas { min-width: 0; }
 .hero-cuerpo > *, .paso > *, .tarjeta > *, .prod > * { min-width: 0; }
 @media (max-width: 700px) { main { padding: 16px; } }
+.manual-canal { margin-bottom: 14px; display: grid; gap: 10px; }
+.manual-canal h3 { margin: 0; font: 400 1.4rem/1.2 "Instrument Serif", serif; }
+.manual-canal ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 6px; }
+.fotos-archivo { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.fotos-archivo button { padding: 0; border: 2px solid transparent; border-radius: 16px; overflow: hidden; background: var(--bg-panel); cursor: pointer; text-align: left; }
+.fotos-archivo button:hover, .fotos-archivo button:focus-visible { border-color: var(--accent); }
+.fotos-archivo img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; }
+.fotos-archivo span { display: block; padding: 6px 8px; font-size: .8rem; color: var(--fg-muted); }
 .tarjeta { border: 1px solid var(--vidrio-borde); border-radius: 1.5rem; background: var(--bg-panel); box-shadow: 0 18px 48px -32px rgb(0 0 0 / .7); padding: 22px; scroll-margin-top: 76px; }
 .cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
 .meta { font-size: 12.5px; font-weight: 500; color: var(--fg-muted); }

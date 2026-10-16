@@ -150,8 +150,17 @@ def _url_publica(url: str) -> str:
 
 
 def _texto_web(url: str) -> str:
-    _url_publica(url)
-    with requests.get(url, timeout=20, stream=True, headers={"User-Agent": "Mozilla/5.0 (STUDIO 4)"}) as r:
+    for _ in range(5):   # las redirecciones se siguen a mano, comprobando cada destino
+        _url_publica(url)
+        r = requests.get(url, timeout=20, stream=True, allow_redirects=False, headers={"User-Agent": "Mozilla/5.0 (STUDIO 4)"})
+        if r.is_redirect and r.headers.get("Location"):
+            url = urllib.parse.urljoin(url, r.headers["Location"])
+            r.close()
+            continue
+        break
+    else:
+        raise ValueError("El enlace redirige demasiadas veces.")
+    with r:
         r.raise_for_status()
         trozos, total = [], 0
         for b in r.iter_content(65536):

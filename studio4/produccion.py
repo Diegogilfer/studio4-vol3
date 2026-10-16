@@ -486,6 +486,19 @@ def completar_guion(pid: str, segundos: int | None = None) -> None:
     _en_fondo(pid, "Guion", fase)
 
 
+def volver_guion_original(pid: str) -> None:
+    """Deshace «Completar la historia»: vuelve tu texto tal cual (la versión completada se descarta)."""
+    def cambio(p):
+        if p["trabajo"].get("ocupado"):
+            raise RuntimeError("Espera a que termine la fase en curso.")
+        if p.get("guion_aprobado"):
+            raise ValueError("El guion ya está aprobado: reábrelo para cambiarlo.")
+        if not p.get("guion_original"):
+            raise ValueError("Este guion no se ha completado: ya es el tuyo.")
+        p.update(guion=p["guion_original"], autor_guion="Tú")
+    modificar(pid, cambio)
+
+
 def guardar_guion(pid: str, texto: str) -> None:
     texto = " ".join(str(texto).split())
     if len(texto.split()) < 10:

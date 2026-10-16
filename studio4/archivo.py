@@ -20,10 +20,10 @@ LIBRES = ("public domain", "pd", "cc0")
 
 
 def buscar(consulta: str, cuantas: int = 10, min_lado: int = 400) -> list[dict[str, Any]]:
-    """Fotos de dominio público que encajan con la consulta: [{titulo, url, ancho, alto, fecha}]."""
+    """Fotos de dominio público que encajan con la consulta: [{titulo, url (miniatura), ancho, alto, fecha}]."""
     r = requests.get(API, headers=CABECERAS, timeout=30, params=dict(
         action="query", format="json", generator="search", gsrsearch=f"{consulta} filetype:bitmap", gsrnamespace=6,
-        gsrlimit=cuantas * 2, prop="imageinfo", iiprop="url|size|extmetadata", iiurlwidth=1920)).json()
+        gsrlimit=cuantas * 2, prop="imageinfo", iiprop="url|size|extmetadata", iiurlwidth=330)).json()
     salida = []
     for p in ((r.get("query") or {}).get("pages") or {}).values():
         ii = p["imageinfo"][0]
