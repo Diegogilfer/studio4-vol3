@@ -1351,3 +1351,25 @@ def test_corregir_texto_de_escena_importada_no_toca_el_audio(aislado):
     assert q["voz"] is not None and q["escenas"][1]["texto_voz"] == "Jason Duval"
     assert [w["palabra"] for w in q["voz"]["palabras"]] == ["frase", "1", "Jason", "Duval"]
     assert all(3.0 <= w["ini"] and w["fin"] <= 6.0 for w in q["voz"]["palabras"][2:]) and q["guion"].endswith("Jason Duval")
+
+
+def test_transcripcion_va_diciendo_por_donde_va(monkeypatch, tmp_path):
+    """En un vídeo largo la barra avanza con el tiempo transcrito («6:30 de 17:45»), no se queda quieta."""
+    from studio4 import importar
+
+    class Palabra:
+        def __init__(self, w, a, b):
+            self.word, self.start, self.end = w, a, b
+
+    class Seg:
+        def __init__(self, fin, palabras):
+            self.end, self.words = fin, palabras
+
+    class Modelo:
+        def transcribe(self, *a, **k):
+            return iter([Seg(390.0, [Palabra(" hola", 1, 2)]), Seg(1065.8, [Palabra(" fin", 1060, 1065)])]), type("I", (), {"duration": 1065.8})()
+    monkeypatch.setattr(importar, "_whisper", Modelo())
+    pasos = []
+    palabras = importar.transcribir(tmp_path / "a.wav", avance=lambda fr, t: pasos.append((round(fr, 2), t)))
+    assert [w["palabra"] for w in palabras] == ["hola", "fin"]
+    assert pasos == [(0.37, "Transcribiendo el vídeo · 6:30 de 17:45"), (1.0, "Transcribiendo el vídeo · 17:45 de 17:45")]

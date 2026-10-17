@@ -74,17 +74,27 @@ def descargar(url: str, carpeta: Path, avisar: Callable[[str], None] = lambda _f
     return {"titulo": info.get("title") or "Vídeo importado", "canal": info.get("uploader") or "", "url": url}
 
 
-def transcribir(audio: Path, avisar: Callable[[str], None] = lambda _f: None) -> list[dict[str, Any]]:
-    """Palabras con su tiempo exacto ({palabra, ini, fin}), con Whisper en local (la primera vez baja el modelo)."""
+def _mmss(s: float) -> str:
+    return f"{int(s) // 60}:{int(s) % 60:02d}"
+
+
+def transcribir(audio: Path, avisar: Callable[[str], None] = lambda _f: None,
+                avance: Callable[[float, str], None] | None = None) -> list[dict[str, Any]]:
+    """Palabras con su tiempo exacto ({palabra, ini, fin}), con Whisper en local (la primera vez baja el modelo).
+    `avance(fraccion, texto)` va diciendo por dónde va («6:30 de 17:45»): en un vídeo largo tarda bastante y la
+    barra no puede quedarse quieta."""
     global _whisper
     from faster_whisper import WhisperModel
     if _whisper is None:
         avisar("Preparando el transcriptor (solo la primera vez tarda)")
         _whisper = WhisperModel(MODELO_WHISPER, device="cpu", compute_type="int8")
     avisar("Transcribiendo el vídeo palabra por palabra")
-    segmentos, _info = _whisper.transcribe(str(audio), word_timestamps=True, vad_filter=True)
+    segmentos, info = _whisper.transcribe(str(audio), word_timestamps=True, vad_filter=True)
+    total = float(getattr(info, "duration", 0) or 0)
     palabras = []
     for s in segmentos:
+        if avance and total:
+            avance(min(1.0, s.end / total), f"Transcribiendo el vídeo · {_mmss(s.end)} de {_mmss(total)}")
         for w in s.words or []:
             texto = w.word.strip()
             if texto:
@@ -149,7 +159,8 @@ def preparar(carpeta: Path, avisar: Callable[[str, int], None] = lambda *_: None
         avisar("Usando la transcripción ya hecha", 60)
     except (OSError, ValueError):
         avisar("Transcribiendo el vídeo palabra por palabra", 25)
-        palabras = transcribir(carpeta / "voz.wav", lambda f: avisar(f, 25))
+        palabras = transcribir(carpeta / "voz.wav", lambda f: avisar(f, 25),
+                               avance=lambda fr, texto: avisar(texto, 25 + int(35 * fr)))
         tmp = guardada.with_suffix(".tmp")
         tmp.write_text(json.dumps(palabras, ensure_ascii=False), encoding="utf-8")
         tmp.replace(guardada)
