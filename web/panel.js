@@ -817,15 +817,33 @@ function pintarTrabajo(t) {
   const enCrear = p && !p.guion_aprobado && !empezarOtro;   // en Crear, solo los del guion que estás revisando
   for (const id of ["t-error", "aviso-panel"]) {
     $(id).hidden = !t.error || (id === "aviso-panel" && !enCrear);
-    // La voz de Google sin saldo (402): salida directa con la voz de fal y su coste para este guion.
+    // La voz de Google sin saldo (402): primero, volver GRATIS a las voces del panel con una clave nueva;
+    // la voz de pago de fal queda como segunda opción, con su coste para este guion.
     const letras = (p?.escenas || []).reduce((n, e) => n + (e.texto_voz || "").length, 0);
-    const conFal = t.error && /\(402\)/.test(t.error) && estado?.fal && letras && !t.ocupado
-      ? `<button class="primario" type="button" data-voz-fal="1">Usar voz ElevenLabs por fal (≈ ${(letras / 1000 * 0.10).toFixed(2).replace(".", ",")} $)</button>` : "";
-    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${conFal}${!t.ocupado && t.reintentable !== false && !conFal
+    const sinSaldo = t.error && /\(402\)/.test(t.error) && !t.ocupado;
+    const gratis = sinSaldo ? `<span class="clave-gratis"><b>Sigue gratis con tus voces del panel:</b> crea una clave en
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
+        → «Create API key» → <b>en un proyecto nuevo</b> (sin facturación) y pégala aquí.
+        <span class="fila"><input class="campo" type="password" autocomplete="off" placeholder="AIza…" data-clave-gemini>
+        <button class="primario" type="button" data-guardar-clave="1">Probar y usar</button></span></span>` : "";
+    const conFal = sinSaldo && estado?.fal && letras
+      ? `<button class="boton" type="button" data-voz-fal="1">O voz de pago ElevenLabs por fal (≈ ${(letras / 1000 * 0.10).toFixed(2).replace(".", ",")} $)</button>` : "";
+    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${gratis}${conFal}${!t.ocupado && t.reintentable !== false && !sinSaldo
       ? `<button class="boton" type="button" data-reintentar="1"><svg width="14" height="14"><use href="#i-renovar"/></svg>Reintentar</button>` : ""}` : "";
   }
 }
 document.addEventListener("click", async (ev) => {
+  const g = ev.target.closest("[data-guardar-clave]");
+  if (g) {   // prueba la clave con una voz; si sirve, se guarda y se repite el paso que falló con la voz elegida
+    const campo = g.parentElement.querySelector("[data-clave-gemini]");
+    g.disabled = true; g.textContent = "Probando la voz…";
+    try {
+      await api("/api/clave-gemini", { clave: campo.value });
+      g.textContent = "Clave guardada · repitiendo";
+      await api("/api/reintentar", {}); await refrescar();
+    } catch (e) { aviso(e); g.textContent = "Probar y usar"; } finally { g.disabled = false; }
+    return;
+  }
   const f = ev.target.closest("[data-voz-fal]");
   if (f) {   // rehace la voz con ElevenLabs por fal (de pago; el coste se ve en el botón)
     f.disabled = true;

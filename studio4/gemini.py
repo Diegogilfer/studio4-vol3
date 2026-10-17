@@ -25,6 +25,43 @@ def cliente() -> genai.Client:
     return _cliente
 
 
+def cambiar_clave(clave: str) -> str:
+    """Una clave nueva de AI Studio para volver a las voces gratis. Antes de guardarla se prueba diciendo «Hola»
+    con una voz del panel: si Google la rechaza o es de un proyecto con facturación sin saldo (402), no se guarda
+    y se explica por qué. Si sirve, queda en .env y se usa al momento (sin reiniciar). Devuelve el modelo que habló."""
+    global _cliente
+    import re as _re
+    from dotenv import set_key
+    clave = (clave or "").strip()
+    if not _re.fullmatch(r"AIza[0-9A-Za-z_\-]{30,}", clave):
+        raise ValueError("Eso no parece una clave de Google: empiezan por «AIza» (cópiala de aistudio.google.com/apikey).")
+    prueba = genai.Client(api_key=clave)
+    cfg = types.GenerateContentConfig(response_modalities=["AUDIO"], speech_config=types.SpeechConfig(
+        voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=config.VOZ_GEMINI))))
+    ultimo = ""
+    for modelo in _modelos(config.MODELO_TTS, config.MODELOS_TTS_RESERVA):
+        try:
+            prueba.models.generate_content(model=modelo, contents="Di con calma: Hola.", config=cfg)
+            break
+        except Exception as e:  # noqa: BLE001
+            ultimo = str(e)
+            if "402" in ultimo or "prepayment" in ultimo:
+                raise ValueError("Esa clave es de un proyecto CON facturación y sin saldo, como la anterior. Crea la clave "
+                                 "en un proyecto NUEVO sin facturación («Create API key» → «Create API key in new project»).") from e
+            if "API_KEY_INVALID" in ultimo or "API key not valid" in ultimo:
+                raise ValueError("Google dice que esa clave no es válida: cópiala entera otra vez.") from e
+            logger.warning("Probando la clave nueva con %s: %s", modelo, ultimo[:200])
+    else:
+        raise ValueError(f"La clave funciona, pero Google no deja hacer voz con ella ahora mismo: {ultimo[:200]}")
+    config.ENV_FILE.touch(exist_ok=True)
+    set_key(str(config.ENV_FILE), "GEMINI_API_KEY", clave, quote_mode="never")
+    config.GEMINI_API_KEY = clave
+    _cliente = None
+    _bloqueo.update(hasta=0.0, motivo="")   # fuera la pausa por el 402 de la clave anterior
+    registro.apuntar("Gemini TTS", "prueba de la clave nueva", produccion="")
+    return modelo
+
+
 def _modelos(preferido: str, reserva: list[str]) -> list[str]:
     return list(dict.fromkeys([preferido, *reserva]))
 

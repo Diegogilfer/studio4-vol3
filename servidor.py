@@ -388,6 +388,10 @@ class Panel(BaseHTTPRequestHandler):
             pids = [produccion.desde_biblioteca(cid, i, str(d.get("voz", "gemini")), str(d.get("estilo", "")),
                                                 float(d.get("velocidad_voz") or 1.0)) for i in ids]
             return self._json({"ok": True, "ids": pids})
+        if ruta == "/api/clave-gemini":   # clave nueva de AI Studio: se prueba con una voz antes de guardarla
+            from studio4 import gemini
+            gemini.cambiar_clave(str(self._cuerpo_json().get("clave", "")))
+            return self._json({"ok": True})
         if ruta == "/api/ideas/diarias":   # volver a preparar las 3 ideas de hoy
             ideas.lanzar_diarias(canales.activo()["id"])
             return self._json({"ok": True})

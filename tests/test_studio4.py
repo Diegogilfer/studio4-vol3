@@ -1702,3 +1702,36 @@ def test_biblioteca_avisa_de_guiones_repetidos_entre_temas(aislado):
     assert r["repetidos"] == ["FL-006 corto a se parece a FL-001 corto e"]
     por_id = {g["id"]: g for g in r["guiones"]}
     assert por_id["FL-001-corto-e"]["parecido_a"] == ["FL-006 corto a"] and not por_id["FL-006-corto-b"]["parecido_a"]
+
+
+
+def test_clave_gemini_nueva_se_prueba_antes_de_guardarse(aislado, monkeypatch, tmp_path):
+    from studio4 import gemini
+
+    class Modelos:
+        def __init__(self, error):
+            self.error = error
+
+        def generate_content(self, **k):
+            if self.error:
+                raise RuntimeError(self.error)
+
+    class Cliente:
+        error = ""
+
+        def __init__(self, api_key):
+            self.models = Modelos(Cliente.error)
+    monkeypatch.setattr(gemini.genai, "Client", Cliente)
+    monkeypatch.setattr(config, "ENV_FILE", tmp_path / ".env")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "vieja")
+    clave = "AIza" + "x" * 35
+    with pytest.raises(ValueError, match="no parece"):
+        gemini.cambiar_clave("hola")
+    Cliente.error = "402 Your prepayment credits are depleted"
+    with pytest.raises(ValueError, match="proyecto NUEVO"):
+        gemini.cambiar_clave(clave)
+    assert config.GEMINI_API_KEY == "vieja" and not (tmp_path / ".env").exists()   # la mala no se guarda
+    Cliente.error = ""
+    gemini._bloquear(1800, "sin saldo")
+    gemini.cambiar_clave(clave)
+    assert config.GEMINI_API_KEY == clave and clave in (tmp_path / ".env").read_text() and not gemini.bloqueado()

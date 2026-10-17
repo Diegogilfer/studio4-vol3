@@ -40,7 +40,7 @@ VOCES_GEMINI = {
 }
 ESTILO_VOZ = os.getenv(
     "GEMINI_TTS_ESTILO",
-    "Narra en español neutro, como un documental intrigante: ritmo ágil, pausas cortas entre frases",
+    "Narra en español latino neutro, como un documental intrigante: ritmo ágil, pausas cortas entre frases",
 )
 
 # --- fal.ai (de pago por uso, con saldo previo): imágenes Nano Banana y vídeo Veo 3.1 sin la facturación de Google --
