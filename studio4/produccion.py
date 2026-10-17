@@ -709,6 +709,11 @@ def _fase_render(pid: str) -> None:
         raise
     modificar(pid, lambda q: q.update(estado="terminado", final={
         "archivo": final.name, "renderizado": time.strftime("%Y-%m-%d %H:%M:%S")}))
+    try:   # la voz y el material de cada escena, guardados en la carpeta del vídeo (no se pierden al borrarla)
+        _avisar(pid, "Guardando la voz y el material", 91)
+        carpetas.guardar_material(cargar(pid), carpeta(pid))
+    except Exception as e:  # noqa: BLE001 - el vídeo ya está hecho; guardar el material se puede repetir
+        logger.warning("No se pudo guardar el material: %s", e)
     # Siempre se entregan los 3 formatos: completo, Reels y Shorts, sin pulsar nada más.
     _avisar(pid, "Preparando Reels y Shorts para publicar", 92)
     try:

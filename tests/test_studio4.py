@@ -1451,3 +1451,28 @@ def test_ideas_del_dia_tres_de_canales_distintos_sin_nombrar_el_origen(aislado, 
     for x in d["ideas"]:
         assert x["fuente"]["canal"] not in x["texto"] and x["fuente"]["titulo"] not in x["texto"]   # el guionista no lo ve
     assert ideas.diarias("fourlevel")["hoy"] and len(ideas.diarias("fourlevel")["ideas"]) == 3
+
+
+def test_voz_y_material_se_guardan_en_la_carpeta_del_video(aislado):
+    from studio4 import carpetas
+    _produccion("p-mat", escenas=2, titulo="Armas de GTA 6", carpeta="",
+                investigacion={"fuentes": [{"url": "https://www.gtabase.com/gta-6/weapons"}]})
+    base = produccion.carpeta("p-mat")
+    (base / "tomas").mkdir()
+    (base / "voz.wav").write_bytes(b"RIFF voz")
+    (base / "tomas" / "e1.png").write_bytes(b"imagen 1")
+    (base / "tomas" / "e1_original.jpg").write_bytes(b"original 1")
+    (base / "tomas" / "e2.mp4").write_bytes(b"clip 2")
+
+    def preparar(q):
+        q["voz"] = {"archivo": "voz.wav", "proveedor": "fal", "duracion": 900.0}
+        q["escenas"][0].update(tomas=[{"archivo": "tomas/e1.png", "tipo": "imagen", "origen": "real", "url": "https://x/lucia-1080.jpg",
+                                       "fuente": "https://www.gtabase.com/gta-6/characters/lucia", "original": "tomas/e1_original.jpg"}], elegida=0)
+        q["escenas"][1].update(tomas=[{"archivo": "tomas/e2.mp4", "tipo": "video", "origen": "flow"}], elegida=0)
+    produccion.modificar("p-mat", preparar)
+    destino = carpetas.guardar_material(produccion.cargar("p-mat"), base)
+    nombres = sorted(str(f.relative_to(destino)).replace("\\\\", "/") for f in destino.rglob("*") if f.is_file())
+    assert any(n.endswith("- Voz.wav") for n in nombres) and any("escena 01 - original.jpg" in n for n in nombres)
+    assert any("escena 02.mp4" in n for n in nombres)
+    creditos = next(destino.glob("* - Fuentes y créditos.txt")).read_text(encoding="utf-8")
+    assert "lucia-1080.jpg" in creditos and "gtabase.com/gta-6/weapons" in creditos and "fal" in creditos

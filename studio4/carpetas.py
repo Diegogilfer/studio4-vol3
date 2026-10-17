@@ -23,6 +23,7 @@ logger = logging.getLogger("studio4.carpetas")
 RAIZ_USUARIO = Path(os.getenv("STUDIO4_CARPETA", str(Path.home() / "Videos" / "STUDIO 4")))
 # Subcarpetas: llevan delante el nombre del vídeo (ver subcarpeta()).
 CLIPS, GUION, ENTREGAS = "1 Clips de Flow", "2 Guion y escenas", "3 Entregas"
+MATERIAL = "4 Voz y material"   # la voz y lo que se usó en cada escena, guardado aunque se borre la producción
 EXTENSIONES = {".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 VERSION = {"corto": "Corto", "largo": "Largo", "propio": "Guion propio", "importado": "Importado"}
@@ -174,6 +175,54 @@ def importar(p: dict[str, Any], recibir) -> list[str]:
         finally:
             Path(tmp).unlink(missing_ok=True)
     return nuevas
+
+
+def _copiar(origen: Path, destino: Path) -> bool:
+    """Copia si falta o cambió (un vídeo largo no vuelve a copiar 100 imágenes iguales al montarse otra vez)."""
+    if not origen.is_file():
+        return False
+    if destino.is_file() and destino.stat().st_size == origen.stat().st_size:
+        return False
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(origen, destino)
+    return True
+
+
+def guardar_material(p: dict[str, Any], base_produccion: Path) -> Path:
+    """«4 Voz y material»: la voz, la imagen o el clip de cada escena (y su original a sangre), los retratos y de
+    dónde salió cada cosa. De un vídeo importado no se copian los trozos del original (ya tienes el vídeo)."""
+    destino = ruta(p) / subcarpeta(p, MATERIAL)
+    destino.mkdir(parents=True, exist_ok=True)
+    c = corto(p)
+    voz = p.get("voz") or {}
+    if voz.get("archivo") and voz.get("proveedor") != "original":
+        _copiar(base_produccion / voz["archivo"], destino / f"{c} - Voz{Path(voz['archivo']).suffix}")
+    creditos = [f"«{p.get('titulo') or p.get('tema', '')}» · voz, material y fuentes", ""]
+    if voz:
+        creditos.append(f"Voz: {voz.get('proveedor', '')} {voz.get('voz_nombre', '')} · {voz.get('duracion', 0)} s".rstrip())
+    for e in p.get("escenas") or []:
+        if e.get("elegida") is None:
+            continue
+        t = e["tomas"][e["elegida"]]
+        origen = t.get("origen", "")
+        linea = f"Escena {e['orden']:02d} · {origen or t.get('tipo', '')}"
+        if t.get("fuente") or t.get("url"):
+            linea += f" · {t.get('url') or ''} {('(' + t['fuente'] + ')') if t.get('fuente') else ''}".rstrip()
+        creditos.append(linea)
+        if origen == "original":
+            continue
+        archivo = base_produccion / t["archivo"]
+        _copiar(archivo, destino / "Escenas" / f"{c} - escena {e['orden']:02d}{archivo.suffix}")
+        if t.get("original"):
+            o = base_produccion / t["original"]
+            _copiar(o, destino / "Escenas" / f"{c} - escena {e['orden']:02d} - original{o.suffix}")
+    for retrato in sorted((base_produccion / "retratos").glob("*.png")):
+        _copiar(retrato, destino / "Retratos" / retrato.name)
+    paginas = [f.get("url", "") for f in ((p.get("investigacion") or {}).get("fuentes") or []) if f.get("url")]
+    if paginas:
+        creditos += ["", "Páginas investigadas:"] + [f"- {u}" for u in paginas]
+    (destino / f"{c} - Fuentes y créditos.txt").write_text("\n".join(creditos) + "\n", encoding="utf-8")
+    return destino
 
 
 def exportar(p: dict[str, Any], archivos: list[tuple[Path, str]], textos: str) -> Path:
