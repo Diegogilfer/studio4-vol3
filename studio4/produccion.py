@@ -405,7 +405,8 @@ def _investigar(pids: list[str], idea: str, dossier: dict | None = None) -> dict
         if propias:   # las webs de confianza del canal: datos de primera mano, por delante de lo general
             _avisar(pids, "Leyendo tus fuentes de confianza", 28)
             try:
-                extra = fuentes.investigar(idea, propias, produccion=pids[0])
+                largo = any(cargar(x).get("version") == "largo" for x in pids)   # 15 min necesitan muchos más datos
+                extra = fuentes.investigar(idea, propias, produccion=pids[0], paginas=10 if largo else fuentes.PAGINAS_POR_TEMA)
             except Exception as e:  # noqa: BLE001 - sin fuentes el guion sale igual
                 logger.warning("Fuentes del canal: %s", e)
                 extra = {"texto": "", "fuentes": []}

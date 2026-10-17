@@ -211,6 +211,12 @@ def estudiar_modelo(cid: str, url: str, nota: str = "") -> dict[str, Any]:
     return modelo
 
 
+def _sin_citas(texto: str) -> str:
+    """Quita las frases literales entre comillas (son del otro canal) y los nombres propios de canales."""
+    texto = re.sub(r"[“\"«][^”\"»]{0,240}[”\"»]", "…", str(texto))
+    return re.sub(r"\s*(?:Prueba literal|Literal de referencia)[^.]*\.", "", texto).strip()
+
+
 def voz_modelo(cid: str) -> str:
     """Cómo debe sonar la voz según los vídeos modelo del canal ("" si no hay)."""
     return " ".join(m.get("voz", "") for m in (leer(cid) or {}).get("modelos", []) if m.get("voz"))
@@ -244,11 +250,14 @@ def para_guion(cid: str) -> str:
         return ""
     previas = []
     for mo in d.get("modelos", []):   # el vídeo que el autor puso de ejemplo manda sobre todo lo demás
-        previas += [f"VÍDEO MODELO DEL AUTOR ({mo['url']}) · así quiere sus vídeos; manda sobre todo lo demás:",
-                    f"Nota del autor: {mo.get('nota', '')}", f"Qué es: {mo.get('resumen', '')}",
-                    f"Narrador: {mo.get('narrador', '')}", f"Ritmo: {mo.get('ritmo', '')}", f"Visual: {mo.get('visual', '')}",
-                    f"Datos: {mo.get('datos', '')}", "Estructura: " + " → ".join(mo.get("estructura") or []),
-                    f"Cierre: {mo.get('cierre', '')}"] + [f"- {r}" for r in mo.get("reglas") or []] + [""]
+        # Es de OTRO canal: se toman sus ideas y su forma, nunca su nombre, su enlace ni sus frases.
+        previas += ["VÍDEO MODELO (de otro canal; así quiere el autor sus vídeos). Toma solo IDEAS y FORMA: nunca "
+                    "menciones a ese canal ni a su autor, no copies su contenido ni ninguna de sus frases:",
+                    f"Nota del autor: {_sin_citas(mo.get('nota', ''))}", f"Qué es: {_sin_citas(mo.get('resumen', ''))}",
+                    f"Narrador: {_sin_citas(mo.get('narrador', ''))}", f"Ritmo: {_sin_citas(mo.get('ritmo', ''))}",
+                    f"Visual: {_sin_citas(mo.get('visual', ''))}", f"Datos: {_sin_citas(mo.get('datos', ''))}",
+                    "Estructura: " + " → ".join(_sin_citas(x) for x in mo.get("estructura") or []),
+                    f"Cierre: {_sin_citas(mo.get('cierre', ''))}"] + [f"- {_sin_citas(r)}" for r in mo.get("reglas") or []] + [""]
     if not d.get("manual"):
         return "\n".join(previas)
     m = d["manual"]

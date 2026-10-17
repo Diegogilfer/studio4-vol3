@@ -163,7 +163,7 @@ fechas, cifras y detalles concretos. En español, en viñetas breves, cada una t
 de donde sale). Máximo 20 viñetas. Solo lo que dicen las páginas; nada inventado."""
 
 
-def investigar(idea: str, fuentes: list[str], produccion: str = "") -> dict[str, Any]:
+def investigar(idea: str, fuentes: list[str], produccion: str = "", paginas: int = PAGINAS_POR_TEMA) -> dict[str, Any]:
     """{texto, fuentes: [{titulo, url}]} con lo que dicen las fuentes del canal sobre la idea (vacío si nada encaja)."""
     if not fuentes:
         return {"texto": "", "fuentes": []}
@@ -171,11 +171,11 @@ def investigar(idea: str, fuentes: list[str], produccion: str = "") -> dict[str,
     elegidas: list[str] = []
     for f in fuentes:
         try:
-            elegidas += elegir(indice(f), palabras)
+            elegidas += elegir(indice(f), palabras, n=paginas)
         except Exception as e:  # noqa: BLE001 - una fuente caída no frena la investigación
             logger.warning("Fuente %s: %s", f, e)
     paginas = []
-    for u in elegidas[:PAGINAS_POR_TEMA]:
+    for u in elegidas[:paginas]:
         try:
             paginas.append((u, texto_de(u)))
         except Exception as e:  # noqa: BLE001

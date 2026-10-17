@@ -1273,7 +1273,8 @@ def test_video_modelo_manda_en_el_guion_y_en_la_voz(aislado, monkeypatch):
     aprender.estudiar_modelo("fourlevel", "https://youtu.be/m", "así quiero mis vídeos")
     aprender.estudiar_modelo("fourlevel", "https://youtu.be/m", "nota nueva")   # el mismo vídeo se reemplaza, no se duplica
     texto = aprender.para_guion("fourlevel")
-    assert texto.startswith("VÍDEO MODELO DEL AUTOR (https://youtu.be/m)") and "Nota del autor: nota nueva" in texto
+    assert texto.startswith("VÍDEO MODELO (de otro canal") and "Nota del autor: nota nueva" in texto
+    assert "youtu.be" not in texto and "nunca menciones a ese canal" in texto   # ni su enlace ni su nombre
     assert texto.count("VÍDEO MODELO") == 1 and "- Usa narrador no humano" in texto
     assert aprender.voz_modelo("fourlevel") == "Voz sintética estilo Loquendo"
 
@@ -1425,3 +1426,10 @@ def test_mas_escenas_que_imagenes_se_reusan_en_vez_de_dejar_huecos():
     escenas = [{"orden": i, "texto_voz": "algo", "elegida": None} for i in range(1, 6)]
     reparto = galeria.repartir(escenas, imgs)
     assert sorted(reparto) == [1, 2, 3, 4, 5] and reparto[1]["url"] != reparto[2]["url"]
+
+
+
+def test_vídeo_modelo_sin_frases_literales_del_otro_canal():
+    from studio4 import aprender
+    t = aprender._sin_citas('Saluda con “Espero les guste y comenzamos”. Prueba literal: abre con «Rockstar acaba de revelar».')
+    assert "Espero les guste" not in t and "Rockstar acaba" not in t and "Saluda con" in t
