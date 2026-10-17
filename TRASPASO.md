@@ -47,8 +47,12 @@
 3. **Biblioteca en el panel** (lo pidió el autor): ver como ítems la voz, las imágenes y los clips de cada producción
    y lo más usado. El material ya se guarda en `Vídeos\STUDIO 4\<canal>\<vídeo>\4 Voz y material` con
    «Fuentes y créditos.txt» (`carpetas.guardar_material`).
-4. Preguntar qué quiere decir con **«Instagram agent skill»**.
-5. Futuro (no ahora): productos en 3D, estudio de pódcast, DeepSeek como acompañante por chat o voz.
+4. **Biblioteca de guiones** (lo pidió el autor): el autor prepara guiones por chat con otro asistente, en paquetes
+   por tema (FL-001…: 1 guion largo de 15 min + 5 cortos de 48 s, cada uno con título, descripción, hashtags y
+   fuentes). Studio 4 debería tener una pestaña donde pegar un paquete entero y crear solas las 6 producciones
+   (guion propio, formato 16:9 o 9:16 según el tipo, con sus textos), marcando qué código ya se produjo.
+5. Preguntar qué quiere decir con **«Instagram agent skill»**.
+6. Futuro (no ahora): productos en 3D, estudio de pódcast, DeepSeek como acompañante por chat o voz.
 
 ## Dónde está cada cosa (lo de estos días)
 
