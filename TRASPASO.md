@@ -25,33 +25,32 @@
 10. Imágenes reales de GTA: de las **páginas recomendadas** del canal (gtabase.com), con comentario propio y edición;
     sin música ni trozos largos de tráileres oficiales.
 
-## Estado ahora
+## Estado ahora (17-oct-2026)
 
-- **Clave de Gemini bloqueada (402, prepago a 0 $).** El texto funciona por la reserva (DeepSeek); la voz de Google
-  no. El autor debe crear una clave en un proyecto **sin facturación**. Mientras, voz por fal.
-- **Vídeo importado (Rai Can)** `20261015-225825-importado-video`: terminado (4 piezas) tras retomarse solo.
-  Es solo de prueba: **no se publica**.
-- **Vídeo de 15 min** `20261016-223818-largo-gta-6-las-armas-nuevas-que-veremos-los-a`: el guion (2.010 palabras)
-  salió **solo con Wikipedia** por un fallo ya corregido (`e58ae62`): la lectura de gtabase fallaba siempre.
-  **Hay que rehacer la investigación** (el «Escribir otra versión» reutiliza la investigación vieja).
+- **Clave de Gemini bloqueada (402, prepago a 0 $).** El texto va por la reserva (DeepSeek). Para la voz, el panel ya
+  ofrece pegar una **clave nueva gratis** (`gemini.cambiar_clave`, la prueba con una voz antes de guardarla). El
+  autor aún no la ha puesto; mientras, voz por fal (de pago, con su visto bueno).
+- **Biblioteca de guiones llena:** 12 temas (FL-001…FL-012), 72 guiones escritos por Agron (asistente por chat), en
+  `producciones/biblioteca_fourlevel.json`. Ya se creó la producción del **largo de FL-001**
+  (`20261017-140843-gta-6-todas-las-armas-autos-nuevos-y-rar`). **Repetido detectado:** FL-001 corto e ≈ FL-006
+  corto a (crear solo uno).
+- **Producciones antiguas:** el autor pidió empezar limpio; quedan 2 importaciones de prueba (Rai Can, no se publican).
+  Borrarlas lo hace el autor desde el panel (a un agente se le bloqueó el borrado).
+- **Ideas del día:** 3 cada día con imagen REAL de su tema (gtabase entero → Wikipedia → archivo), nunca la miniatura
+  del vídeo ajeno.
 
 ## Pendiente, en orden
 
-1. **Vídeo de 15 min** (tema: armas nuevas, autos nuevos y cosas raras/curiosidades de GTA 6):
-   - Rehacer investigación + guion con las fuentes ya arregladas (borra `investigacion` de esa producción y vuelve a
-     lanzar, o crea una nueva igual). Comprobar que en `investigacion.fuentes` aparecen páginas de **gtabase.com**.
-   - Enseñar el guion al autor antes de seguir.
-   - Antes de aprobar: `proveedor_voz = "fal"` (voz por trozos, ya implementada). Escenas por clips de 8 s.
-   - «Imágenes reales para todas · gratis» (galeria.py, ~110 escenas, formato largo 16:9) → montar → revisar.
-2. ~~Pruebas completas~~: hechas (101 de 101 con la CPU libre).
-3. **Biblioteca en el panel** (lo pidió el autor): ver como ítems la voz, las imágenes y los clips de cada producción
-   y lo más usado. El material ya se guarda en `Vídeos\STUDIO 4\<canal>\<vídeo>\4 Voz y material` con
-   «Fuentes y créditos.txt» (`carpetas.guardar_material`).
-4. ~~Biblioteca de guiones~~: hecha (Crear › Biblioteca, `studio4/biblioteca.py`). Los prompts para el asistente por
-   chat están en `PROMPTS_AGRON.md`. Lo que se pidió: el autor prepara guiones por chat con otro asistente, en paquetes
-   por tema (FL-001…: 1 guion largo de 15 min + 5 cortos de 48 s, cada uno con título, descripción, hashtags y
-   fuentes). Studio 4 debería tener una pestaña donde pegar un paquete entero y crear solas las 6 producciones
-   (guion propio, formato 16:9 o 9:16 según el tipo, con sus textos), marcando qué código ya se produjo.
+1. **Producir FL-001** (el largo ya creado y sus 5 cortos), uno a uno desde Crear › Biblioteca, enseñando cada guion
+   al autor antes de aprobar. Voz: la gratis de Google si el autor pone la clave nueva; si no, fal (≈1,10 $ el largo,
+   ≈0,07 $ cada corto). Después «Imágenes reales para todas · gratis» (salen primero de las FUENTES del paquete) →
+   montar → revisar con el autor.
+2. **Biblioteca de material en el panel** (lo pidió el autor): ver como ítems la voz, las imágenes y los clips de cada
+   producción y lo más usado. El material ya se guarda en `Vídeos\STUDIO 4\<canal>\<vídeo>\4 Voz y material`
+   (`carpetas.guardar_material`).
+3. **Voz local gratis (KittenTTS, Apache-2.0):** auditado; solo una voz en español y su normalizador es solo para
+   inglés. Pendiente de que el autor apruebe una prueba aislada (entorno aparte, un párrafo, medir tiempo y calidad).
+4. **Cola visible** de trabajos en la galería (idea sacada de otra app): un marcador «en espera» por pieza.
 5. Preguntar qué quiere decir con **«Instagram agent skill»**.
 6. Futuro (no ahora): productos en 3D, estudio de pódcast, DeepSeek como acompañante por chat o voz.
 
