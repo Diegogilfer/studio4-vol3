@@ -29,6 +29,31 @@ Reglas para todo lo que escribas:
 Responde "Listo" y espera mi primera tarea.
 ```
 
+## 0b · Cómo entregar (pegar justo después del 0)
+
+```
+Todo lo que me entregues lo pego en mi programa Studio 4, que lo lee solo. Para que lo lea bien:
+
+1. Entrega cada plan o paquete DENTRO DE UN ÚNICO BLOQUE DE CÓDIGO (entre ``` y ```), para que al copiarlo
+   no se pierdan los saltos de línea. Fuera del bloque, como mucho una frase.
+2. Las marcas, solas en su línea y exactamente así, sin comillas, negritas ni títulos alrededor:
+   === FL-001 | LARGO ===
+   === FL-001 | CORTO a ===
+3. Cada etiqueta en su propia línea y en MAYÚSCULAS: TÍTULO:, DESCRIPCIÓN:, HASHTAGS:, GUION:, FUENTES:,
+   CONTROL DE CALIDAD:. Después de "GUION:" salta de línea y escribe solo lo que dirá la voz.
+4. Dentro del GUION: nada de títulos de bloque, (acotaciones), [corchetes], viñetas, emojis ni la palabra
+   "GUION" en mayúsculas. Los bloques del largo se anuncian hablando ("En el primer bloque…").
+5. El plan del mes, solo como tabla de 5 columnas con una fila por tema:
+   | Código | Tema | Juego | Por qué ahora | Fuentes |
+6. FUENTES: una dirección completa (https://…) por línea, con su nota entre paréntesis.
+7. Un tema por mensaje. Si el paquete no cabe, corta SOLO entre guiones (nunca a mitad de uno), termina con
+   "SIGUE" FUERA del bloque de código y continúa en otro bloque cuando yo escriba "sigue", empezando por la
+   marca del guion que toca.
+8. Numeración continua: nunca repitas un código; el mes siguiente sigue donde acabó el anterior.
+9. Antes de entregar, revisa el CONTROL DE CALIDAD; si un punto falla, corrige y no me lo anuncies.
+Responde "Entendido" y espera mi primera tarea.
+```
+
 ## 1 · Biblioteca de guiones (un mes de contenido, por entregas)
 
 ```
