@@ -118,11 +118,23 @@ def pegar(cid: str, texto: str) -> dict[str, Any]:
     return {"guiones": guiones, "plan": plan_con_estado(cid), "temas_nuevos": len(filas)}
 
 
+_MARCA_SUELTA = re.compile(r"[«\"“]?\s*(={2,}\s*[A-Za-z]{1,6}[ -]?\d{1,4}\s*[|—–:·•/-]\s*(?:LARGO|CORTO)\b[^=\n|]*?={2,})\s*[»\"”]?",
+                           re.IGNORECASE)
+_ETIQUETAS = re.compile(r"[ \t]+(T[IÍ]TULO|DESCRIPCI[OÓ]N|HASHTAGS|GUI[OÓ]N|FUENTES|CONTROL DE CALIDAD)\s*:")
+
+
+def _separar(texto: str) -> str:
+    """Un paquete que llega en una sola línea (al copiar de un chat se pierden los saltos) o con la marca entre
+    comillas («=== FL-001 | LARGO ===»): cada marca y cada etiqueta vuelve a su propia línea."""
+    texto = _MARCA_SUELTA.sub(lambda m: f"\n{m.group(1)}\n", texto)
+    return _ETIQUETAS.sub(lambda m: f"\n{m.group(1)}:", texto)   # solo en MAYÚSCULAS: dentro del guion no se toca
+
+
 def limpiar(texto: str) -> str:
     """Quita el formato que añaden los chats (negritas, títulos «###», citas «>», bloques de código) sin tocar
     el texto: así el paquete se lee igual venga como venga pegado."""
     lineas = []
-    for linea in (texto or "").replace("\r\n", "\n").split("\n"):
+    for linea in _separar((texto or "").replace("\r\n", "\n")).split("\n"):
         if re.match(r"^\s*`{3,}", linea):   # las vallas de un bloque de código
             continue
         linea = re.sub(r"^\s*(?:#{1,6}|>)\s*", "", linea)        # «### …» y «> …»
@@ -133,7 +145,7 @@ def limpiar(texto: str) -> str:
 
 def fuentes_de(texto: str) -> list[dict[str, str]]:
     """Las páginas de la sección FUENTES del paquete (donde investigó el asistente), con su nota si la trae."""
-    m = re.search(r"^\s*FUENTES\b.*?$(.*?)(?=^\s*CONTROL DE CALIDAD\b|^\s*={3,}|\Z)", texto or "",
+    m = re.search(r"^\s*FUENTES\b(.*?)(?=^\s*CONTROL DE CALIDAD\b|^\s*={2,}|\Z)", texto or "",
                   re.IGNORECASE | re.MULTILINE | re.DOTALL)
     salida: list[dict[str, str]] = []
     for u, nota in re.findall(r"(https?://[^\s)\]>]+)\s*(?:\(([^)]*)\))?", m.group(1) if m else ""):

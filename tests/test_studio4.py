@@ -1671,3 +1671,19 @@ def test_biblioteca_guion_en_la_misma_linea_y_plan_sin_barra_inicial(aislado):
     assert r[0]["guion"].startswith("Esta es una frase") and "GUION" not in r[0]["guion"]
     r = biblioteca.pegar("fourlevel", "FL-003 | Largo viaje por Leonida | GTA 6 | x | https://www.gtabase.com/gta-6/")
     assert r["temas_nuevos"] == 1 and not r["guiones"]
+
+
+
+def test_biblioteca_paquete_pegado_en_una_sola_linea_y_con_comillas(aislado):
+    """Tal cual lo pegó el autor: marca entre «», y título, descripción, hashtags y guion en la misma línea."""
+    from studio4 import biblioteca
+    g = ("El primer avance oficial de Grand Theft Auto 6 superó las noventa millones de reproducciones en solo "
+         "veinticuatro horas. Hoy les traigo un análisis completo sobre cada arma, cada vehículo nuevo y cada rareza.")
+    texto = (f"«=== FL-001 | LARGO ===» TÍTULO: GTA 6: Todas las armas DESCRIPCIÓN: Analizamos a fondo los vehículos. "
+             f"HASHTAGS: #GTA6 #ViceCity GUION: {g} «=== FL-001 | CORTO a ===» TÍTULO: El arma rara GUION: {g} "
+             "FUENTES: https://www.gtabase.com/gta-6/weapons/ (armas) CONTROL DE CALIDAD: [x] Datos verificables")
+    r = biblioteca.pegar("fourlevel", texto)["guiones"]
+    assert [(x["codigo"], x["tipo"]) for x in r] == [("FL-001", "largo"), ("FL-001", "corto")]
+    assert r[0]["titulo"] == "GTA 6: Todas las armas" and r[0]["hashtags"] == ["#GTA6", "#ViceCity"]
+    assert r[0]["guion"] == g and r[1]["guion"] == g
+    assert r[0]["fuentes"][0]["url"] == "https://www.gtabase.com/gta-6/weapons/"
