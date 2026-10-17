@@ -1245,6 +1245,13 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .b-item b { font-size: 14px; } .b-item small { color: var(--fg-muted); font-size: 12px; }
 .b-codigo { font: 600 12px/1 var(--sans); padding: 6px 10px; border-radius: 999px; background: var(--control); white-space: nowrap; }
 .b-item.hecho { opacity: .6; }
+.b-plan { display: grid; gap: 6px; padding: 12px; border-radius: 18px; border: 1px dashed var(--caja-borde); }
+.b-plan-cab { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 0 4px 4px; }
+.b-plan-cab small { margin-right: auto; }
+.b-plan-cab small, .b-tema small { color: var(--fg-muted); font-size: 12px; }
+.b-tema { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 14px; }
+.b-tema b { font-size: 14px; } .b-tema.hecho { opacity: .55; }
+@media (max-width: 640px) { .b-tema, .b-item { grid-template-columns: minmax(0, 1fr); } }
 /* Desde URL */
 .u-logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--caja);
   border: 1px solid var(--caja-borde); color: var(--fg-muted); }
@@ -1338,8 +1345,8 @@ html .progreso div { transition: width 1.2s var(--calma); }
   border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
 .idea-dia img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; }
 .idea-img { position: relative; margin: 0; }
-.idea-img figcaption { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px;
-  background: rgba(0, 0, 0, .65); color: #fff; }
+.idea-img figcaption { position: absolute; right: 6px; bottom: 4px; font-size: 9px; letter-spacing: .02em;
+  color: rgb(255 255 255 / .38); text-shadow: 0 1px 2px rgb(0 0 0 / .5); pointer-events: none; }
 .idea-sin-img { aspect-ratio: 16 / 9; display: grid; place-items: center; background: #111; color: #9a9a9a; font-size: 13px; }
 .idea-dia-cuerpo { display: grid; gap: 8px; padding: 16px 18px 18px; align-content: start; }
 .idea-dia-cuerpo small { font-size: 12px; color: var(--fg-muted); } .idea-dia-cuerpo b.display { font-size: 21px; line-height: 1.15; }

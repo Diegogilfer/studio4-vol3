@@ -282,11 +282,26 @@ function pintarResumen() {
 $("a-guion").addEventListener("input", pintarResumen);
 // Biblioteca de guiones: pegar paquetes (escritos fuera) y convertirlos en producciones con un clic.
 let guionesBib = [];
+let planBib = [];
 async function cargarBiblioteca() {
-  try { guionesBib = (await api("/api/biblioteca")).guiones; } catch (e) { return aviso(e); }
+  try { ({ guiones: guionesBib, plan: planBib = [] } = await api("/api/biblioteca")); } catch (e) { return aviso(e); }
   pintarBiblioteca();
 }
+// El plan del mes de Agron: cada tema con lo que lleva y el mensaje listo para pedirle su paquete.
+function pintarPlan() {
+  $("b-plan").hidden = !planBib.length;
+  if (!planBib.length) return;
+  const listos = planBib.filter((t) => t.guiones).length;
+  $("b-plan").innerHTML = `<div class="b-plan-cab"><b>Plan del mes</b><small>${listos} de ${planBib.length} temas con guiones</small>
+      <button class="boton" type="button" data-b-mes="1">Copiar pedido del próximo mes</button></div>
+    ${planBib.map((t) => `<div class="b-tema ${t.creados && t.creados === t.guiones ? "hecho" : ""}">
+      <span class="b-codigo">${esc(t.codigo)}</span>
+      <span><b>${esc(t.tema)}</b><br><small>${esc(t.juego || "")}${t.por_que ? ` · ${esc(t.por_que)}` : ""}</small></span>
+      <span class="b-estado">${!t.guiones ? `<button class="boton" type="button" data-b-pedir="${esc(t.codigo)}">Copiar pedido para Agron</button>`
+        : `<small>${t.guiones} guiones · ${t.creados} creados</small>`}</span></div>`).join("")}`;
+}
 function pintarBiblioteca() {
+  pintarPlan();
   const pendientes = guionesBib.filter((x) => !x.producido).length;
   $("b-crear-todos").disabled = !pendientes;
   $("b-crear-todos").textContent = pendientes ? `Crear los ${pendientes} pendientes` : "Nada pendiente";
@@ -305,8 +320,28 @@ async function crearDesdeBiblioteca(ids, boton) {
   } catch (e) { aviso(e); } finally { boton.disabled = false; }
 }
 $("b-guardar").addEventListener("click", async () => {
-  try { guionesBib = (await api("/api/biblioteca", { texto: $("b-texto").value })).guiones; $("b-texto").value = ""; pintarBiblioteca(); }
-  catch (e) { aviso(e); }
+  try {
+    ({ guiones: guionesBib, plan: planBib = [] } = await api("/api/biblioteca", { texto: $("b-texto").value }));
+    $("b-texto").value = ""; pintarBiblioteca();
+  } catch (e) { aviso(e); }
+});
+$("b-plan").addEventListener("click", async (ev) => {
+  const mes = ev.target.closest("[data-b-mes]");
+  const b = mes || ev.target.closest("[data-b-pedir]");
+  if (!b) return;
+  let texto;
+  if (mes) {   // el mes siguiente sigue la numeración y no repite ningún tema ya planificado
+    const ultimo = Math.max(...planBib.map((x) => Number(x.codigo.split("-")[1]) || 0));
+    const pref = planBib[0].codigo.split("-")[0];
+    const desde = `${pref}-${String(ultimo + 1).padStart(3, "0")}`;
+    texto = `PLAN DEL MES SIGUIENTE: propón 12 temas nuevos, de ${desde} en adelante, con la misma tabla de 5 columnas `
+      + `(| Código | Tema | Juego | Por qué ahora | Fuentes |) y las mismas reglas. No repitas ninguno de estos temas ya hechos: `
+      + planBib.map((x) => `${x.codigo} ${x.tema}`).join("; ") + ". No escribas guiones todavía.";
+  } else {
+    const t = planBib.find((x) => x.codigo === b.dataset.bPedir);
+    texto = `siguiente: entrega el PAQUETE de ${t.codigo} («${t.tema}») con el FORMATO DE ENTREGA OBLIGATORIO, FUENTES y CONTROL DE CALIDAD.`;
+  }
+  try { await navigator.clipboard.writeText(texto); b.textContent = "Copiado: pégalo en Agron"; } catch (_) { prompt("Copia esto para Agron:", texto); }
 });
 $("b-crear-todos").addEventListener("click", (ev) => crearDesdeBiblioteca(guionesBib.filter((x) => !x.producido).map((x) => x.id), ev.currentTarget));
 $("b-lista").addEventListener("click", async (ev) => {

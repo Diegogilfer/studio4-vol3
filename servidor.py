@@ -226,7 +226,8 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(aprender.estado(canales.activo()["id"]))
         if ruta == "/api/biblioteca":   # los guiones guardados del canal
             from studio4 import biblioteca
-            return self._json({"guiones": biblioteca.leer(canales.activo()["id"])})
+            cid = canales.activo()["id"]
+            return self._json({"guiones": biblioteca.leer(cid), "plan": biblioteca.plan_con_estado(cid)})
         if ruta == "/api/ideas/diarias":   # 3 ideas listas cada día, preparadas solas
             return self._json(ideas.diarias(canales.activo()["id"]))
         if ruta == "/api/importar/vista":   # qué hay detrás del enlace, para confirmar antes de procesar
@@ -377,8 +378,8 @@ class Panel(BaseHTTPRequestHandler):
             from studio4 import biblioteca
             d = self._cuerpo_json()
             cid = canales.activo()["id"]
-            if ruta == "/api/biblioteca":   # pegar un paquete de guiones
-                return self._json({"guiones": biblioteca.anadir(cid, str(d.get("texto", "")))})
+            if ruta == "/api/biblioteca":   # pegar un paquete de guiones o el plan del mes
+                return self._json(biblioteca.pegar(cid, str(d.get("texto", ""))))
             if ruta == "/api/biblioteca/quitar":
                 biblioteca.quitar(cid, str(d.get("id", "")))
                 return self._json({"ok": True})

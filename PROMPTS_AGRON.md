@@ -1,6 +1,7 @@
 # Prompts para Agron (trabajo por chat, sin acceso al PC)
 
-Lo que Agron entrega se pega en Studio 4 › Crear › **Biblioteca** (paquetes de guiones) o se usa a mano
+Lo que Agron entrega se pega en Studio 4 › Crear › **Biblioteca** (el plan del mes y los paquetes de guiones;
+el plan queda a la vista con el botón «Copiar pedido para Agron» en cada tema sin guiones) o se usa a mano
 (títulos, calendario, posts). Pega primero el **0** al empezar una conversación nueva con Agron.
 
 Las reglas de los prompts 0 y 1 son las mismas que usa Studio 4 por dentro con DeepSeek, Gemini o cualquier
@@ -33,10 +34,14 @@ Responde "Listo" y espera mi primera tarea.
 ```
 Vamos a construir una BIBLIOTECA DE GUIONES para un mes, por entregas.
 
-PASO 1 (ahora): propón el PLAN DEL MES: 12 temas en una tabla con: código (FL-001…), tema, juego, por qué
-interesa ahora y qué páginas usarás como fuente. El primero: "GTA 6 — armas nuevas, autos nuevos y cosas
-raras/curiosidades". Mezcla novedades (GTA 6 y otros lanzamientos), historia y secretos de juegos famosos,
+PASO 1 (ahora): propón el PLAN DEL MES COMPLETO: 12 temas. El primero: "GTA 6 — armas nuevas, autos nuevos y
+cosas raras/curiosidades". Mezcla novedades (GTA 6 y otros lanzamientos), historia y secretos de juegos famosos,
 curiosidades técnicas y comparaciones. No escribas guiones todavía.
+Entrégalo SOLO como esta tabla (Studio 4 la lee tal cual; una fila por tema, sin filas vacías ni notas dentro):
+| Código | Tema | Juego | Por qué ahora | Fuentes |
+|---|---|---|---|---|
+| FL-001 | GTA 6: armas nuevas, autos nuevos y curiosidades | GTA 6 | … | https://www.gtabase.com/gta-6/weapons/ https://www.gtabase.com/gta-6/vehicles/ |
+(hasta FL-012)
 
 PASO 2 (cuando yo escriba "siguiente"): entrega el siguiente tema como un PAQUETE de 6 guiones:
   - 1 LARGO (15 min, ~2.000 palabras): bloques anunciados, conectores ("además", "según Rockstar"),

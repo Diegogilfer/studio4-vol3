@@ -1632,3 +1632,19 @@ def test_imagen_de_wikipedia_solo_del_articulo_del_tema(aislado, monkeypatch):
                                                                        "fuente": "Wikipedia · Nintendo Switch 2"}
     paginas.pop()
     assert ideas._de_wikipedia("El bundle de Switch 2 de Nintendo") == {}   # la actriz no tiene nada que ver
+
+
+
+def test_plan_del_mes_de_agron_en_la_biblioteca(aislado):
+    from studio4 import biblioteca
+    tabla = ("Aquí tienes el plan:\n\n| Código | Tema | Juego | Por qué ahora | Fuentes |\n|---|---|---|---|---|\n"
+             "| **FL-001** | GTA 6: armas y autos | GTA 6 | Tráiler 2 | https://www.gtabase.com/gta-6/weapons/ |\n"
+             "| FL-002 | El vampiro de Saint Denis | RDR2 | Halloween | https://www.gtabase.com/red-dead-redemption-2/ |\n")
+    r = biblioteca.pegar("fourlevel", tabla)
+    assert [p["codigo"] for p in r["plan"]] == ["FL-001", "FL-002"] and r["temas_nuevos"] == 2
+    assert r["plan"][0]["tema"] == "GTA 6: armas y autos" and "gtabase" in r["plan"][0]["fuentes"]
+    g = "Esta es una frase del guion corto con datos del Cheetah Classic de Leonida. " * 3
+    r = biblioteca.pegar("fourlevel", f"=== FL-001 | CORTO a ===\nTÍTULO: Autos\nGUION:\n{g}")
+    assert r["plan"][0]["guiones"] == 1 and r["plan"][1]["guiones"] == 0 and r["temas_nuevos"] == 0
+    with pytest.raises(ValueError):
+        biblioteca.pegar("fourlevel", "hola")

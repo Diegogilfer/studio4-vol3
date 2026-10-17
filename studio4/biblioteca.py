@@ -14,6 +14,10 @@ Formato del paquete (marcas fijas, para que nada dependa de cómo escriba cada a
     …
 
 LARGO → 16:9 (YouTube); CORTO → 9:16 (Shorts y Reels). Se guarda por canal y recuerda qué ya se produjo.
+
+El PLAN DEL MES (paso 1 del prompt) se pega en el mismo sitio: una tabla con una fila por tema,
+    | FL-001 | Tema | Juego | Por qué ahora | Fuentes |
+y el panel muestra en qué va cada tema (sin guiones, con guiones, creados).
 """
 
 from __future__ import annotations
@@ -47,6 +51,69 @@ def _escribir(cid: str, items: list[dict[str, Any]]) -> None:
     tmp = ruta.with_suffix(".tmp")
     tmp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(ruta)
+
+
+_FILA = re.compile(r"^\s*\|?\s*([A-Za-z]{1,6}-\d{1,4})\s*\|(.*)$", re.MULTILINE)
+
+
+def _archivo_plan(cid: str):
+    return config.PRODUCCIONES / f"plan_{cid}.json"
+
+
+def leer_plan(cid: str) -> list[dict[str, Any]]:
+    try:
+        return json.loads(_archivo_plan(cid).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def parsear_plan(texto: str) -> list[dict[str, Any]]:
+    """Las filas del plan del mes: código, tema, juego, por qué ahora y fuentes (las que falten quedan vacías)."""
+    plan: dict[str, dict[str, Any]] = {}
+    for m in _FILA.finditer(limpiar(texto)):
+        celdas = [c.strip() for c in m.group(2).split("|")]
+        celdas = (celdas + [""] * 4)[:max(4, len(celdas))]
+        codigo = m.group(1).upper()
+        plan[codigo] = {"codigo": codigo, "tema": celdas[0][:200], "juego": celdas[1][:80], "por_que": celdas[2][:400],
+                        "fuentes": " ".join(celdas[3:]).strip(" |")[:600]}
+    return [p for p in plan.values() if p["tema"]]
+
+
+def guardar_plan(cid: str, filas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Añade o actualiza los temas del plan (un código repetido reemplaza al anterior)."""
+    plan = {p["codigo"]: p for p in leer_plan(cid)}
+    for f in filas:
+        plan[f["codigo"]] = {**plan.get(f["codigo"], {}), **f}
+    filas = sorted(plan.values(), key=lambda p: p["codigo"])
+    ruta = _archivo_plan(cid)
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ruta.with_suffix(".tmp")
+    tmp.write_text(json.dumps(filas, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(ruta)
+    return filas
+
+
+def plan_con_estado(cid: str) -> list[dict[str, Any]]:
+    """El plan con lo que lleva cada tema: cuántos guiones hay en la biblioteca y cuántos ya se crearon."""
+    guiones = leer(cid)
+    salida = []
+    for p in leer_plan(cid):
+        suyos = [g for g in guiones if g["codigo"] == p["codigo"]]
+        salida.append({**p, "guiones": len(suyos), "creados": sum(1 for g in suyos if g.get("producido"))})
+    return salida
+
+
+def pegar(cid: str, texto: str) -> dict[str, Any]:
+    """Lo que se pega en la biblioteca: paquetes de guiones, el plan del mes o las dos cosas a la vez."""
+    hay_guiones = bool(_MARCA.search(limpiar(texto)))
+    filas = [] if hay_guiones else parsear_plan(texto)
+    if not hay_guiones and not filas:
+        raise ValueError("No encuentro guiones ni plan: cada guion empieza con «=== FL-001 | LARGO ===» y cada tema "
+                         "del plan es una fila «| FL-001 | Tema | Juego | Por qué ahora | Fuentes |».")
+    if filas:
+        guardar_plan(cid, filas)
+    guiones = anadir(cid, texto) if hay_guiones else leer(cid)
+    return {"guiones": guiones, "plan": plan_con_estado(cid), "temas_nuevos": len(filas)}
 
 
 def limpiar(texto: str) -> str:

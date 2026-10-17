@@ -131,10 +131,11 @@
           <div class="acciones-paso"><button class="primario" id="v-importar" type="button">Importar vídeo <svg width="16" height="16"><use href="#i-flecha"/></svg></button></div>
         </div>
         <div class="solo-biblioteca biblioteca" hidden>
-          <textarea id="b-texto" class="campo guion-texto" rows="6" placeholder="Pega aquí un paquete de guiones (cada uno empieza con «=== FL-001 | LARGO ===» o «=== FL-001 | CORTO a ===»)"></textarea>
+          <textarea id="b-texto" class="campo guion-texto" rows="6" placeholder="Pega aquí lo que te entrega Agron: el plan del mes (la tabla FL-001, FL-002…) o un paquete de guiones (cada uno empieza con «=== FL-001 | LARGO ===»)"></textarea>
           <div class="acciones-paso"><button class="boton" id="b-guardar" type="button">Guardar en la biblioteca</button>
             <button class="primario" id="b-crear-todos" type="button">Crear los pendientes</button></div>
           <p class="meta">El largo sale en 16:9 (YouTube) y los cortos en 9:16 (Shorts y Reels), con la voz y el estilo elegidos abajo.</p>
+          <div class="b-plan" id="b-plan" hidden></div>
           <div class="b-lista" id="b-lista"></div>
         </div>
         <div class="crear-opciones">
