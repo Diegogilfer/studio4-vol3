@@ -346,6 +346,7 @@ def listar_material(cid: str) -> list[dict[str, Any]]:
         it["_h"] = h
     for it in items:
         h = it.pop("_h")
+        it["huella"] = h
         it["usos"] = usos[h]
         it["videos_usado"] = len(videos_por_huella[h])
     return items

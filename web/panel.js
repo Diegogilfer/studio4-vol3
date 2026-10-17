@@ -1779,6 +1779,68 @@ $("ideas-hoy").addEventListener("click", async (ev) => {
     try { await api("/api/ideas/diarias", {}); await pintarIdeasHoy(); } catch (e) { aviso(e); }
   }
 });
+// Inicio: biblioteca de material del canal (voz, imágenes y clips de cada vídeo y lo más usado).
+let materialCanal = [];
+let filtroMaterial = "usado";
+let visiblesMaterial = 12;
+let precargaLista = false;
+const urlMaterial = (ruta) => `/material/${ruta.split("/").map(encodeURIComponent).join("/")}`;
+async function cargarMaterial() {
+  try { materialCanal = (await api("/api/material")).items || []; } catch (_) { return; }
+  pintarMaterial();
+}
+function pintarMaterial() {
+  const caja = $("material-bib");
+  if (!caja) return;
+  caja.hidden = !materialCanal.length;
+  if (!materialCanal.length) { caja.innerHTML = ""; return; }
+  const hayRepetidos = materialCanal.some((x) => x.usos > 1);
+  if (filtroMaterial === "usado" && !hayRepetidos) filtroMaterial = "todo";
+  const vistos = new Set();
+  const masUsados = [...materialCanal].filter((x) => x.usos > 1).sort((a, b) => b.usos - a.usos)
+    .filter((x) => { if (vistos.has(x.huella)) return false; vistos.add(x.huella); return true; });
+  const filtrados = filtroMaterial === "usado" ? masUsados
+    : filtroMaterial === "todo" ? materialCanal : materialCanal.filter((x) => x.tipo === filtroMaterial);
+  const lista = filtrados.length ? filtrados : materialCanal;
+  const mostrar = lista.slice(0, visiblesMaterial);
+  const filtros = [
+    ["usado", "Lo más usado"],
+    ["todo", `Todo (${materialCanal.length})`],
+    ["voz", "Voz"],
+    ["imagen", "Imágenes"],
+    ["clip", "Clips"],
+  ];
+  caja.innerHTML = `<div class="material-cab">
+      <div><span class="sello">Material del canal</span>
+        <h2 class="display">Voz, imágenes y <em>clips</em></h2></div>
+      <div class="chips" role="tablist" aria-label="Filtrar material">${filtros.map(([k, txt]) =>
+        `<button type="button" data-mat-filtro="${k}" class="${filtroMaterial === k ? "si" : ""}">${esc(txt)}</button>`).join("")}</div>
+    </div>
+    <div class="material-rejilla">${mostrar.map((it) => {
+      const src = urlMaterial(it.ruta);
+      const media = it.tipo === "voz"
+        ? `<div class="mat-media voz"><audio controls preload="none" src="${src}"></audio></div>`
+        : it.tipo === "clip"
+          ? `<div class="mat-media"><video src="${src}" controls preload="none"></video>${it.usos > 1 ? `<span class="mat-usos">${it.usos}×</span>` : ""}</div>`
+          : `<div class="mat-media"><img src="${src}" alt="" loading="lazy" data-sin-precarga="1">${it.usos > 1 ? `<span class="mat-usos">${it.usos}×</span>` : ""}</div>`;
+      return `<article class="mat-item">${media}
+        <div class="mat-cuerpo">
+          <div><small>${esc(it.etiqueta)}${it.fuente ? ` · ${esc(it.fuente)}` : ""}${it.videos_usado > 1 ? ` · en ${it.videos_usado} vídeos` : ""}</small>
+            <b>${esc(it.titulo)}</b></div>
+          <div class="fila" style="margin-top:4px"><button class="boton" type="button" data-abrir-video="${esc(it.video)}">Abrir carpeta</button></div>
+        </div></article>`;
+    }).join("")}</div>
+    ${lista.length > mostrar.length ? `<div class="mat-mas"><button class="boton" type="button" data-mat-mas="1">Ver más (${lista.length - mostrar.length} restantes)</button></div>` : ""}`;
+}
+$("material-bib")?.addEventListener("click", async (ev) => {
+  const f = ev.target.closest("[data-mat-filtro]");
+  if (f) { filtroMaterial = f.dataset.matFiltro; visiblesMaterial = 12; return pintarMaterial(); }
+  if (ev.target.closest("[data-mat-mas]")) { visiblesMaterial += 12; return pintarMaterial(); }
+  const abrir = ev.target.closest("[data-abrir-video]");
+  if (abrir) {
+    try { await api("/api/carpeta/abrir", { video: abrir.dataset.abrirVideo }); } catch (e) { aviso(e); }
+  }
+});
 $("tendencias").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-idea]");
   if (!b) return;
@@ -1805,6 +1867,7 @@ async function refrescar() {
   pintarFlow(d);
   siCambia("lista", { lista, activa: d.produccion?.id, c: d.canal?.nombre }, () => pintarLista(lista));
   siCambia("ideas-hoy", d.canal?.id, pintarIdeasHoy);
+  if (precargaLista) siCambia("material", { c: d.canal?.id, f: d.produccion?.final?.renderizado }, cargarMaterial);
   if (ideasDia.ocupado && vistaActual() === "inicio") pintarIdeasHoy();   // mientras se preparan, se ve el avance
   siCambia("motor", d.produccion && { a: d.produccion.guion_aprobado, g: !!d.produccion.guion, e: d.produccion.escenas,
     v: !!d.produccion.voz, f: !!d.produccion.final, p: d.produccion.entregas?.piezas?.length }, () => pintarMotor(d.produccion));
@@ -1857,7 +1920,7 @@ async function precargar() {
     await pintarIdeasHoy();
     estadoP("Cargando las letras…", 0.4);
     await document.fonts.ready;
-    const fuentes = [...new Set([...document.images].map((i) => i.currentSrc || i.src).filter(Boolean))];
+    const fuentes = [...new Set([...document.images].filter((i) => !i.dataset.sinPrecarga).map((i) => i.currentSrc || i.src).filter(Boolean))];
     let hechas = 0;
     estadoP(`Cargando imágenes… 0 de ${fuentes.length}`, 0.45);
     await Promise.all(fuentes.map((src) => new Promise((listo) => {
@@ -1866,7 +1929,7 @@ async function precargar() {
       im.onload = im.onerror = () => { hechas += 1; estadoP(`Cargando imágenes… ${hechas} de ${fuentes.length}`, 0.45 + 0.55 * hechas / fuentes.length); listo(); };
       im.src = src;
     })));
-    document.querySelectorAll('img[loading="lazy"]').forEach((i) => { i.loading = "eager"; });
+    document.querySelectorAll('img[loading="lazy"]:not([data-sin-precarga])').forEach((i) => { i.loading = "eager"; });
   })();
   try {
     await Promise.race([todo, new Promise((listo) => setTimeout(listo, 45000))]);
@@ -1877,9 +1940,12 @@ async function precargar() {
   const capa = $("precarga");
   capa.style.opacity = "0";
   setTimeout(() => capa.remove(), 400);
+  precargaLista = true;
+  cargarMaterial();
 }
 
 precargar();
 cargarYoutube();
 setInterval(() => refrescar().catch(() => {}), 2000);
 setInterval(cargarYoutube, 5 * 60 * 1000);
+

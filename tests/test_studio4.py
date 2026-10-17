@@ -1784,3 +1784,14 @@ def test_biblioteca_de_material_y_seguridad_de_rutas(servidor, aislado, monkeypa
     for intento in ("../..", "C:\\Windows", "FourLevel/../../secreto"):
         assert pedir("POST", "/api/carpeta/abrir", cab, json.dumps({"video": intento}).encode())[0] == 400
 
+
+def test_panel_muestra_material_en_inicio_sin_retrasar_precarga():
+    html = (config.WEB / "index.html").read_text(encoding="utf-8")
+    js = (config.WEB / "panel.js").read_text(encoding="utf-8")
+    assert html.index('id="lista"') < html.index('id="material-bib"') < html.index('class="motor"')
+    assert 'id="material-bib" hidden' in html
+    assert '["usado", "Lo más usado"]' in js and "let visiblesMaterial = 12;" in js
+    assert "data-sin-precarga" in js and '!i.dataset.sinPrecarga' in js
+    assert '<audio controls preload="none"' in js and '<video src="${src}" controls preload="none">' in js
+
+
