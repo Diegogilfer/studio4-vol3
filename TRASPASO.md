@@ -17,7 +17,7 @@
 5. **Nada de pago sin su visto bueno** y con tope. Ya aprobado: voz **ElevenLabs por fal** para el vídeo de 15 min
    (~1,20 $, tope 2 $). Imágenes por fal: solo si lo pide.
 6. **Google Flow no se automatiza** (riesgo para su cuenta): la extensión solo muestra prompts y recoge clips.
-7. **Commit solo si pasan las pruebas** (`python -m pytest tests/test_studio4.py -q -p no:cacheprovider`, 97 hoy).
+7. **Commit solo si pasan las pruebas** (`python -m pytest tests/test_studio4.py -q -p no:cacheprovider`, 101 hoy).
    Comprueba el resultado con `grep failed`, no con el código de salida de una tubería.
 8. **Comprueba visualmente** cada cambio de panel (captura con Edge sin ventana contra el servidor de prueba).
 9. **Vídeos de otros canales** (p. ej. el de Rai Can): solo ideas y forma. **Nunca** mencionarlo, enlazarlo ni copiar
@@ -29,7 +29,7 @@
 
 - **Clave de Gemini bloqueada (402, prepago a 0 $).** El texto funciona por la reserva (DeepSeek); la voz de Google
   no. El autor debe crear una clave en un proyecto **sin facturación**. Mientras, voz por fal.
-- **Vídeo importado (Rai Can)** `20261015-225825-importado-video`: montándose en el servidor del autor (al 90 %).
+- **Vídeo importado (Rai Can)** `20261015-225825-importado-video`: terminado (4 piezas) tras retomarse solo.
   Es solo de prueba: **no se publica**.
 - **Vídeo de 15 min** `20261016-223818-largo-gta-6-las-armas-nuevas-que-veremos-los-a`: el guion (2.010 palabras)
   salió **solo con Wikipedia** por un fallo ya corregido (`e58ae62`): la lectura de gtabase fallaba siempre.
@@ -43,11 +43,12 @@
    - Enseñar el guion al autor antes de seguir.
    - Antes de aprobar: `proveedor_voz = "fal"` (voz por trozos, ya implementada). Escenas por clips de 8 s.
    - «Imágenes reales para todas · gratis» (galeria.py, ~110 escenas, formato largo 16:9) → montar → revisar.
-2. Cuando la CPU esté libre: **las 97 pruebas completas** (con la CPU ocupada por una transcripción tardan mucho).
+2. ~~Pruebas completas~~: hechas (101 de 101 con la CPU libre).
 3. **Biblioteca en el panel** (lo pidió el autor): ver como ítems la voz, las imágenes y los clips de cada producción
    y lo más usado. El material ya se guarda en `Vídeos\STUDIO 4\<canal>\<vídeo>\4 Voz y material` con
    «Fuentes y créditos.txt» (`carpetas.guardar_material`).
-4. **Biblioteca de guiones** (lo pidió el autor): el autor prepara guiones por chat con otro asistente, en paquetes
+4. ~~Biblioteca de guiones~~: hecha (Crear › Biblioteca, `studio4/biblioteca.py`). Los prompts para el asistente por
+   chat están en `PROMPTS_AGRON.md`. Lo que se pidió: el autor prepara guiones por chat con otro asistente, en paquetes
    por tema (FL-001…: 1 guion largo de 15 min + 5 cortos de 48 s, cada uno con título, descripción, hashtags y
    fuentes). Studio 4 debería tener una pestaña donde pegar un paquete entero y crear solas las 6 producciones
    (guion propio, formato 16:9 o 9:16 según el tipo, con sus textos), marcando qué código ya se produjo.
