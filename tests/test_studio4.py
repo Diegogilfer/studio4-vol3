@@ -1220,7 +1220,8 @@ def test_idea_en_tendencia_es_original_y_detallada(aislado, monkeypatch):
     d = ideas.inspirar("fourlevel", {"titulo": "SON IGUALES", "canal": "MrRelevante", "vistas": 6000000, "url": "https://youtu.be/x"})
     assert d["leido"] and "¿Recuerdan a este youtuber?" in pedidos[0] and "6.000.000 vistas" in pedidos[0]
     t = ideas.como_texto(d)
-    assert "Inspirada en «SON IGUALES» (MrRelevante)" in t and "gancho → dato → apuesta" in t and "- 1:1" in t
+    assert "SON IGUALES" not in t and "MrRelevante" not in t   # el guionista nunca ve el vídeo ni el canal de origen
+    assert "gancho → dato → apuesta" in t and "- 1:1" in t
 
 
 def test_edicion_transiciones_y_efectos():
@@ -1433,3 +1434,20 @@ def test_vídeo_modelo_sin_frases_literales_del_otro_canal():
     from studio4 import aprender
     t = aprender._sin_citas('Saluda con “Espero les guste y comenzamos”. Prueba literal: abre con «Rockstar acaba de revelar».')
     assert "Espero les guste" not in t and "Rockstar acaba" not in t and "Saluda con" in t
+
+
+def test_ideas_del_dia_tres_de_canales_distintos_sin_nombrar_el_origen(aislado, monkeypatch):
+    from studio4 import ideas, youtube
+    monkeypatch.setattr(youtube, "disponible", lambda: True)
+    videos = [{"id": f"v{i}", "titulo": f"Vídeo {i}", "canal": c, "vistas": 1000, "vistas_hora": 100 - i, "segundos": 30,
+               "url": f"https://youtu.be/v{i}"} for i, c in enumerate(["MrRelevante", "MrRelevante", "Otro", "Tercero", "Cuarto"])]
+    monkeypatch.setattr(ideas, "en_vivo", lambda cid, n=12: videos)
+    monkeypatch.setattr(ideas, "inspirar", lambda cid, v: {"idea": f"Idea de {v['id']}", "por_que": "porque sí",
+        "original": "lista rápida", "gancho": "¿Sabías…?", "estructura": ["a", "b"], "detalles": ["x"], "formato": "corto",
+        "fuente": {"titulo": v["titulo"], "canal": v["canal"], "url": v["url"]}})
+    d = ideas.generar_diarias("fourlevel")
+    assert [x["idea"] for x in d["ideas"]] == ["Idea de v0", "Idea de v2", "Idea de v3"]   # un solo vídeo por canal
+    assert d["ideas"][0]["miniatura"] == "https://i.ytimg.com/vi/v0/hqdefault.jpg"
+    for x in d["ideas"]:
+        assert x["fuente"]["canal"] not in x["texto"] and x["fuente"]["titulo"] not in x["texto"]   # el guionista no lo ve
+    assert ideas.diarias("fourlevel")["hoy"] and len(ideas.diarias("fourlevel")["ideas"]) == 3

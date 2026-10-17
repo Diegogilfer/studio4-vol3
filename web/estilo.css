@@ -1324,6 +1324,14 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .idea-hoy small { font-size: 12px; color: var(--fg-muted); }
 .idea-hoy b.display { font-size: 22px; line-height: 1.15; }
 .idea-hoy .primario { justify-self: start; }
+/* Ideas del día: miniatura del vídeo que las inspiró + la idea; «Ver todo» abre el detalle */
+.idea-dia { display: grid; grid-template-rows: auto 1fr; border-radius: var(--r-caja); overflow: hidden; background: var(--caja);
+  border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
+.idea-dia img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; }
+.idea-dia-cuerpo { display: grid; gap: 8px; padding: 16px 18px 18px; align-content: start; }
+.idea-dia-cuerpo small { font-size: 12px; color: var(--fg-muted); } .idea-dia-cuerpo b.display { font-size: 21px; line-height: 1.15; }
+.idea-dia-cuerpo p { margin: 0; } .idea-detalle { display: grid; gap: 6px; font-size: 13.5px; }
+.idea-detalle ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 4px; color: var(--fg-muted); }
 .ideas-vacio { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .ideas-vacio b.display { font-size: clamp(22px, 2.4vw, 30px); }
 .td-nicho li .boton, .idea-hoy .primario, .td-idea .primario { white-space: nowrap; flex: none; }

@@ -1545,10 +1545,10 @@ $("td-aprender")?.addEventListener("click", async () => {
   try { await api("/api/manual", {}); await cargarTendencias(); } catch (e) { aviso(e); }
 });
 // Un clic: la idea (de Tendencias, de un nicho o de Inicio) se convierte en producción con lo de siempre del canal.
-async function crearRapido(idea, version = "corto", boton = null) {
+async function crearRapido(idea, version = "corto", boton = null, datos = "") {
   if (boton) boton.disabled = true;
   try {
-    await api("/api/crear-rapido", { idea, version });
+    await api("/api/crear-rapido", { idea, version, datos });
     empezarOtro = false; paso = 1;
     await refrescar();
     location.hash = "#crear";
@@ -1559,20 +1559,51 @@ document.addEventListener("click", (ev) => {
   if (b) crearRapido(b.dataset.rapido, b.dataset.formato || "corto", b);
 });
 // Inicio: las ideas del día del canal, para crear con un clic.
+// Inicio: 3 ideas listas cada día (lo que más crece en el nicho, leído y convertido en idea propia).
+let ideasDia = { ideas: [] };
+let ideaAbierta = -1;
 async function pintarIdeasHoy() {
-  let t;
-  try { t = await api("/api/tendencias"); } catch (_) { return; }
-  const ideas = t.datos?.informe?.ideas || [];
+  try { ideasDia = await api("/api/ideas/diarias"); } catch (_) { return; }
+  const d = ideasDia;
   $("ideas-hoy").hidden = false;
-  $("ideas-hoy").innerHTML = ideas.length ? `<div class="ideas-cab"><span class="sello">Ideas para hoy</span>
-      <a class="boton" href="#tendencias">Ver tendencias</a></div>
-    <div class="ideas-lista">${ideas.slice(0, 4).map((x) => `<div class="idea-hoy"><small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"}</small>
-      <b class="display">${esc(x.idea)}</b>
-      <button class="primario" type="button" data-rapido="${esc(x.idea)}" data-formato="${x.formato === "largo" ? "largo" : "corto"}">Crear ya</button></div>`).join("")}</div>`
-    : `<div class="ideas-cab"><span class="sello">Ideas para hoy</span></div>
-    <div class="ideas-vacio"><b class="display">Busca ideas con <em>tirón</em> para tu canal</b>
-      <a class="primario" href="#tendencias">Ver tendencias</a></div>`;
+  const cab = `<div class="ideas-cab"><span class="sello">Ideas para hoy${d.generadas ? ` · ${esc(d.generadas)}` : ""}</span>
+      <button class="boton" type="button" id="ideas-renovar" ${d.ocupado ? "disabled" : ""}>Buscar otras 3</button></div>`;
+  if (d.ocupado && !(d.hoy && d.ideas.length)) {
+    $("ideas-hoy").innerHTML = `${cab}<div class="ideas-vacio"><b class="display">Preparando las <em>3 ideas</em> de hoy…</b>
+      <span class="meta">${esc(d.fase || "")}</span></div>`;
+    return;
+  }
+  if (!d.ideas.length) {
+    $("ideas-hoy").innerHTML = `${cab}<div class="ideas-vacio"><b class="display">Aún no hay ideas para <em>hoy</em></b>
+      <span class="meta">${esc(d.error || "Conecta YouTube y pon el nicho del canal para prepararlas.")}</span></div>`;
+    return;
+  }
+  $("ideas-hoy").innerHTML = `${cab}<div class="ideas-lista">${d.ideas.map((x, i) => `<article class="idea-dia">
+      <img src="${esc(x.miniatura)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      <div class="idea-dia-cuerpo">
+        <small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"} · ${compactoNum(x.fuente?.vistas_hora || 0)} vistas/hora</small>
+        <b class="display">${esc(x.idea)}</b>
+        <p class="meta">${esc(x.por_que || "")}</p>
+        ${ideaAbierta === i ? `<div class="idea-detalle"><p><b>Gancho:</b> ${esc(x.gancho || "")}</p>
+          <p><b>Estructura:</b> ${esc((x.estructura || []).join(" → "))}</p>
+          <ul>${(x.detalles || []).map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
+          <p class="meta">Inspirada en «${esc(x.fuente?.titulo || "")}» (${esc(x.fuente?.canal || "")}): solo lo ves tú; el vídeo nunca lo menciona.</p></div>` : ""}
+        <div class="fila"><button class="primario" type="button" data-idea-dia="${i}">Crear ya</button>
+          <button class="boton" type="button" data-ver-idea="${i}">${ideaAbierta === i ? "Ver menos" : "Ver todo"}</button></div>
+      </div></article>`).join("")}</div>`;
 }
+$("ideas-hoy").addEventListener("click", async (ev) => {
+  const ver = ev.target.closest("[data-ver-idea]");
+  if (ver) { ideaAbierta = ideaAbierta === Number(ver.dataset.verIdea) ? -1 : Number(ver.dataset.verIdea); return pintarIdeasHoy(); }
+  const crear = ev.target.closest("[data-idea-dia]");
+  if (crear) {
+    const x = ideasDia.ideas[Number(crear.dataset.ideaDia)];
+    return crearRapido(x.idea, x.formato === "largo" ? "largo" : "corto", crear, x.texto || "");
+  }
+  if (ev.target.closest("#ideas-renovar")) {
+    try { await api("/api/ideas/diarias", {}); await pintarIdeasHoy(); } catch (e) { aviso(e); }
+  }
+});
 $("tendencias").addEventListener("click", (ev) => {
   const b = ev.target.closest("[data-idea]");
   if (!b) return;
@@ -1599,6 +1630,7 @@ async function refrescar() {
   pintarFlow(d);
   siCambia("lista", { lista, activa: d.produccion?.id, c: d.canal?.nombre }, () => pintarLista(lista));
   siCambia("ideas-hoy", d.canal?.id, pintarIdeasHoy);
+  if (ideasDia.ocupado && vistaActual() === "inicio") pintarIdeasHoy();   // mientras se preparan, se ve el avance
   siCambia("motor", d.produccion && { a: d.produccion.guion_aprobado, g: !!d.produccion.guion, e: d.produccion.escenas,
     v: !!d.produccion.voz, f: !!d.produccion.final, p: d.produccion.entregas?.piezas?.length }, () => pintarMotor(d.produccion));
 

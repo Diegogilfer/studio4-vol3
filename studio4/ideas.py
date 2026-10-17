@@ -8,10 +8,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import threading
+import time
 from typing import Any
 
-from . import aprender, canales, registro, tendencias, youtube
+from . import aprender, canales, config, registro, tendencias, youtube
 
 logger = logging.getLogger("studio4.ideas")
 
@@ -60,10 +63,84 @@ def inspirar(cid: str, video: dict[str, Any]) -> dict[str, Any]:
 
 
 def como_texto(d: dict[str, Any]) -> str:
-    """El detalle para «Datos que no pueden faltar»: lo que el guionista recibe como material prioritario."""
-    f = d.get("fuente") or {}
-    lineas = [f"Inspirada en «{f.get('titulo', '')}» ({f.get('canal', '')}), sin copiarla: {d.get('por_que', '')}",
-              f"De qué trata el original: {d.get('original', '')}", f"Gancho: {d.get('gancho', '')}",
-              "Estructura: " + " → ".join(d.get("estructura") or [])]
+    """El detalle para «Datos que no pueden faltar»: lo que el guionista recibe como material prioritario.
+    Nunca nombra el vídeo ni el canal que la inspiró (eso solo lo ve el autor en el panel)."""
+    lineas = ["Idea original del canal (no menciones ni copies ningún vídeo ni canal ajeno).",
+              f"Por qué puede funcionar: {d.get('por_que', '')}",
+              f"Tipo de vídeo que está funcionando (solo como referencia de forma): {d.get('original', '')}",
+              f"Gancho: {d.get('gancho', '')}", "Estructura: " + " → ".join(d.get("estructura") or [])]
     lineas += [f"- {x}" for x in d.get("detalles") or []]
     return "\n".join(x for x in lineas if x.split(":", 1)[-1].strip())
+
+
+# --- 3 ideas listas cada día ---------------------------------------------------------------------
+IDEAS_AL_DIA = 3
+_estado: dict[str, dict[str, Any]] = {}
+_cerrojo = threading.Lock()
+
+
+def _archivo(cid: str):
+    return config.PRODUCCIONES / f"ideas_dia_{cid}.json"
+
+
+def _hoy() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
+def generar_diarias(cid: str, avisar=lambda _f: None) -> dict[str, Any]:
+    """Lo que más crece hoy en el nicho → 3 ideas originales con todo el detalle y la miniatura del vídeo que las
+    inspiró (cada una de un canal distinto)."""
+    videos = en_vivo(cid, n=12)
+    ideas, canales_vistos = [], set()
+    for v in videos:
+        if len(ideas) >= IDEAS_AL_DIA:
+            break
+        if v["canal"] in canales_vistos:
+            continue
+        avisar(f"Leyendo «{v['titulo'][:40]}» ({len(ideas) + 1} de {IDEAS_AL_DIA})")
+        try:
+            d = inspirar(cid, v)
+        except Exception as e:  # noqa: BLE001 - un vídeo que no se puede leer deja paso al siguiente
+            logger.warning("Idea desde %s: %s", v.get("url"), e)
+            continue
+        canales_vistos.add(v["canal"])
+        d["miniatura"] = f"https://i.ytimg.com/vi/{v['id']}/hqdefault.jpg"
+        d["fuente"] = {**d.get("fuente", {}), "vistas_hora": v.get("vistas_hora"), "segundos": v.get("segundos")}
+        d["texto"] = como_texto(d)
+        ideas.append(d)
+    datos = {"fecha": _hoy(), "generadas": time.strftime("%H:%M"), "ideas": ideas}
+    ruta = _archivo(cid)
+    tmp = ruta.with_suffix(".tmp")
+    tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(ruta)
+    return datos
+
+
+def lanzar_diarias(cid: str) -> None:
+    with _cerrojo:
+        if _estado.get(cid, {}).get("ocupado"):
+            return
+        _estado[cid] = {"ocupado": True, "fase": "Buscando lo que más crece hoy en tu nicho", "error": ""}
+
+    def correr():
+        try:
+            generar_diarias(cid, avisar=lambda f: _estado[cid].update(fase=f))
+            _estado[cid].update(ocupado=False, fase="")
+        except Exception as e:  # noqa: BLE001
+            logger.exception("Ideas del día de %s", cid)
+            _estado[cid].update(ocupado=False, error=str(e)[:200], fecha_error=_hoy())
+    threading.Thread(target=correr, name=f"studio4-ideas-{cid}", daemon=True).start()
+
+
+def diarias(cid: str) -> dict[str, Any]:
+    """Las ideas de hoy. Si aún no hay (primera visita del día), se preparan solas en segundo plano."""
+    try:
+        datos = json.loads(_archivo(cid).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        datos = {"fecha": "", "ideas": []}
+    est = _estado.get(cid, {})
+    if datos.get("fecha") != _hoy() and not est.get("ocupado") and est.get("fecha_error") != _hoy() and youtube.disponible():
+        lanzar_diarias(cid)   # una vez al día; si falló hoy, se reintenta con el botón
+        est = _estado.get(cid, {})
+    return {**datos, "hoy": datos.get("fecha") == _hoy(), "ocupado": bool(est.get("ocupado")), "fase": est.get("fase", ""),
+            "error": est.get("error", "")}

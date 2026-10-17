@@ -294,7 +294,7 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
     return pids
 
 
-def crear_rapido(idea: str, version: str = "corto") -> list[str]:
+def crear_rapido(idea: str, version: str = "corto", datos: str = "") -> list[str]:
     """Un clic: la idea pasa a producción con lo de siempre del canal (su voz, su estilo y su tono) y la duración
     por defecto. Lo demás se puede cambiar después, al revisar el guion."""
     if len(idea.strip()) < 3:
@@ -304,7 +304,8 @@ def crear_rapido(idea: str, version: str = "corto") -> list[str]:
     c = canales.activo()
     return crear(idea.strip(), [version], c.get("estilo") or "cinematografico", "gemini",
                  tono=c.get("tono", ""), publico=c.get("publico", ""), voz_nombre=c.get("voz_nombre", ""),
-                 velocidad_voz=float(c.get("velocidad") or 1.0))
+                 velocidad_voz=float(c.get("velocidad") or 1.0),
+                 refs=referencias.preparar({"datos": datos}, []) if datos.strip() else None)
 
 
 # Desde URL: lo que sale con solo pulsar «Procesar» (todo se puede cambiar después y volver a montar).

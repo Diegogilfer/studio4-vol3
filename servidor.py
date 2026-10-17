@@ -224,6 +224,8 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(tendencias.estado(canales.activo()["id"]))
         if ruta == "/api/manual":
             return self._json(aprender.estado(canales.activo()["id"]))
+        if ruta == "/api/ideas/diarias":   # 3 ideas listas cada día, preparadas solas
+            return self._json(ideas.diarias(canales.activo()["id"]))
         if ruta == "/api/importar/vista":   # qué hay detrás del enlace, para confirmar antes de procesar
             from studio4 import importar
             q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("url") or [""])[0].strip()
@@ -367,6 +369,9 @@ class Panel(BaseHTTPRequestHandler):
             if not url.startswith(("http://", "https://")):
                 raise Error(400, "Pega el enlace del vídeo modelo.")
             return self._json(aprender.estudiar_modelo(canales.activo()["id"], url, str(d.get("nota", ""))[:600]))
+        if ruta == "/api/ideas/diarias":   # volver a preparar las 3 ideas de hoy
+            ideas.lanzar_diarias(canales.activo()["id"])
+            return self._json({"ok": True})
         if ruta == "/api/ideas/vivo":   # lo que más crece esta semana en el nicho del canal
             return self._json({"videos": ideas.en_vivo(canales.activo()["id"])})
         if ruta == "/api/ideas/inspirar":   # una idea original a partir de un vídeo en tendencia
@@ -412,7 +417,8 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"ok": True})
         if ruta == "/api/crear-rapido":   # un clic desde una idea o un nicho: lo de siempre del canal
             d = self._cuerpo_json()
-            return self._json({"ok": True, "ids": produccion.crear_rapido(str(d.get("idea", "")), str(d.get("version", "corto")))})
+            return self._json({"ok": True, "ids": produccion.crear_rapido(str(d.get("idea", "")), str(d.get("version", "corto")),
+                                                                          datos=str(d.get("datos", "")))})
         if ruta == "/api/producciones/eliminar":
             produccion.eliminar(str(self._cuerpo_json().get("id", "")))
             return self._json({"ok": True})
