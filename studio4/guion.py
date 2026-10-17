@@ -1,7 +1,8 @@
 """Fase 1 · Guion: DeepSeek escribe a partir de la investigación. Corto (Shorts y Reels) y largo (YouTube)
 salen de la misma investigación pero son guiones distintos: otro ritmo, otra estructura, otro cierre.
 
-Sin DEEPSEEK_API_KEY escribe Gemini con las mismas reglas, para que STUDIO nunca se quede parado."""
+Sin DEEPSEEK_API_KEY escribe Gemini con las mismas reglas, para que STUDIO nunca se quede parado. Las reglas de
+la metodología (las mismas que usa el asistente por chat) están en metodologia.py."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ import logging
 import re
 from typing import Any
 
-from . import config, deepseek, gemini
+from . import config, deepseek, gemini, metodologia
 
 logger = logging.getLogger("studio4.guion")
 
@@ -24,8 +25,10 @@ PROHIBIDO = [
     "en conclusión", "¿y tú qué opinas?", "prepárate", "este viaje", "un viaje a través", "misterio sin resolver",
 ]
 
-SISTEMA = f"""Eres guionista de documentales y de vídeos de divulgación en español neutro, con voz propia.
+SISTEMA = f"""Eres guionista de documentales y de vídeos de divulgación en español latino neutro, con voz propia.
 Escribes SOLO lo que dirá la voz en off: sin acotaciones, corchetes, títulos, emojis ni Markdown.
+
+{metodologia.para_sistema()}
 
 VERDAD Y DETALLE
 - Todo sale del dossier de investigación. Usa cifras, nombres, lugares y fechas concretas.

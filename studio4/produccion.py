@@ -15,6 +15,7 @@ import shutil
 import threading
 import time
 import unicodedata
+import urllib.parse
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -378,6 +379,8 @@ def desde_biblioteca(cid: str, item_id: str, proveedor_voz: str = "gemini", esti
                 tono=c.get("tono", ""), voz_nombre=c.get("voz_nombre", ""), velocidad_voz=velocidad_voz)[0]
     modificar(pid, lambda q: q.update(titulo=item["titulo"], descripcion=item["descripcion"], hashtags=item["hashtags"],
                                       biblioteca=item["id"]))
+    if item.get("fuentes"):   # donde investigó quien escribió el guion: créditos y primeras páginas para las imágenes
+        modificar(pid, lambda q: q.update(investigacion={**(q.get("investigacion") or {}), "fuentes": item["fuentes"]}))
     biblioteca.marcar(cid, item_id, pid)
     return pid
 
@@ -851,6 +854,21 @@ def poner_imagen_real(pid: str, orden: int, url: str, pagina: str) -> dict[str, 
     return toma
 
 
+def _imagenes_de_sus_fuentes(p: dict[str, Any]) -> list[dict[str, Any]]:
+    """Las imágenes de las páginas exactas donde se investigó este guion (p. ej. las que trae un paquete de la
+    biblioteca), solo si son de las webs de confianza del canal: van primero en el reparto."""
+    confianza = {urllib.parse.urlparse(f).netloc.removeprefix("www.") for f in canales.de_produccion(p).get("fuentes") or []}
+    salida: list[dict[str, Any]] = []
+    for f in (p.get("investigacion") or {}).get("fuentes") or []:
+        url = f.get("url", "")
+        if urllib.parse.urlparse(url).netloc.removeprefix("www.") in confianza:
+            try:
+                salida += galeria.imagenes_de(url)
+            except Exception as e:  # noqa: BLE001 - una página caída no frena las demás
+                logger.info("Imágenes de %s: %s", url, e)
+    return salida
+
+
 def rellenar_reales(pid: str) -> None:
     """Gratis: a cada escena sin clip, la captura real de tus fuentes que mejor encaja con lo que se dice y se ve."""
     p = cargar(pid)
@@ -861,8 +879,10 @@ def rellenar_reales(pid: str) -> None:
         q = cargar(pid)
         _avisar(pid, "Buscando imágenes reales en tus fuentes", 10)
         largo = len(q["escenas"]) > 40   # un vídeo largo necesita muchas más imágenes distintas
-        pool = galeria.buscar(q["canal"], f"{q.get('titulo') or q['tema']}", n=300 if largo else 80, produccion=pid,
-                              paginas_por_fuente=12 if largo else galeria.PAGINAS)
+        pool = _imagenes_de_sus_fuentes(q) + galeria.buscar(
+            q["canal"], f"{q.get('titulo') or q['tema']}", n=300 if largo else 80, produccion=pid,
+            paginas_por_fuente=12 if largo else galeria.PAGINAS)
+        pool = list({i["url"]: i for i in pool}.values())
         if not pool:
             raise ValueError("Tus fuentes no tienen imágenes sobre este tema.")
         reparto = galeria.repartir(q["escenas"], pool)

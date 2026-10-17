@@ -62,8 +62,10 @@ def _palabras(texto: str) -> set[str]:
     return {w for w in re.findall(r"[a-z0-9]{3,}", fuentes._normal(texto))}
 
 
-def buscar(cid: str, consulta: str, n: int = 24, produccion: str = "", paginas_por_fuente: int = PAGINAS) -> list[dict[str, Any]]:
-    """Imágenes reales de las fuentes del canal que encajan con la consulta (en español o en inglés)."""
+def buscar(cid: str, consulta: str, n: int = 24, produccion: str = "", paginas_por_fuente: int = PAGINAS,
+           minimo: int = 0) -> list[dict[str, Any]]:
+    """Imágenes reales de las fuentes del canal que encajan con la consulta (en español o en inglés).
+    Con «minimo», solo las que comparten al menos esas palabras con la consulta (para no mostrar una cualquiera)."""
     canal = canales.obtener(cid)
     if not canal.get("fuentes"):
         raise ValueError("Añade las fuentes de confianza del canal (Canales) para buscar sus imágenes reales.")
@@ -87,7 +89,7 @@ def buscar(cid: str, consulta: str, n: int = 24, produccion: str = "", paginas_p
             logger.info("No pude leer %s: %s", p, e)
     buscadas = {w for k in palabras for w in _palabras(k)}
     orden = sorted(vistas.values(), key=lambda i: -len(_palabras(i["descripcion"]) & buscadas))
-    return orden[:n]
+    return [i for i in orden if len(_palabras(i["descripcion"]) & buscadas) >= minimo][:n]
 
 
 def encajar(foto: Image.Image, ancho: int, alto: int) -> Image.Image:

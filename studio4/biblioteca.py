@@ -62,9 +62,22 @@ def limpiar(texto: str) -> str:
     return "\n".join(lineas)
 
 
+def fuentes_de(texto: str) -> list[dict[str, str]]:
+    """Las páginas de la sección FUENTES del paquete (donde investigó el asistente), con su nota si la trae."""
+    m = re.search(r"^\s*FUENTES\b.*?$(.*?)(?=^\s*CONTROL DE CALIDAD\b|^\s*={3,}|\Z)", texto or "",
+                  re.IGNORECASE | re.MULTILINE | re.DOTALL)
+    salida: list[dict[str, str]] = []
+    for u, nota in re.findall(r"(https?://[^\s)\]>]+)\s*(?:\(([^)]*)\))?", m.group(1) if m else ""):
+        u = u.rstrip(".,;")
+        if u not in [f["url"] for f in salida]:
+            salida.append({"url": u, "titulo": " ".join(nota.split())[:200]})
+    return salida[:20]
+
+
 def parsear(texto: str) -> list[dict[str, Any]]:
     """Los guiones de un paquete. Error claro si no trae las marcas o algún guion está vacío."""
     texto = limpiar(texto)
+    fuentes = fuentes_de(texto)
     marcas = list(_MARCA.finditer(texto or ""))
     if not marcas:
         raise ValueError("No encuentro guiones: cada uno debe empezar con una línea como «=== FL-001 | LARGO ===».")
@@ -84,7 +97,7 @@ def parsear(texto: str) -> list[dict[str, Any]]:
         salida.append({"codigo": m.group(1).upper(), "tipo": tipo, "etiqueta": etiqueta,
                        "titulo": campos.get("TITULO", "")[:100], "descripcion": campos.get("DESCRIPCION", "")[:600],
                        "hashtags": [h for h in re.findall(r"#\w+", campos.get("HASHTAGS", ""))][:10],
-                       "guion": guion, "palabras": len(guion.split()), "producido": ""})
+                       "guion": guion, "palabras": len(guion.split()), "producido": "", "fuentes": fuentes})
     return salida
 
 

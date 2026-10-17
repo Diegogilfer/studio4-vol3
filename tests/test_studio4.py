@@ -1445,9 +1445,10 @@ def test_ideas_del_dia_tres_de_canales_distintos_sin_nombrar_el_origen(aislado, 
     monkeypatch.setattr(ideas, "inspirar", lambda cid, v: {"idea": f"Idea de {v['id']}", "por_que": "porque sí",
         "original": "lista rápida", "gancho": "¿Sabías…?", "estructura": ["a", "b"], "detalles": ["x"], "formato": "corto",
         "fuente": {"titulo": v["titulo"], "canal": v["canal"], "url": v["url"]}})
+    monkeypatch.setattr(ideas, "imagen_de", lambda cid, idea: {})
     d = ideas.generar_diarias("fourlevel")
     assert [x["idea"] for x in d["ideas"]] == ["Idea de v0", "Idea de v2", "Idea de v3"]   # un solo vídeo por canal
-    assert d["ideas"][0]["miniatura"] == "https://i.ytimg.com/vi/v0/hqdefault.jpg"
+    assert d["ideas"][0]["miniatura"] == ""   # nunca la miniatura del vídeo ajeno
     for x in d["ideas"]:
         assert x["fuente"]["canal"] not in x["texto"] and x["fuente"]["titulo"] not in x["texto"]   # el guionista no lo ve
     assert ideas.diarias("fourlevel")["hoy"] and len(ideas.diarias("fourlevel")["ideas"]) == 3
@@ -1545,3 +1546,52 @@ def test_biblioteca_no_mete_fuentes_ni_control_en_el_ultimo_guion():
              "CONTROL DE CALIDAD:\n[x] Datos verificables\n[x] Español latino")
     r = biblioteca.parsear(texto)
     assert "gtabase" not in r[0]["guion"] and "CONTROL" not in r[0]["guion"] and r[0]["guion"].endswith("Leonida.")
+
+
+
+def test_metodologia_es_la_misma_para_todos_los_modelos_y_para_el_chat():
+    """DeepSeek, Gemini y la reserva escriben con el mismo sistema, y el prompt del asistente por chat no se separa."""
+    import re as _re
+    from studio4 import guion, metodologia
+    assert metodologia.para_sistema() in guion.SISTEMA
+    chat = " ".join((config.RAIZ / "PROMPTS_AGRON.md").read_text(encoding="utf-8").split())
+    for regla in metodologia.reglas()[:-2] + metodologia.CONTROL:   # LARGO y CORTO van reformulados en el paso 2
+        assert " ".join(regla.split()) in chat, regla
+    assert not any(p.lower() in metodologia.para_sistema().lower() for p in guion.PROHIBIDO)
+
+
+
+def test_idea_del_dia_usa_imagen_real_del_tema_y_nunca_la_miniatura_ajena(monkeypatch):
+    import json as _json
+    from studio4 import ideas
+    monkeypatch.setattr(ideas, "en_vivo", lambda cid, n: [{"id": "abc123", "canal": "Otro", "titulo": "t", "url": "u",
+                                                          "vistas_hora": 10, "segundos": 30}])
+    monkeypatch.setattr(ideas, "inspirar", lambda cid, v: {"idea": "El Cheetah Classic de GTA 6", "fuente": {}})
+    monkeypatch.setattr(ideas.galeria, "buscar", lambda *a, **k: [{"url": "https://www.gtabase.com/x/cheetah.jpg",
+                                                                  "pagina": "https://www.gtabase.com/gta-6/vehicles"}])
+    d = ideas.generar_diarias("fourlevel")["ideas"][0]
+    assert d["miniatura"] == "https://www.gtabase.com/x/cheetah.jpg" and d["miniatura_fuente"] == "www.gtabase.com"
+    assert "ytimg" not in _json.dumps(d)
+
+
+
+def test_biblioteca_guarda_las_fuentes_del_paquete():
+    from studio4 import biblioteca
+    g = "Esta es una frase del guion corto con datos del Cheetah Classic de Leonida. " * 3
+    texto = (f"=== FL-001 | CORTO a ===\nTÍTULO: Autos\nGUION:\n{g}\n\nFUENTES:\n\nhttps://www.gtabase.com/gta-6/vehicles/\n"
+             " (Registro de vehículos, Cheetah Classic).\nhttps://www.rockstargames.com/VI\n (Web oficial).\n\n"
+             "CONTROL DE CALIDAD: [x] Datos verificables")
+    r = biblioteca.parsear(texto)[0]
+    assert [f["url"] for f in r["fuentes"]] == ["https://www.gtabase.com/gta-6/vehicles/", "https://www.rockstargames.com/VI"]
+    assert r["fuentes"][0]["titulo"].startswith("Registro de vehículos") and "gtabase" not in r["guion"]
+
+
+
+def test_imagenes_primero_de_las_paginas_del_guion_si_son_de_confianza(aislado, monkeypatch):
+    from studio4 import galeria
+    from studio4 import canales
+    monkeypatch.setattr(canales, "de_produccion", lambda p: {"fuentes": ["https://www.gtabase.com/gta-6/"]})
+    monkeypatch.setattr(galeria, "imagenes_de", lambda u: [{"url": u + "a.jpg", "pagina": u, "descripcion": "a"}])
+    p = {"investigacion": {"fuentes": [{"url": "https://www.gtabase.com/gta-6/vehicles/"},
+                                       {"url": "https://es.wikipedia.org/wiki/Grand_Theft_Auto_VI"}]}}
+    assert [i["url"] for i in produccion._imagenes_de_sus_fuentes(p)] == ["https://www.gtabase.com/gta-6/vehicles/a.jpg"]

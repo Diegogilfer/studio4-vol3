@@ -1628,7 +1628,9 @@ async function pintarIdeasHoy() {
     return;
   }
   $("ideas-hoy").innerHTML = `${cab}<div class="ideas-lista">${d.ideas.map((x, i) => `<article class="idea-dia">
-      <img src="${esc(x.miniatura)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      ${x.miniatura ? `<figure class="idea-img"><img src="${esc(x.miniatura)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+        ${x.miniatura_fuente ? `<figcaption>Imagen: ${esc(x.miniatura_fuente)}</figcaption>` : ""}</figure>`
+        : `<div class="idea-img idea-sin-img"><span>${d.ocupado ? "Buscando una imagen real…" : "Sin imagen real del tema"}</span></div>`}
       <div class="idea-dia-cuerpo">
         <small>${x.formato === "largo" ? "Largo · YouTube" : "Corto · Shorts y Reels"} · ${compactoNum(x.fuente?.vistas_hora || 0)} vistas/hora</small>
         <b class="display">${esc(x.idea)}</b>

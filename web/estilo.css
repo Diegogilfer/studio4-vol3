@@ -1337,6 +1337,10 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .idea-dia { display: grid; grid-template-rows: auto 1fr; border-radius: var(--r-caja); overflow: hidden; background: var(--caja);
   border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }
 .idea-dia img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; }
+.idea-img { position: relative; margin: 0; }
+.idea-img figcaption { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+  background: rgba(0, 0, 0, .65); color: #fff; }
+.idea-sin-img { aspect-ratio: 16 / 9; display: grid; place-items: center; background: #111; color: #9a9a9a; font-size: 13px; }
 .idea-dia-cuerpo { display: grid; gap: 8px; padding: 16px 18px 18px; align-content: start; }
 .idea-dia-cuerpo small { font-size: 12px; color: var(--fg-muted); } .idea-dia-cuerpo b.display { font-size: 21px; line-height: 1.15; }
 .idea-dia-cuerpo p { margin: 0; } .idea-detalle { display: grid; gap: 6px; font-size: 13.5px; }

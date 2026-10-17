@@ -12,9 +12,10 @@ import json
 import logging
 import threading
 import time
+import urllib.parse
 from typing import Any
 
-from . import aprender, canales, config, registro, tendencias, youtube
+from . import aprender, archivo, canales, config, galeria, registro, tendencias, youtube
 
 logger = logging.getLogger("studio4.ideas")
 
@@ -87,9 +88,33 @@ def _hoy() -> str:
     return time.strftime("%Y-%m-%d")
 
 
+def imagen_de(cid: str, idea: str) -> dict[str, str]:
+    """La imagen de la tarjeta: una imagen REAL del tema de la idea, de las fuentes de confianza del canal o, si no
+    hay, una foto de dominio público. Nunca la miniatura del vídeo ajeno que la inspiró (no es nuestro contenido y
+    no muestra lo que propone la idea). {} si no hay ninguna que encaje."""
+    try:
+        img = galeria.buscar(cid, idea, n=1, paginas_por_fuente=2, minimo=2)
+        if img:
+            return {"url": img[0]["url"], "fuente": urllib.parse.urlparse(img[0].get("pagina") or img[0]["url"]).netloc}
+    except Exception as e:  # noqa: BLE001 - sin fuentes o caídas se prueba con las fotos de archivo
+        logger.info("Imagen de la idea en las fuentes: %s", e)
+    try:
+        foto = archivo.buscar(idea, cuantas=1)
+        if foto:
+            return {"url": foto[0]["url"], "fuente": "Wikimedia Commons (dominio público)"}
+    except Exception as e:  # noqa: BLE001
+        logger.info("Imagen de la idea en el archivo: %s", e)
+    return {}
+
+
+def _con_imagen(cid: str, d: dict[str, Any]) -> None:
+    img = imagen_de(cid, d.get("idea", ""))
+    d["miniatura"], d["miniatura_fuente"] = img.get("url", ""), img.get("fuente", "")
+
+
 def generar_diarias(cid: str, avisar=lambda _f: None) -> dict[str, Any]:
-    """Lo que más crece hoy en el nicho → 3 ideas originales con todo el detalle y la miniatura del vídeo que las
-    inspiró (cada una de un canal distinto)."""
+    """Lo que más crece hoy en el nicho → 3 ideas originales con todo el detalle y una imagen real de su tema
+    (cada una inspirada en un canal distinto)."""
     videos = en_vivo(cid, n=12)
     ideas, canales_vistos = [], set()
     for v in videos:
@@ -104,16 +129,46 @@ def generar_diarias(cid: str, avisar=lambda _f: None) -> dict[str, Any]:
             logger.warning("Idea desde %s: %s", v.get("url"), e)
             continue
         canales_vistos.add(v["canal"])
-        d["miniatura"] = f"https://i.ytimg.com/vi/{v['id']}/hqdefault.jpg"
+        avisar(f"Buscando una imagen real para la idea {len(ideas) + 1} de {IDEAS_AL_DIA}")
+        _con_imagen(cid, d)
         d["fuente"] = {**d.get("fuente", {}), "vistas_hora": v.get("vistas_hora"), "segundos": v.get("segundos")}
         d["texto"] = como_texto(d)
         ideas.append(d)
     datos = {"fecha": _hoy(), "generadas": time.strftime("%H:%M"), "ideas": ideas}
+    _guardar(cid, datos)
+    return datos
+
+
+def _guardar(cid: str, datos: dict[str, Any]) -> None:
     ruta = _archivo(cid)
     tmp = ruta.with_suffix(".tmp")
     tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(ruta)
-    return datos
+
+
+def _ajena(d: dict[str, Any]) -> bool:
+    """¿La tarjeta aún lleva la miniatura del vídeo que la inspiró (ideas guardadas antes de este cambio)?"""
+    return "ytimg.com" in str(d.get("miniatura", ""))
+
+
+def _reponer_imagenes(cid: str) -> None:
+    """Cambia las miniaturas ajenas de las ideas ya guardadas por imágenes reales de su tema."""
+    with _cerrojo:
+        if _estado.get(cid, {}).get("ocupado"):
+            return
+        _estado[cid] = {"ocupado": True, "fase": "Buscando imágenes reales para las ideas de hoy", "error": ""}
+
+    def correr():
+        try:
+            datos = json.loads(_archivo(cid).read_text(encoding="utf-8"))
+            for d in datos.get("ideas") or []:
+                if _ajena(d):
+                    _con_imagen(cid, d)
+            _guardar(cid, datos)
+        except Exception:  # noqa: BLE001
+            logger.exception("Imágenes de las ideas de %s", cid)
+        _estado[cid].update(ocupado=False, fase="")
+    threading.Thread(target=correr, name=f"studio4-ideas-img-{cid}", daemon=True).start()
 
 
 def lanzar_diarias(cid: str) -> None:
@@ -142,5 +197,11 @@ def diarias(cid: str) -> dict[str, Any]:
     if datos.get("fecha") != _hoy() and not est.get("ocupado") and est.get("fecha_error") != _hoy() and youtube.disponible():
         lanzar_diarias(cid)   # una vez al día; si falló hoy, se reintenta con el botón
         est = _estado.get(cid, {})
+    elif any(_ajena(d) for d in datos.get("ideas") or []) and not est.get("ocupado"):
+        _reponer_imagenes(cid)
+        est = _estado.get(cid, {})
+    for d in datos.get("ideas") or []:
+        if _ajena(d):
+            d["miniatura"] = ""   # mientras se busca la imagen real, la tarjeta va sin imagen
     return {**datos, "hoy": datos.get("fecha") == _hoy(), "ocupado": bool(est.get("ocupado")), "fase": est.get("fase", ""),
             "error": est.get("error", "")}

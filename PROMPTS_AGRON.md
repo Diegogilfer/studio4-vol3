@@ -15,6 +15,9 @@ Reglas para todo lo que escribas:
 - Español latino neutro: "ustedes", nunca "vosotros". Narrador en primera persona, cercano, con datos.
 - Solo datos verificables (gtabase.com para GTA, Wikipedia, webs oficiales de cada juego o estudio).
   Lo no confirmado se dice como rumor.
+- Que la investigación no traiga un dato no significa que no exista: cuenta lo que sí está confirmado y nunca
+  concluyas que «no hay nada».
+- Primera persona sí, experiencias inventadas no: nada de «llevo semanas buscando» ni «lo probé» si no es verdad.
 - Nunca menciones a otros youtubers ni canales, ni copies frases de otros vídeos.
 - Nada de emojis dentro de los guiones.
 Responde "Listo" y espera mi primera tarea.
@@ -31,13 +34,15 @@ raras/curiosidades". Mezcla novedades (GTA 6 y otros lanzamientos), historia y s
 curiosidades técnicas y comparaciones. No escribas guiones todavía.
 
 PASO 2 (cuando yo escriba "siguiente"): entrega el siguiente tema como un PAQUETE de 6 guiones:
-  - 1 LARGO (15 min, ~2.000 palabras): bloques anunciados, conectores ("además", "pero eso no es todo",
-    "según Rockstar"), cierre con balance y pregunta para comentar.
+  - 1 LARGO (15 min, ~2.000 palabras): bloques anunciados, conectores ("además", "según Rockstar"),
+    cierre con balance y una pregunta concreta para comentar.
   - 5 CORTOS (48 s, ~110 palabras): a) lo más llamativo, b) lo más esperado, c) la curiosidad más rara,
     d) un detalle que casi nadie vio, e) una comparación concreta con un juego anterior.
-    Cada corto trata una sola cosa, con su propio gancho, y termina invitando al vídeo largo.
-  En todos: primera frase con un dato fuerte; cada nombre que el público no conozca se presenta;
-  frases cortas (cada ~18 palabras se muestra con una captura de 8 segundos).
+    Cada corto trata una sola cosa, con su propio gancho, contada completa para quien no sabe nada, y
+    termina invitando al vídeo largo.
+  En todos:
+  - Primera frase con un dato fuerte; cada nombre que el público no conozca se presenta.
+  - Frases cortas (cada ~18 palabras se muestra con una captura de 8 segundos).
 
 FORMATO DE ENTREGA OBLIGATORIO (cada guion exactamente así, nada más dentro del bloque):
 === FL-001 | LARGO ===
