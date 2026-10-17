@@ -50,6 +50,8 @@ Todo lo que me entregues lo pego en mi programa Studio 4, que lo lee solo. Para 
    "SIGUE" FUERA del bloque de código y continúa en otro bloque cuando yo escriba "sigue", empezando por la
    marca del guion que toca.
 8. Numeración continua: nunca repitas un código; el mes siguiente sigue donde acabó el anterior.
+   Nunca repitas un tema ni un corto ya entregado (ni con otro título, ni como "comparación"): dentro de un
+   mismo plan, cada corto cuenta algo que no cuente ningún otro corto ni otro tema.
 9. Antes de entregar, revisa el CONTROL DE CALIDAD; si un punto falla, corrige y no me lo anuncies.
 Responde "Entendido" y espera mi primera tarea.
 ```

@@ -228,7 +228,7 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/biblioteca":   # los guiones guardados del canal
             from studio4 import biblioteca
             cid = canales.activo()["id"]
-            return self._json({"guiones": biblioteca.leer(cid), "plan": biblioteca.plan_con_estado(cid)})
+            return self._json({"guiones": biblioteca.con_parecidos(biblioteca.leer(cid)), "plan": biblioteca.plan_con_estado(cid)})
         if ruta == "/api/ideas/diarias":   # 3 ideas listas cada día, preparadas solas
             return self._json(ideas.diarias(canales.activo()["id"]))
         if ruta == "/api/importar/vista":   # qué hay detrás del enlace, para confirmar antes de procesar

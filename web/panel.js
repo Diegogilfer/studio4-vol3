@@ -288,9 +288,22 @@ async function cargarBiblioteca() {
   pintarBiblioteca();
 }
 // El plan del mes de Agron: cada tema con lo que lleva y el mensaje listo para pedirle su paquete.
+// Todo lo que ya existe (plan y biblioteca), para que el pedido del mes siguiente no repita nada.
+function temasHechos() {
+  const temas = new Map(planBib.map((t) => [t.codigo, t.tema]));
+  guionesBib.forEach((g) => {
+    if (g.tipo === "largo" || !temas.has(g.codigo)) temas.set(g.codigo, g.titulo || temas.get(g.codigo) || "");
+  });
+  return [...temas].sort(([a], [b]) => a.localeCompare(b));
+}
 function pintarPlan() {
-  $("b-plan").hidden = !planBib.length;
-  if (!planBib.length) return;
+  $("b-plan").hidden = !planBib.length && !guionesBib.length;
+  if (!planBib.length) {
+    $("b-plan").innerHTML = guionesBib.length ? `<div class="b-plan-cab"><b>Mes siguiente</b>
+      <small>El pedido lleva los ${temasHechos().length} temas y los títulos que ya tienes, para que no se repitan.</small>
+      <button class="boton" type="button" data-b-mes="1">Copiar pedido del próximo mes</button></div>` : "";
+    return;
+  }
   const listos = planBib.filter((t) => t.guiones).length;
   $("b-plan").innerHTML = `<div class="b-plan-cab"><b>Plan del mes</b><small>${listos} de ${planBib.length} temas con guiones</small>
       <button class="boton" type="button" data-b-mes="1">Copiar pedido del próximo mes</button></div>
@@ -319,11 +332,13 @@ function pintarBiblioteca() {
     const faltan = gs.filter((g) => !g.producido).length;
     return `<details class="b-grupo" data-b-tema="${esc(codigo)}" ${temasAbiertos.has(codigo) ? "open" : ""}>
       <summary><span class="b-codigo">${esc(codigo)}</span>
-        <span><b>${esc((largo || gs[0]).titulo || codigo)}</b><br><small>${gs.length} guiones · ${gs.length - faltan} creados</small></span>
+        <span><b>${esc((largo || gs[0]).titulo || codigo)}</b><br><small>${gs.length} guiones · ${gs.length - faltan} creados${
+          gs.some((g) => g.parecido_a?.length) ? ` · <span class="b-repe">${gs.filter((g) => g.parecido_a?.length).length} parecido a otro tema</span>` : ""}</small></span>
         ${faltan ? `<button class="boton" type="button" data-b-crear-tema="${esc(codigo)}">Crear el tema (${faltan})</button>` : "<small>Hecho</small>"}</summary>
       ${gs.map((x) => `<div class="b-item ${x.producido ? "hecho" : ""}">
         <span class="b-codigo">${x.tipo === "largo" ? "Largo · 16:9" : `Corto ${esc(x.etiqueta.split(/[\s:]/)[0])} · 9:16`}</span>
-        <span><b>${esc(x.titulo || x.guion.slice(0, 60))}</b><br><small>${x.palabras} palabras${x.producido ? " · ya creado" : ""}</small></span>
+        <span><b>${esc(x.titulo || x.guion.slice(0, 60))}</b><br><small>${x.palabras} palabras${x.producido ? " · ya creado" : ""}</small>
+          ${x.parecido_a?.length ? `<br><small class="b-repe">Se parece a ${esc(x.parecido_a.join(", "))}: crea solo uno de los dos</small>` : ""}</span>
         <span class="fila">${x.producido ? "" : `<button class="primario" type="button" data-b-crear="${esc(x.id)}">Crear este</button>`}
           <button class="boton" type="button" data-b-quitar="${esc(x.id)}">Quitar</button></span></div>`).join("")}
     </details>`;
@@ -355,7 +370,8 @@ $("b-guardar").addEventListener("click", async (ev) => {
     pintarBiblioteca();
     const nuevos = Math.max(0, guionesBib.length - antes);
     infoBib(r.temas_nuevos ? `Plan guardado: ${r.temas_nuevos} temas.`
-      : `Guardado: ${nuevos === 1 ? "1 guion nuevo" : nuevos ? `${nuevos} guiones nuevos` : "guiones actualizados"} · ${guionesBib.length} en la biblioteca.`);
+      : `Guardado: ${nuevos === 1 ? "1 guion nuevo" : nuevos ? `${nuevos} guiones nuevos` : "guiones actualizados"} · ${guionesBib.length} en la biblioteca.`
+        + (r.repetidos?.length ? ` Ojo, repiten algo que ya tenías: ${r.repetidos.join("; ")}.` : ""), !!r.repetidos?.length);
   } catch (e) {
     infoBib(`No se guardó: ${e.message || e}`, true);
   } finally { boton.disabled = false; }
@@ -365,13 +381,17 @@ $("b-plan").addEventListener("click", async (ev) => {
   const b = mes || ev.target.closest("[data-b-pedir]");
   if (!b) return;
   let texto;
-  if (mes) {   // el mes siguiente sigue la numeración y no repite ningún tema ya planificado
-    const ultimo = Math.max(...planBib.map((x) => Number(x.codigo.split("-")[1]) || 0));
-    const pref = planBib[0].codigo.split("-")[0];
-    const desde = `${pref}-${String(ultimo + 1).padStart(3, "0")}`;
+  if (mes) {   // el mes siguiente sigue la numeración y no repite ningún tema ni ningún corto ya hecho
+    const hechos = temasHechos();
+    const ultimo = Math.max(...hechos.map(([c]) => Number(c.split("-")[1]) || 0));
+    const desde = `${hechos[0][0].split("-")[0]}-${String(ultimo + 1).padStart(3, "0")}`;
+    const cortos = guionesBib.filter((g) => g.tipo === "corto" && g.titulo).map((g) => g.titulo);
     texto = `PLAN DEL MES SIGUIENTE: propón 12 temas nuevos, de ${desde} en adelante, con la misma tabla de 5 columnas `
-      + `(| Código | Tema | Juego | Por qué ahora | Fuentes |) y las mismas reglas. No repitas ninguno de estos temas ya hechos: `
-      + planBib.map((x) => `${x.codigo} ${x.tema}`).join("; ") + ". No escribas guiones todavía.";
+      + `(| Código | Tema | Juego | Por qué ahora | Fuentes |) y las mismas reglas. No escribas guiones todavía.\n\n`
+      + `PROHIBIDO REPETIR. Estos temas ya están hechos; no los repitas ni con otro título ni como comparación:\n`
+      + hechos.map(([c, t]) => `- ${c}: ${t}`).join("\n")
+      + (cortos.length ? `\n\nY estos cortos ya existen; ningún corto nuevo puede contar lo mismo:\n${cortos.map((t) => `- ${t}`).join("\n")}` : "")
+      + `\n\nAntes de entregar la tabla, revisa fila por fila que ningún tema se parezca a los de arriba.`;
   } else {
     const t = planBib.find((x) => x.codigo === b.dataset.bPedir);
     texto = `siguiente: entrega el PAQUETE de ${t.codigo} («${t.tema}») con el FORMATO DE ENTREGA OBLIGATORIO, FUENTES y CONTROL DE CALIDAD.`;

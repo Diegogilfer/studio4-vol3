@@ -1245,6 +1245,7 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .b-item b { font-size: 14px; } .b-item small { color: var(--fg-muted); font-size: 12px; }
 .b-codigo { font: 600 12px/1 var(--sans); padding: 6px 10px; border-radius: 999px; background: var(--control); white-space: nowrap; }
 .b-item.hecho { opacity: .6; }
+.b-repe { color: #d97706; font-weight: 500; }
 .b-grupo { border-radius: 18px; background: var(--caja); border: 1px solid var(--caja-borde); }
 .b-grupo > summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center;
   padding: 12px 14px; cursor: pointer; list-style: none; }

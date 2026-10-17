@@ -1687,3 +1687,18 @@ def test_biblioteca_paquete_pegado_en_una_sola_linea_y_con_comillas(aislado):
     assert r[0]["titulo"] == "GTA 6: Todas las armas" and r[0]["hashtags"] == ["#GTA6", "#ViceCity"]
     assert r[0]["guion"] == g and r[1]["guion"] == g
     assert r[0]["fuentes"][0]["url"] == "https://www.gtabase.com/gta-6/weapons/"
+
+
+
+def test_biblioteca_avisa_de_guiones_repetidos_entre_temas(aislado):
+    from studio4 import biblioteca
+    vice = ("Vice City de 2002 tenía Ocean Drive con sus hoteles art deco y neón rosa. GTA 6 vuelve a esa calle "
+            "con playas llenas de gente, tráfico real y reflejos en el agua que cambian con la hora del día. ") * 2
+    otro = ("Red Dead Redemption 2 tiene doscientas especies de animales con comportamiento propio, cazadores, "
+            "presas y carroñeros que reaccionan al clima y a las estaciones del juego. ") * 2
+    biblioteca.pegar("fourlevel", f"=== FL-001 | CORTO e ===\nTÍTULO: Vice City vs GTA 6\nGUION:\n{vice}")
+    r = biblioteca.pegar("fourlevel", f"=== FL-006 | CORTO a ===\nTÍTULO: Ocean Drive en GTA 6\nGUION:\n{vice}\n"
+                                      f"=== FL-006 | CORTO b ===\nTÍTULO: Animales\nGUION:\n{otro}")
+    assert r["repetidos"] == ["FL-006 corto a se parece a FL-001 corto e"]
+    por_id = {g["id"]: g for g in r["guiones"]}
+    assert por_id["FL-001-corto-e"]["parecido_a"] == ["FL-006 corto a"] and not por_id["FL-006-corto-b"]["parecido_a"]

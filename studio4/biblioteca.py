@@ -114,8 +114,13 @@ def pegar(cid: str, texto: str) -> dict[str, Any]:
                          "del plan es una fila «| FL-001 | Tema | Juego | Por qué ahora | Fuentes |».")
     if filas:
         guardar_plan(cid, filas)
-    guiones = anadir(cid, texto) if hay_guiones else leer(cid)
-    return {"guiones": guiones, "plan": plan_con_estado(cid), "temas_nuevos": len(filas)}
+    previos = leer(cid)
+    nuevos = parsear(texto) if hay_guiones else []
+    repetidos = sorted({f"{_nombre(n)} se parece a {_nombre(p)}" for n in nuevos for p in previos
+                        if p["codigo"] != n["codigo"] and parecido(n, p)})
+    guiones = anadir(cid, texto) if hay_guiones else previos
+    return {"guiones": con_parecidos(guiones), "plan": plan_con_estado(cid), "temas_nuevos": len(filas),
+            "repetidos": repetidos}
 
 
 _MARCA_SUELTA = re.compile(r"[«\"“]?\s*(={2,}\s*[A-Za-z]{1,6}[ -]?\d{1,4}\s*[|—–:·•/-]\s*(?:LARGO|CORTO)\b[^=\n|]*?={2,})\s*[»\"”]?",
@@ -180,6 +185,43 @@ def parsear(texto: str) -> list[dict[str, Any]]:
                        "titulo": campos.get("TITULO", "")[:100], "descripcion": campos.get("DESCRIPCION", "")[:600],
                        "hashtags": [h for h in re.findall(r"#\w+", campos.get("HASHTAGS", ""))][:10],
                        "guion": guion, "palabras": len(guion.split()), "producido": "", "fuentes": fuentes})
+    return salida
+
+
+# --- Repetidos: dos guiones de temas distintos que cuentan casi lo mismo ----------------------------
+# Medido con los 72 guiones del primer mes: entre temas distintos el texto comparte como mucho un 20 % de
+# palabras; el único caso repetido de verdad (Vice City vs GTA 6 en FL-001 y FL-006) compartía el 26 %.
+PARECIDO_TEXTO = 0.25
+PARECIDO_TITULO = 0.5
+
+
+def _palabras(texto: str) -> set[str]:
+    from .fuentes import _normal
+    return set(re.findall(r"[a-z0-9]{4,}", _normal(texto or "")))
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    return len(a & b) / max(1, len(a | b))
+
+
+def _nombre(x: dict[str, Any]) -> str:
+    return f"{x['codigo']} {'largo' if x['tipo'] == 'largo' else ('corto ' + x['etiqueta'].split(':')[0]).strip()}"
+
+
+def parecido(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    texto = _jaccard(_palabras(a["guion"]), _palabras(b["guion"]))
+    titulo = _jaccard(_palabras(a.get("titulo", "")), _palabras(b.get("titulo", "")))
+    return texto >= PARECIDO_TEXTO or (titulo >= PARECIDO_TITULO and texto >= 0.15)
+
+
+def con_parecidos(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Cada guion con «parecido_a»: los de OTROS temas que cuentan casi lo mismo (para no grabarlo dos veces)."""
+    salida = [{**x, "parecido_a": []} for x in items]
+    for i, a in enumerate(salida):
+        for b in salida[i + 1:]:
+            if a["codigo"] != b["codigo"] and parecido(a, b):
+                a["parecido_a"].append(_nombre(b))
+                b["parecido_a"].append(_nombre(a))
     return salida
 
 
