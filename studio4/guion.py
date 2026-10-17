@@ -159,7 +159,7 @@ def identidad_del_canal(canal: dict[str, Any]) -> str:
         lineas.append(f"- Arco emocional de cada vídeo: {canal['arco']}.")
     if canal.get("cta"):
         lineas.append(f"- Termina SIEMPRE con esta llamada a la acción, dicha de forma natural: «{canal['cta']}».")
-    return ("IDENTIDAD DEL CANAL (manda sobre el estilo genérico):\n" + "\n".join(lineas)) if lineas else ""
+    return ("IDENTIDAD DEL CANAL (manda sobre todo lo demás, también sobre el manual y el vídeo modelo):\n" + "\n".join(lineas)) if lineas else ""
 
 
 def corto_de_mas(texto: str, segundos: int) -> bool:

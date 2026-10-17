@@ -74,7 +74,7 @@ def _limpio(c: dict[str, Any]) -> dict[str, Any]:
     return {"id": c.get("id") or _id(nombre), "nombre": nombre, "redes": {k: v for k, v in redes.items() if v},
             "voz_nombre": str(c.get("voz_nombre", ""))[:30], "estilo": str(c.get("estilo", ""))[:30],
             "nicho": str(c.get("nicho", "")).strip()[:80], "tono": str(c.get("tono", ""))[:80],
-            "arquetipo": str(c.get("arquetipo", "")).strip()[:100], "arco": str(c.get("arco", "")).strip()[:140],
+            "arquetipo": str(c.get("arquetipo", "")).strip()[:160], "arco": str(c.get("arco", "")).strip()[:140],
             "cta": str(c.get("cta", "")).strip()[:100],
             "velocidad": min((0.9, 1.0, 1.1, 1.2), key=lambda v: abs(v - float(c.get("velocidad") or 1.0))),
             "fuentes": [u.strip() for u in (c.get("fuentes") or []) if re.match(r"https?://\S+$", str(u).strip())][:6],
