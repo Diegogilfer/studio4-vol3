@@ -1476,3 +1476,16 @@ def test_voz_y_material_se_guardan_en_la_carpeta_del_video(aislado):
     assert any("escena 02.mp4" in n for n in nombres)
     creditos = next(destino.glob("* - Fuentes y créditos.txt")).read_text(encoding="utf-8")
     assert "lucia-1080.jpg" in creditos and "gtabase.com/gta-6/weapons" in creditos and "fal" in creditos
+
+
+
+def test_investigar_en_las_fuentes_de_punta_a_punta(monkeypatch):
+    """Elegir páginas, leerlas y resumirlas: el guion recibe los datos de tus páginas recomendadas."""
+    from studio4 import fuentes, gemini
+    monkeypatch.setattr(fuentes, "claves", lambda idea, produccion="": ["weapons", "vehicles"])
+    monkeypatch.setattr(fuentes, "indice", lambda f: ["https://g.com/gta-6/weapons/flashbang", "https://g.com/gta-6/vehicles/cheetah",
+                                                        "https://g.com/gta-6/animals/alligator"])
+    monkeypatch.setattr(fuentes, "texto_de", lambda u: f"Página {u} " + "dato " * 100)
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: "- La Cheetah Classic está confirmada [2]")
+    r = fuentes.investigar("armas y autos de GTA 6", ["https://g.com/gta-6/"], n_paginas=10)
+    assert r["texto"].startswith("- La Cheetah") and sorted(f["url"].rsplit("/", 1)[-1] for f in r["fuentes"]) == ["cheetah", "flashbang"]
