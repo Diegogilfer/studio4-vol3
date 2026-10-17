@@ -168,6 +168,7 @@ class Panel(BaseHTTPRequestHandler):
         except Error as e:
             self._json({"error": str(e)}, e.codigo)
         except (ValueError, RuntimeError, FileNotFoundError, KeyError, IndexError) as e:
+            logger.warning("Rechazado %s: %s", ruta, e)   # queda en servidor.log para saber por qué no se hizo
             self._json({"error": str(e)}, 400)
         except (BrokenPipeError, ConnectionResetError):
             pass

@@ -319,11 +319,29 @@ async function crearDesdeBiblioteca(ids, boton) {
     await cargarBiblioteca(); await refrescar();
   } catch (e) { aviso(e); } finally { boton.disabled = false; }
 }
-$("b-guardar").addEventListener("click", async () => {
+// El resultado de guardar se ve justo debajo del botón (el aviso general queda arriba de la tarjeta, fuera de la vista).
+function infoBib(texto, error) {
+  $("b-info").hidden = !texto;
+  $("b-info").textContent = texto;
+  $("b-info").classList.toggle("error", !!error);
+}
+$("b-guardar").addEventListener("click", async (ev) => {
+  const boton = ev.currentTarget;
+  if (!$("b-texto").value.trim()) return infoBib("Pega primero lo que te entregó Agron (el plan o un paquete de guiones).", true);
+  const antes = guionesBib.length;
+  boton.disabled = true;
+  infoBib("Guardando…");
   try {
-    ({ guiones: guionesBib, plan: planBib = [] } = await api("/api/biblioteca", { texto: $("b-texto").value }));
-    $("b-texto").value = ""; pintarBiblioteca();
-  } catch (e) { aviso(e); }
+    const r = await api("/api/biblioteca", { texto: $("b-texto").value });
+    ({ guiones: guionesBib, plan: planBib = [] } = r);
+    $("b-texto").value = "";
+    pintarBiblioteca();
+    const nuevos = Math.max(0, guionesBib.length - antes);
+    infoBib(r.temas_nuevos ? `Plan guardado: ${r.temas_nuevos} temas.`
+      : `Guardado: ${nuevos === 1 ? "1 guion nuevo" : nuevos ? `${nuevos} guiones nuevos` : "guiones actualizados"} · ${guionesBib.length} en la biblioteca.`);
+  } catch (e) {
+    infoBib(`No se guardó: ${e.message || e}`, true);
+  } finally { boton.disabled = false; }
 });
 $("b-plan").addEventListener("click", async (ev) => {
   const mes = ev.target.closest("[data-b-mes]");

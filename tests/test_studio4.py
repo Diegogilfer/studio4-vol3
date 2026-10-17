@@ -1648,3 +1648,26 @@ def test_plan_del_mes_de_agron_en_la_biblioteca(aislado):
     assert r["plan"][0]["guiones"] == 1 and r["plan"][1]["guiones"] == 0 and r["temas_nuevos"] == 0
     with pytest.raises(ValueError):
         biblioteca.pegar("fourlevel", "hola")
+
+
+
+def test_biblioteca_acepta_marcas_como_las_escribe_cada_chat():
+    from studio4 import biblioteca
+    g = "Esta es una frase del guion con datos de armas nuevas y autos de GTA seis. " * 3
+    for marca in ("=== FL-001 · LARGO ===", "FL-001 | LARGO", "Guion FL-001 — LARGO", "=== FL 001 / LARGO ===",
+                  "== FL-1 | LARGO ==", "**FL-001 | LARGO**"):
+        r = biblioteca.parsear(f"{marca}\nTÍTULO: Armas\nGUION:\n{g}")
+        assert (r[0]["codigo"], r[0]["tipo"]) == ("FL-001", "largo"), marca
+    r = biblioteca.parsear(f"=== FL-002 | CORTO a: lo más llamativo ===\nGUION:\n{g}\n=== FL-002 | CORTO b ===\nGUION:\n{g}")
+    assert [x["etiqueta"] for x in r] == ["a: lo más llamativo", "b"]
+    # una fila del plan del mes no se confunde con un guion
+    assert biblioteca.parsear_plan("| FL-003 | Largo viaje por Leonida | GTA 6 | x | y |")[0]["tema"] == "Largo viaje por Leonida"
+
+
+def test_biblioteca_guion_en_la_misma_linea_y_plan_sin_barra_inicial(aislado):
+    from studio4 import biblioteca
+    g = "Esta es una frase del guion con datos de armas nuevas y autos de GTA seis. " * 3
+    r = biblioteca.parsear(f"=== FL-001 | LARGO ===\nTÍTULO: Armas\nGUION: {g}")
+    assert r[0]["guion"].startswith("Esta es una frase") and "GUION" not in r[0]["guion"]
+    r = biblioteca.pegar("fourlevel", "FL-003 | Largo viaje por Leonida | GTA 6 | x | https://www.gtabase.com/gta-6/")
+    assert r["temas_nuevos"] == 1 and not r["guiones"]

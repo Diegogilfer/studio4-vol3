@@ -29,7 +29,9 @@ from typing import Any
 
 from . import config
 
-_MARCA = re.compile(r"^\s*={3,}\s*([A-Za-z]{1,6}-?\d{1,4})\s*[|—–:-]\s*(LARGO|CORTO)\s*([^=]*?)\s*={3,}\s*$",
+# «=== FL-001 | LARGO ===» y lo que los chats hacen con ella: sin los «===», «·» o «/» en vez de la barra,
+# «FL 001», «Guion FL-001 — Corto a: lo más llamativo»…
+_MARCA = re.compile(r"^\s*(?:={2,}\s*)?(?:GUI[OÓ]N\s+)?([A-Za-z]{1,6})[ -]?(\d{1,4})\s*[|—–:·•/-]\s*(LARGO|CORTO)\b\s*([^=|\n]*?)\s*(?:={2,})?\s*$",
                     re.IGNORECASE | re.MULTILINE)
 _CAMPO = re.compile(r"^\s*(T[IÍ]TULO|DESCRIPCI[OÓ]N|HASHTAGS)\s*:\s*(.*)$", re.IGNORECASE | re.MULTILINE)
 
@@ -155,13 +157,14 @@ def parsear(texto: str) -> list[dict[str, Any]]:
         bloque = re.split(r"^\s*(?:FUENTES|CONTROL DE CALIDAD|\[[ xX]?\])\b", bloque, maxsplit=1,
                           flags=re.IGNORECASE | re.MULTILINE)[0]
         campos = {k.upper().replace("Í", "I").replace("Ó", "O"): v.strip() for k, v in _CAMPO.findall(bloque)}
-        partes = re.split(r"^\s*GUI[OÓ]N\s*:\s*$", bloque, maxsplit=1, flags=re.IGNORECASE | re.MULTILINE)
+        partes = re.split(r"^\s*GUI[OÓ]N\s*:[ \t]*", bloque, maxsplit=1, flags=re.IGNORECASE | re.MULTILINE)
         guion = " ".join((partes[1] if len(partes) > 1 else _CAMPO.sub("", bloque)).split())
-        tipo = m.group(2).lower()
-        etiqueta = m.group(3).strip()
+        tipo = m.group(3).lower()
+        etiqueta = m.group(4).strip(" :.-—–")
+        codigo = f"{m.group(1).upper()}-{int(m.group(2)):03d}"
         if len(guion.split()) < 20:
-            raise ValueError(f"El guion {m.group(1)} {tipo} {etiqueta} está vacío o es demasiado corto.")
-        salida.append({"codigo": m.group(1).upper(), "tipo": tipo, "etiqueta": etiqueta,
+            raise ValueError(f"El guion {codigo} {tipo} {etiqueta} está vacío o es demasiado corto.")
+        salida.append({"codigo": codigo, "tipo": tipo, "etiqueta": etiqueta,
                        "titulo": campos.get("TITULO", "")[:100], "descripcion": campos.get("DESCRIPCION", "")[:600],
                        "hashtags": [h for h in re.findall(r"#\w+", campos.get("HASHTAGS", ""))][:10],
                        "guion": guion, "palabras": len(guion.split()), "producido": "", "fuentes": fuentes})
