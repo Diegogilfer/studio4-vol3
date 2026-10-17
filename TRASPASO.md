@@ -82,3 +82,9 @@
 - 2026-10-17 · Claude (rama `reestructura-google`): metodología común de guion, biblioteca por temas con plan del mes y
   aviso de repetidos, imágenes reales en las ideas del día, precarga completa, clave gratis de Google desde el panel
   (commits 9f3b206…fed942c). Creada la carpeta `../studio4-antigravity` (rama `antigravity`) para Antigravity.
+- 2026-10-17 · Antigravity (rama `antigravity`): biblioteca de material del canal en Inicio (`#material-bib`) con filtro
+  «Lo más usado» primero, 12 piezas con «Ver más», carga tras `precargar()` (`data-sin-precarga`), rutas seguras en
+  `/material/` (`is_relative_to(RAIZ_USUARIO)` y solo extensiones de audio/imagen/vídeo) y apertura de carpeta calculada
+  en el servidor en `/api/carpeta/abrir`; además se asegura `config.PRODUCCIONES` en `visuales_api.generar_escenas`
+  (commits `85c4a20` y `2ea420a`, 117 pruebas en verde).
+
