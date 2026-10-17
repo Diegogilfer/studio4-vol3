@@ -1249,6 +1249,8 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .u-escena { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 14px; background: var(--caja);
   border: 1px solid var(--caja-borde); } .u-escena span { flex: 1; min-width: 0; font-size: 13.5px; }
 .u-escena b { color: var(--fg-muted); font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.u-texto { flex: 1; min-width: 0; height: 36px; font-size: 13.5px; transition: border-color .3s var(--ease); }
+.u-texto.guardado { border-color: var(--ok); }
 .ideas-vivo-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .idea-vivo { display: grid; gap: 6px; padding: 14px 16px; border-radius: var(--r-caja); background: var(--caja);
   border: 1px solid var(--caja-borde); box-shadow: var(--caja-sombra); }

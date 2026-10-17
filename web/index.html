@@ -231,8 +231,7 @@
       <div id="u-resultado" class="crear-opciones" hidden>
         <div class="fila"><b class="pregunta-txt" id="u-titulo"></b>
           <button class="boton" type="button" data-abrir="3 Entregas">Abrir carpeta</button></div>
-        <div class="fila" id="u-sin-montar" hidden><span class="meta">Este vídeo está importado pero aún no tiene sus 3 formatos.</span>
-          <button class="primario" type="button" id="u-montar">Montar los 3 formatos</button></div>
+        <p class="meta" id="u-sin-montar" hidden>Este vídeo está importado pero aún no tiene sus 3 formatos: revisa los textos y pulsa «Montar los 3 formatos».</p>
         <div class="piezas" id="u-piezas"></div>
         <div class="crear-bloque u-edicion">
           <b>Edición</b>
@@ -243,6 +242,7 @@
             <label class="meta">Quitar del inicio <input class="campo u-seg" id="u-inicio" type="number" min="0" step="0.5" inputmode="decimal"> s</label>
             <label class="meta">Quitar del final <input class="campo u-seg" id="u-final" type="number" min="0" step="0.5" inputmode="decimal"> s</label>
           </div>
+          <p class="meta">Corrige el texto de cualquier escena (lo que la transcripción entendió mal) y vuelve a montar.</p>
           <div class="u-escenas" id="u-escenas"></div>
           <div class="acciones-paso"><button class="primario" id="u-remontar" type="button">Volver a montar <svg width="16" height="16"><use href="#i-renovar"/></svg></button></div>
         </div>

@@ -1337,3 +1337,17 @@ def test_error_dice_el_motivo_el_paso_y_guarda_el_detalle(aislado):
         _time.sleep(0.05)
     assert "No se pudo cortar la escena 50" in t["error"] and t["fase_fallida"] == "Preparando la escena 50 de 120"
     assert t["detalle"].startswith("RuntimeError: No se pudo cortar") and t["reintentable"]
+
+
+def test_corregir_texto_de_escena_importada_no_toca_el_audio(aislado):
+    """«Jason Dubal» → «Jason Duval»: cambian los subtítulos de esa escena; la voz original sigue."""
+    _produccion("p-txt", escenas=2, version="importado")
+    voz_ = {"archivo": "voz.wav", "duracion": 6.0, "escenas": [{"ini": 0, "fin": 3}, {"ini": 3, "fin": 6}],
+            "palabras": [{"palabra": "frase", "ini": 0.2, "fin": 1.0}, {"palabra": "1", "ini": 1.1, "fin": 2.0},
+                         {"palabra": "Jason", "ini": 3.2, "fin": 4.0}, {"palabra": "Dubal", "ini": 4.1, "fin": 5.0}]}
+    produccion.modificar("p-txt", lambda q: q.update(voz=voz_))
+    produccion.editar_escena("p-txt", 2, {"texto_voz": "Jason Duval"})
+    q = produccion.cargar("p-txt")
+    assert q["voz"] is not None and q["escenas"][1]["texto_voz"] == "Jason Duval"
+    assert [w["palabra"] for w in q["voz"]["palabras"]] == ["frase", "1", "Jason", "Duval"]
+    assert all(3.0 <= w["ini"] and w["fin"] <= 6.0 for w in q["voz"]["palabras"][2:]) and q["guion"].endswith("Jason Duval")

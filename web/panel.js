@@ -1118,7 +1118,7 @@ function pintarUrl(p) {
   if (!mia || !(p.final || p.escenas?.length)) return;
   $("u-titulo").textContent = p.titulo || p.tema;
   $("u-piezas").innerHTML = (p.entregas?.piezas || []).map((z) => piezaHTML(p, z)).join("")
-    || `<p class="meta">El vídeo completo está listo; los Reels y el Short se preparan al montar.</p>`;
+    || (p.final ? `<p class="meta">El vídeo completo está listo; los Reels y el Short se preparan al volver a montar.</p>` : "");
   const ed = p.edicion || {};
   $("u-trans").innerHTML = Object.entries(TRANS_URL).map(([k, n]) =>
     `<label><input type="radio" name="u-trans" value="${k}" ${ed.transicion === k ? "checked" : ""}>${n}</label>`).join("");
@@ -1127,9 +1127,11 @@ function pintarUrl(p) {
   $("u-caratula").checked = ed.caratula !== false;
   if (document.activeElement !== $("u-inicio")) $("u-inicio").value = ed.inicio || 0;
   if (document.activeElement !== $("u-final")) $("u-final").value = ed.final || 0;
-  $("u-escenas").innerHTML = p.escenas.map((e) => `<div class="u-escena"><b>Escena ${e.orden}</b><span>${esc(e.texto_voz)}</span>
+  $("u-escenas").innerHTML = p.escenas.map((e) => `<div class="u-escena"><b>Escena ${e.orden}</b>
+    <input class="campo u-texto" data-u-texto="${e.orden}" value="${esc(e.texto_voz)}" aria-label="Texto de la escena ${e.orden}" spellcheck="true">
     <button class="boton" type="button" data-u-quitar="${e.orden}" ${p.escenas.length < 2 || t.ocupado ? "disabled" : ""}>Quitar</button></div>`).join("");
   $("u-remontar").disabled = !!t.ocupado;
+  $("u-remontar").firstChild.textContent = p.final ? "Volver a montar " : "Montar los 3 formatos ";
 }
 // Al pegar el enlace: el logo de la plataforma al momento y, en un par de segundos, qué vídeo es (para confirmar).
 const LOGOS = { youtube: "l-youtube", tiktok: "l-tiktok", instagram: "l-instagram", facebook: "l-facebook" };
@@ -1159,9 +1161,6 @@ $("u-url").addEventListener("input", () => {
     finally { $("u-logo").classList.remove("leyendo"); }
   }, 600);
 });
-$("u-montar").addEventListener("click", async () => {   // un vídeo importado sin sus 3 formatos: se monta con la edición
-  try { await guardarEdicion(); await api("/api/render", {}); await refrescar(); } catch (e) { aviso(e); }
-});
 $("u-archivo").addEventListener("change", () => {
   videoUrlSubido = $("u-archivo").files[0] || null;
   $("u-info").textContent = videoUrlSubido ? `Archivo: ${videoUrlSubido.name}` : "";
@@ -1190,7 +1189,17 @@ async function guardarEdicion() {
       inicio: Number($("u-inicio").value || 0), final: Number($("u-final").value || 0) });
   } catch (e) { aviso(e); }
 }
-$("u-resultado").addEventListener("change", (ev) => { if (ev.target.closest(".u-edicion")) guardarEdicion(); });
+$("u-resultado").addEventListener("change", async (ev) => {
+  const t = ev.target.closest("[data-u-texto]");
+  if (t) {   // corregir lo que Whisper entendió mal: cambian los subtítulos de esa escena, no el audio
+    try {
+      await api("/api/escena", { orden: Number(t.dataset.uTexto), texto_voz: t.value });
+      t.classList.add("guardado"); setTimeout(() => t.classList.remove("guardado"), 1200);
+    } catch (e) { aviso(e); }
+    return;
+  }
+  if (ev.target.closest(".u-edicion")) guardarEdicion();
+});
 $("u-resultado").addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-u-quitar]");
   if (!b) return;
