@@ -711,11 +711,21 @@ function pintarTrabajo(t) {
   const enCrear = p && !p.guion_aprobado && !empezarOtro;   // en Crear, solo los del guion que estás revisando
   for (const id of ["t-error", "aviso-panel"]) {
     $(id).hidden = !t.error || (id === "aviso-panel" && !enCrear);
-    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${!t.ocupado && t.reintentable !== false
+    // La voz de Google sin saldo (402): salida directa con la voz de fal y su coste para este guion.
+    const letras = (p?.escenas || []).reduce((n, e) => n + (e.texto_voz || "").length, 0);
+    const conFal = t.error && /\(402\)/.test(t.error) && estado?.fal && letras && !t.ocupado
+      ? `<button class="primario" type="button" data-voz-fal="1">Usar voz ElevenLabs por fal (≈ ${(letras / 1000 * 0.10).toFixed(2).replace(".", ",")} $)</button>` : "";
+    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${conFal}${!t.ocupado && t.reintentable !== false && !conFal
       ? `<button class="boton" type="button" data-reintentar="1"><svg width="14" height="14"><use href="#i-renovar"/></svg>Reintentar</button>` : ""}` : "";
   }
 }
 document.addEventListener("click", async (ev) => {
+  const f = ev.target.closest("[data-voz-fal]");
+  if (f) {   // rehace la voz con ElevenLabs por fal (de pago; el coste se ve en el botón)
+    f.disabled = true;
+    try { await api("/api/voz", { proveedor: "fal" }); await refrescar(); } catch (e) { aviso(e); } finally { f.disabled = false; }
+    return;
+  }
   const b = ev.target.closest("[data-reintentar]");
   if (!b) return;
   b.disabled = true;

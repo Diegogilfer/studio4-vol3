@@ -277,6 +277,7 @@ class Panel(BaseHTTPRequestHandler):
             "produccion": p,
             "canal": canal,
             "manual_fecha": (aprender.leer(canal["id"]) or {}).get("fecha", ""),
+            "fal": bool(config.FAL_KEY) and not config.SIN_PAGO,   # para ofrecer la voz de fal si Google no tiene saldo
             "canales": [{"id": c["id"], "nombre": c["nombre"]} for c in canales.listar()],
             "extension": flow.estado_extension(),
             "codigo": config.token_flow(),
