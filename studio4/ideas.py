@@ -258,6 +258,9 @@ def diarias(cid: str) -> dict[str, Any]:
         _reponer_imagenes(cid)
         est = _estado.get(cid, {})
     for d in datos.get("ideas") or []:
+        for k in ("idea", "gancho", "texto"):   # huecos «[nombre]» de ideas generadas antes de prohibirlos
+            if isinstance(d.get(k), str):
+                d[k] = re.sub(r"\s*\[[^]]{1,20}\]", "", d[k])
         if _ajena(d):
             d["miniatura"] = ""   # mientras se busca la imagen real, la tarjeta va sin imagen
     return {**datos, "hoy": datos.get("fecha") == _hoy(), "ocupado": bool(est.get("ocupado")), "fase": est.get("fase", ""),
