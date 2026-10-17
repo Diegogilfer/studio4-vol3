@@ -1236,6 +1236,15 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .terminos { font-size: 12px; color: var(--fg-muted); gap: 6px; } .terminos a { color: var(--accent); }
 /* Crear: de dónde salen los datos y las imágenes (las páginas recomendadas del canal) */
 .fuentes-aviso { margin: 0; } .fuentes-aviso b { color: var(--fg); } .fuentes-aviso a { color: var(--accent); }
+/* Crear › Biblioteca de guiones */
+#crear[data-modo="biblioteca"] :is(.caja-viva, #a-guion-info, .fuentes-aviso, .ideas-vivo, .formatos, .solo-propio, #referencias,
+  .opciones, #a-resumen, .crear-opciones > .acciones-paso) { display: none; }
+.biblioteca { display: grid; gap: 12px; } .b-lista { display: grid; gap: 8px; }
+.b-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px;
+  border-radius: 16px; background: var(--caja); border: 1px solid var(--caja-borde); }
+.b-item b { font-size: 14px; } .b-item small { color: var(--fg-muted); font-size: 12px; }
+.b-codigo { font: 600 12px/1 var(--sans); padding: 6px 10px; border-radius: 999px; background: var(--control); white-space: nowrap; }
+.b-item.hecho { opacity: .6; }
 /* Desde URL */
 .u-logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--caja);
   border: 1px solid var(--caja-borde); color: var(--fg-muted); }

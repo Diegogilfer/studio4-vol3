@@ -263,6 +263,10 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
             raise ValueError(f"Formato desconocido: {formato_propio}")
         texto = " ".join(guion_propio.split())
         pid = f"{sello}-{_slug(idea or texto[:40])}"
+        n = 2
+        while carpeta(pid).exists():   # varias en el mismo segundo (p. ej. desde la biblioteca)
+            pid = f"{sello}-{n}-{_slug(idea or texto[:40])}"
+            n += 1
         _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
                voz_nombre=voz_nombre, velocidad_voz=velocidad_voz,
                version="propio", guion=texto, autor_guion="Tú", reparto=list(reparto or [])[:6],
@@ -358,6 +362,24 @@ def retomar(pid: str) -> None:
     completo = bool(p.get("desde_url"))
     _en_fondo(pid, "Desde URL" if completo else "Importar vídeo",
               lambda: _fase_importar(pid, (p.get("origen") or {}).get("url", ""), completo))
+
+
+def desde_biblioteca(cid: str, item_id: str, proveedor_voz: str = "gemini", estilo: str = "", velocidad_voz: float = 1.0) -> str:
+    """Un guion de la biblioteca → una producción lista para aprobar, con su título, descripción y hashtags."""
+    from . import biblioteca
+    item = next((x for x in biblioteca.leer(cid) if x["id"] == item_id), None)
+    if not item:
+        raise ValueError("Ese guion ya no está en la biblioteca.")
+    c = canales.obtener(cid)
+    largo = item["tipo"] == "largo"
+    pid = crear(item["titulo"] or item["guion"][:60], [], estilo or c.get("estilo") or "cinematografico", proveedor_voz,
+                segundos={"largo": max(60, int(item["palabras"] / guion.PALABRAS_POR_SEGUNDO))} if largo else None,
+                guion_propio=item["guion"], formato_propio="horizontal" if largo else "vertical",
+                tono=c.get("tono", ""), voz_nombre=c.get("voz_nombre", ""), velocidad_voz=velocidad_voz)[0]
+    modificar(pid, lambda q: q.update(titulo=item["titulo"], descripcion=item["descripcion"], hashtags=item["hashtags"],
+                                      biblioteca=item["id"]))
+    biblioteca.marcar(cid, item_id, pid)
+    return pid
 
 
 def editar(pid: str, datos: dict[str, Any]) -> dict[str, Any]:
@@ -616,7 +638,7 @@ def aprobar_guion(pid: str, texto: str | None = None, forzar: bool = False) -> N
 
         def aplicar(r):
             r.update(titulo=r.get("titulo") or plan["titulo"],   # el título del guionista manda; Gemini solo si no hay
-                     descripcion=plan["descripcion"], hashtags=plan["hashtags"],
+                     descripcion=r.get("descripcion") or plan["descripcion"], hashtags=r.get("hashtags") or plan["hashtags"],
                      biblia=plan["biblia"], estilo_en=plan["estilo_en"], avisos=plan.get("avisos", []),
                      estado="rodando", escena_activa=1, recoger_para="escenas")
             r["escenas"] = [{**e, "tomas": [], "elegida": None} for e in plan["escenas"]]

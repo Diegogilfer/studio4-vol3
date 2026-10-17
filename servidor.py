@@ -224,6 +224,9 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(tendencias.estado(canales.activo()["id"]))
         if ruta == "/api/manual":
             return self._json(aprender.estado(canales.activo()["id"]))
+        if ruta == "/api/biblioteca":   # los guiones guardados del canal
+            from studio4 import biblioteca
+            return self._json({"guiones": biblioteca.leer(canales.activo()["id"])})
         if ruta == "/api/ideas/diarias":   # 3 ideas listas cada día, preparadas solas
             return self._json(ideas.diarias(canales.activo()["id"]))
         if ruta == "/api/importar/vista":   # qué hay detrás del enlace, para confirmar antes de procesar
@@ -369,6 +372,19 @@ class Panel(BaseHTTPRequestHandler):
             if not url.startswith(("http://", "https://")):
                 raise Error(400, "Pega el enlace del vídeo modelo.")
             return self._json(aprender.estudiar_modelo(canales.activo()["id"], url, str(d.get("nota", ""))[:600]))
+        if ruta in ("/api/biblioteca", "/api/biblioteca/crear", "/api/biblioteca/quitar"):
+            from studio4 import biblioteca
+            d = self._cuerpo_json()
+            cid = canales.activo()["id"]
+            if ruta == "/api/biblioteca":   # pegar un paquete de guiones
+                return self._json({"guiones": biblioteca.anadir(cid, str(d.get("texto", "")))})
+            if ruta == "/api/biblioteca/quitar":
+                biblioteca.quitar(cid, str(d.get("id", "")))
+                return self._json({"ok": True})
+            ids = [str(x) for x in d.get("ids") or []]
+            pids = [produccion.desde_biblioteca(cid, i, str(d.get("voz", "gemini")), str(d.get("estilo", "")),
+                                                float(d.get("velocidad_voz") or 1.0)) for i in ids]
+            return self._json({"ok": True, "ids": pids})
         if ruta == "/api/ideas/diarias":   # volver a preparar las 3 ideas de hoy
             ideas.lanzar_diarias(canales.activo()["id"])
             return self._json({"ok": True})

@@ -222,6 +222,8 @@ function pintarAsistente() {
   document.querySelectorAll(".solo-idea").forEach((el) => { el.hidden = modo() !== "idea"; });
   document.querySelectorAll(".solo-propio").forEach((el) => { el.hidden = !propio; });
   document.querySelectorAll(".solo-video").forEach((el) => { el.hidden = modo() !== "video"; });
+  document.querySelectorAll(".solo-biblioteca").forEach((el) => { el.hidden = modo() !== "biblioteca"; });
+  if (modo() === "biblioteca") cargarBiblioteca();
   $("a-crear-txt").textContent = propio ? "Usar mi guion" : "Investigar y escribir";
   // Siempre a la vista: los datos y las imágenes reales salen de las páginas recomendadas del canal.
   const webs = (estado?.canal?.fuentes || []).map((u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return u; } });
@@ -278,6 +280,43 @@ function pintarResumen() {
 }
 ["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 $("a-guion").addEventListener("input", pintarResumen);
+// Biblioteca de guiones: pegar paquetes (escritos fuera) y convertirlos en producciones con un clic.
+let guionesBib = [];
+async function cargarBiblioteca() {
+  try { guionesBib = (await api("/api/biblioteca")).guiones; } catch (e) { return aviso(e); }
+  pintarBiblioteca();
+}
+function pintarBiblioteca() {
+  const pendientes = guionesBib.filter((x) => !x.producido).length;
+  $("b-crear-todos").disabled = !pendientes;
+  $("b-crear-todos").textContent = pendientes ? `Crear los ${pendientes} pendientes` : "Nada pendiente";
+  $("b-lista").innerHTML = guionesBib.map((x) => `<div class="b-item ${x.producido ? "hecho" : ""}">
+      <span class="b-codigo">${esc(x.codigo)} · ${x.tipo === "largo" ? "Largo" : `Corto ${esc(x.etiqueta)}`}</span>
+      <span><b>${esc(x.titulo || x.guion.slice(0, 60))}</b><br><small>${x.palabras} palabras${x.producido ? " · ya creado" : ""}</small></span>
+      <span class="fila">${x.producido ? "" : `<button class="primario" type="button" data-b-crear="${esc(x.id)}">Crear</button>`}
+        <button class="boton" type="button" data-b-quitar="${esc(x.id)}">Quitar</button></span></div>`).join("")
+    || `<p class="meta">La biblioteca está vacía: pega un paquete de guiones arriba.</p>`;
+}
+async function crearDesdeBiblioteca(ids, boton) {
+  boton.disabled = true;
+  try {
+    await api("/api/biblioteca/crear", { ids, voz: $("a-voz").value, estilo: estiloElegido, velocidad_voz: velocidadVoz() });
+    await cargarBiblioteca(); await refrescar();
+  } catch (e) { aviso(e); } finally { boton.disabled = false; }
+}
+$("b-guardar").addEventListener("click", async () => {
+  try { guionesBib = (await api("/api/biblioteca", { texto: $("b-texto").value })).guiones; $("b-texto").value = ""; pintarBiblioteca(); }
+  catch (e) { aviso(e); }
+});
+$("b-crear-todos").addEventListener("click", (ev) => crearDesdeBiblioteca(guionesBib.filter((x) => !x.producido).map((x) => x.id), ev.currentTarget));
+$("b-lista").addEventListener("click", async (ev) => {
+  const c = ev.target.closest("[data-b-crear]");
+  if (c) return crearDesdeBiblioteca([c.dataset.bCrear], c);
+  const q = ev.target.closest("[data-b-quitar]");
+  if (q && confirm("¿Quitar este guion de la biblioteca?")) {
+    try { await api("/api/biblioteca/quitar", { id: q.dataset.bQuitar }); await cargarBiblioteca(); } catch (e) { aviso(e); }
+  }
+});
 // Ideas en tendencia: lo que más crece esta semana en el nicho; «Inspirarme» lee el vídeo y propone una idea original.
 let videosVivo = [];
 function pintarIdeasVivo() {

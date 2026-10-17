@@ -1489,3 +1489,36 @@ def test_investigar_en_las_fuentes_de_punta_a_punta(monkeypatch):
     monkeypatch.setattr(gemini, "generar", lambda *a, **k: "- La Cheetah Classic está confirmada [2]")
     r = fuentes.investigar("armas y autos de GTA 6", ["https://g.com/gta-6/"], n_paginas=10)
     assert r["texto"].startswith("- La Cheetah") and sorted(f["url"].rsplit("/", 1)[-1] for f in r["fuentes"]) == ["cheetah", "flashbang"]
+
+
+PAQUETE = """Aquí tienes el paquete FL-001.
+
+=== FL-001 | LARGO ===
+TÍTULO: GTA 6: armas, autos y rarezas confirmadas
+DESCRIPCIÓN: Todo lo confirmado por Rockstar.
+HASHTAGS: #GTA6 #Rockstar #Leonida
+GUION:
+""" + "Esta frase del guion largo habla de armas y autos nuevos confirmados por Rockstar. " * 30 + """
+
+=== FL-001 | CORTO a ===
+TÍTULO: El arma más rara de GTA 6
+DESCRIPCIÓN: Una sola arma.
+HASHTAGS: #GTA6
+GUION:
+""" + "El arma más rara que veremos en Leonida tiene una historia curiosa. " * 4
+
+
+def test_biblioteca_de_guiones(aislado):
+    from studio4 import biblioteca
+    items = biblioteca.anadir("fourlevel", PAQUETE)
+    assert [(x["codigo"], x["tipo"], x["etiqueta"]) for x in items] == [("FL-001", "largo", ""), ("FL-001", "corto", "a")]
+    assert items[0]["titulo"] == "GTA 6: armas, autos y rarezas confirmadas" and items[0]["hashtags"] == ["#GTA6", "#Rockstar", "#Leonida"]
+    assert "TÍTULO" not in items[0]["guion"] and items[1]["palabras"] > 40
+    assert len(biblioteca.anadir("fourlevel", PAQUETE)) == 2          # pegar lo mismo otra vez no duplica
+    with pytest.raises(ValueError, match="=== FL-001"):
+        biblioteca.parsear("un texto sin marcas")
+    pids = [produccion.desde_biblioteca("fourlevel", x["id"]) for x in items]   # dos en el mismo segundo: no chocan
+    assert len(set(pids)) == 2
+    largo, corto = produccion.cargar(pids[0]), produccion.cargar(pids[1])
+    assert (largo["formato"], corto["formato"]) == ("horizontal", "vertical") and largo["hashtags"] == ["#GTA6", "#Rockstar", "#Leonida"]
+    assert all(x["producido"] for x in biblioteca.leer("fourlevel"))
