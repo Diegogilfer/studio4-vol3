@@ -1522,3 +1522,26 @@ def test_biblioteca_de_guiones(aislado):
     largo, corto = produccion.cargar(pids[0]), produccion.cargar(pids[1])
     assert (largo["formato"], corto["formato"]) == ("horizontal", "vertical") and largo["hashtags"] == ["#GTA6", "#Rockstar", "#Leonida"]
     assert all(x["producido"] for x in biblioteca.leer("fourlevel"))
+
+
+
+def test_biblioteca_lee_el_formato_que_ponen_los_chats():
+    """Negritas, títulos markdown, bloques de código y rayas en vez de barra: el paquete se lee igual."""
+    from studio4 import biblioteca
+    g = "Esta es una frase del guion con datos de armas nuevas y autos de GTA seis. " * 5
+    for texto in (f"**=== FL-002 | LARGO ===**\n**TÍTULO:** Armas de GTA 6\n**GUION:**\n{g}",
+                  f"### === FL-002 | LARGO ===\nTÍTULO: Armas de GTA 6\nGUION:\n{g}",
+                  f"```\n=== FL-002 | LARGO ===\nTÍTULO: Armas de GTA 6\nGUION:\n{g}\n```",
+                  f"=== FL-002 — LARGO ===\nTÍTULO: Armas de GTA 6\nGUION:\n{g}"):
+        r = biblioteca.parsear(texto)
+        assert r[0]["titulo"] == "Armas de GTA 6" and r[0]["palabras"] == 80 and "`" not in r[0]["guion"] and "*" not in r[0]["guion"]
+
+
+
+def test_biblioteca_no_mete_fuentes_ni_control_en_el_ultimo_guion():
+    from studio4 import biblioteca
+    g = "Esta es una frase del guion corto con datos del arma más rara de Leonida. " * 3
+    texto = (f"=== FL-003 | CORTO e ===\nTÍTULO: Comparación\nGUION:\n{g}\n\nFUENTES:\n- https://www.gtabase.com/gta-6/weapons\n"
+             "CONTROL DE CALIDAD:\n[x] Datos verificables\n[x] Español latino")
+    r = biblioteca.parsear(texto)
+    assert "gtabase" not in r[0]["guion"] and "CONTROL" not in r[0]["guion"] and r[0]["guion"].endswith("Leonida.")

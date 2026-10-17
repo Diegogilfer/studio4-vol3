@@ -25,7 +25,7 @@ from typing import Any
 
 from . import config
 
-_MARCA = re.compile(r"^\s*={3,}\s*([A-Za-z]{1,6}-?\d{1,4})\s*\|\s*(LARGO|CORTO)\s*([^=]*?)\s*={3,}\s*$",
+_MARCA = re.compile(r"^\s*={3,}\s*([A-Za-z]{1,6}-?\d{1,4})\s*[|—–:-]\s*(LARGO|CORTO)\s*([^=]*?)\s*={3,}\s*$",
                     re.IGNORECASE | re.MULTILINE)
 _CAMPO = re.compile(r"^\s*(T[IÍ]TULO|DESCRIPCI[OÓ]N|HASHTAGS)\s*:\s*(.*)$", re.IGNORECASE | re.MULTILINE)
 
@@ -49,14 +49,31 @@ def _escribir(cid: str, items: list[dict[str, Any]]) -> None:
     tmp.replace(ruta)
 
 
+def limpiar(texto: str) -> str:
+    """Quita el formato que añaden los chats (negritas, títulos «###», citas «>», bloques de código) sin tocar
+    el texto: así el paquete se lee igual venga como venga pegado."""
+    lineas = []
+    for linea in (texto or "").replace("\r\n", "\n").split("\n"):
+        if re.match(r"^\s*`{3,}", linea):   # las vallas de un bloque de código
+            continue
+        linea = re.sub(r"^\s*(?:#{1,6}|>)\s*", "", linea)        # «### …» y «> …»
+        linea = re.sub(r"(\*\*|__)", "", linea)                   # **negrita**
+        lineas.append(linea.strip().strip("*_").strip())
+    return "\n".join(lineas)
+
+
 def parsear(texto: str) -> list[dict[str, Any]]:
     """Los guiones de un paquete. Error claro si no trae las marcas o algún guion está vacío."""
+    texto = limpiar(texto)
     marcas = list(_MARCA.finditer(texto or ""))
     if not marcas:
         raise ValueError("No encuentro guiones: cada uno debe empezar con una línea como «=== FL-001 | LARGO ===».")
     salida = []
     for i, m in enumerate(marcas):
         bloque = texto[m.end(): marcas[i + 1].start() if i + 1 < len(marcas) else len(texto)]
+        # Lo que el asistente añade al final del paquete (fuentes, control de calidad) no es guion.
+        bloque = re.split(r"^\s*(?:FUENTES|CONTROL DE CALIDAD|\[[ xX]?\])\b", bloque, maxsplit=1,
+                          flags=re.IGNORECASE | re.MULTILINE)[0]
         campos = {k.upper().replace("Í", "I").replace("Ó", "O"): v.strip() for k, v in _CAMPO.findall(bloque)}
         partes = re.split(r"^\s*GUI[OÓ]N\s*:\s*$", bloque, maxsplit=1, flags=re.IGNORECASE | re.MULTILINE)
         guion = " ".join((partes[1] if len(partes) > 1 else _CAMPO.sub("", bloque)).split())
