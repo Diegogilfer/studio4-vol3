@@ -17,7 +17,7 @@
 5. **Nada de pago sin su visto bueno** y con tope. Ya aprobado: voz **ElevenLabs por fal** para el vídeo de 15 min
    (~1,20 $, tope 2 $). Imágenes por fal: solo si lo pide.
 6. **Google Flow no se automatiza** (riesgo para su cuenta): la extensión solo muestra prompts y recoge clips.
-7. **Commit solo si pasan las pruebas** (`python -m pytest tests/test_studio4.py -q -p no:cacheprovider`, 101 hoy).
+7. **Commit solo si pasan las pruebas** (`python -m pytest tests/test_studio4.py -q -p no:cacheprovider`, 115 hoy).
    Comprueba el resultado con `grep failed`, no con el código de salida de una tubería.
 8. **Comprueba visualmente** cada cambio de panel (captura con Edge sin ventana contra el servidor de prueba).
 9. **Vídeos de otros canales** (p. ej. el de Rai Can): solo ideas y forma. **Nunca** mencionarlo, enlazarlo ni copiar
@@ -77,3 +77,9 @@
   ninguna prueba lo viera: añade una prueba de punta a punta cuando toques una función.
 - Reiniciar el servidor con un trabajo en marcha lo mataba (ahora las importaciones se retoman solas).
 - Parches con acentos pasados por la consola (heredoc) fallan: escribe el script de cambio en un archivo.
+
+## Bitácora (cada agente apunta aquí lo que hizo)
+
+- 2026-10-17 · Claude (rama `reestructura-google`): metodología común de guion, biblioteca por temas con plan del mes y
+  aviso de repetidos, imágenes reales en las ideas del día, precarga completa, clave gratis de Google desde el panel
+  (commits 9f3b206…fed942c). Creada la carpeta `../studio4-antigravity` (rama `antigravity`) para Antigravity.
