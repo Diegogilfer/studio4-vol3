@@ -223,6 +223,11 @@ function pintarAsistente() {
   document.querySelectorAll(".solo-propio").forEach((el) => { el.hidden = !propio; });
   document.querySelectorAll(".solo-video").forEach((el) => { el.hidden = modo() !== "video"; });
   $("a-crear-txt").textContent = propio ? "Usar mi guion" : "Investigar y escribir";
+  // Siempre a la vista: los datos y las imágenes reales salen de las páginas recomendadas del canal.
+  const webs = (estado?.canal?.fuentes || []).map((u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return u; } });
+  $("a-fuentes").innerHTML = webs.length
+    ? `Datos e imágenes reales: de tus páginas recomendadas (<b>${esc([...new Set(webs)].join(", "))}</b>), además de Wikipedia.`
+    : `Este canal no tiene páginas recomendadas: añádelas en <a href="#canales">Canales</a> para sacar datos e imágenes reales de ellas.`;
   pintarResumen();
 }
 document.querySelectorAll('input[name="modo"]').forEach((r) => r.addEventListener("change", pintarAsistente));

@@ -1395,3 +1395,33 @@ def test_imagenes_reales_de_las_fuentes(monkeypatch):
     vertical = galeria.encajar(Image.new("RGB", (1920, 1080), "red"), 1080, 1920)   # captura 16:9 en un vertical: entera
     horizontal = galeria.encajar(Image.new("RGB", (1920, 1080), "red"), 1920, 1080)  # misma forma: llena
     assert vertical.size == (1080, 1920) and vertical.getpixel((20, 960))[0] < 150 and horizontal.getpixel((5, 5)) == (255, 0, 0)
+
+
+def test_voz_larga_se_graba_por_trozos_y_se_une(monkeypatch, tmp_path):
+    """15 minutos no caben en una llamada: se graba por trozos de escenas enteras y los tiempos se recolocan."""
+    escenas = [("palabra " * 120).strip() for _ in range(6)]          # ~840 caracteres cada escena
+    assert voz.trozos(escenas, limite=2000) == [(0, 2), (2, 4), (4, 6)]
+    assert voz.trozos(["x" * 5000]) == [(0, 1)]                          # una escena enorme no se parte
+    if not shutil.which("ffmpeg"):
+        return
+    llamadas = []
+
+    def uno(segs, destino, proveedor, produccion, direcciones, voz_nombre, estilo_voz, velocidad, contexto=("", "")):
+        llamadas.append((len(segs), bool(contexto[0]), bool(contexto[1])))
+        medios.ffmpeg("-f", "lavfi", "-i", "sine=d=4", "-ar", "24000", "-ac", "1", str(destino))
+        return {"proveedor": proveedor, "duracion": 4.0, "escenas": [{"ini": 0, "fin": 2}, {"ini": 2, "fin": 4}],
+                "palabras": [{"palabra": "a", "ini": 0.5, "fin": 1.0}], "dirigida": False, "voz_nombre": ""}
+    monkeypatch.setattr(voz, "_locutar_uno", uno)
+    monkeypatch.setattr(voz, "LIMITE_TROZO", 2000)
+    r = voz.locutar(escenas, tmp_path / "voz.wav", "fal")
+    assert llamadas == [(2, False, True), (2, True, True), (2, True, False)]   # cada trozo sabe qué va antes y después
+    assert [e["ini"] for e in r["escenas"]] == [0, 2, 4.0, 6.0, 8.0, 10.0] and r["palabras"][2]["ini"] == 8.5
+    assert abs(r["duracion"] - 12.0) < 0.15 and r["trozos"] == 3 and not list(tmp_path.glob("voz_trozo*"))
+
+
+def test_mas_escenas_que_imagenes_se_reusan_en_vez_de_dejar_huecos():
+    from studio4 import galeria
+    imgs = [{"url": f"https://x/{n}-1080.jpg", "descripcion": n, "pagina": "p"} for n in ("lucia", "jason")]
+    escenas = [{"orden": i, "texto_voz": "algo", "elegida": None} for i in range(1, 6)]
+    reparto = galeria.repartir(escenas, imgs)
+    assert sorted(reparto) == [1, 2, 3, 4, 5] and reparto[1]["url"] != reparto[2]["url"]

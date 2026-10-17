@@ -831,7 +831,9 @@ def rellenar_reales(pid: str) -> None:
     def fase():
         q = cargar(pid)
         _avisar(pid, "Buscando imágenes reales en tus fuentes", 10)
-        pool = galeria.buscar(q["canal"], f"{q.get('titulo') or q['tema']}", n=80, produccion=pid)
+        largo = len(q["escenas"]) > 40   # un vídeo largo necesita muchas más imágenes distintas
+        pool = galeria.buscar(q["canal"], f"{q.get('titulo') or q['tema']}", n=300 if largo else 80, produccion=pid,
+                              paginas_por_fuente=12 if largo else galeria.PAGINAS)
         if not pool:
             raise ValueError("Tus fuentes no tienen imágenes sobre este tema.")
         reparto = galeria.repartir(q["escenas"], pool)

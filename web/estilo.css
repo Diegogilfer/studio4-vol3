@@ -1234,6 +1234,8 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .crear-bloque > .meta:first-child { margin: 0; }
 /* Términos de uso: en letra pequeña, junto al botón que los necesita */
 .terminos { font-size: 12px; color: var(--fg-muted); gap: 6px; } .terminos a { color: var(--accent); }
+/* Crear: de dónde salen los datos y las imágenes (las páginas recomendadas del canal) */
+.fuentes-aviso { margin: 0; } .fuentes-aviso b { color: var(--fg); } .fuentes-aviso a { color: var(--accent); }
 /* Desde URL */
 .u-logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--caja);
   border: 1px solid var(--caja-borde); color: var(--fg-muted); }

@@ -24,7 +24,12 @@ logger = logging.getLogger("studio4.voz")
 PROVEEDORES = {
     "gemini": "Voz de Google (gratis)",
     "elevenlabs": "Voz ElevenLabs",
+    "fal": "Voz ElevenLabs por fal (de pago · ~0,10 $ cada 1.000 letras)",
 }
+FAL_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
+FAL_TTS_POR_MIL = 0.10   # $ por cada 1.000 caracteres (ficha de fal, octubre de 2026)
+VOZ_FAL = "George"       # voz de narrador de ElevenLabs; el modelo multilingüe habla en español
+LIMITE_TROZO = 3200      # caracteres por llamada (~3 min de voz): un vídeo largo se graba por partes y se une
 VOZ_ELEVENLABS_POR_DEFECTO = "JBFqnCBsd6RMkjVDRZzb"  # «George», voz prediseñada disponible en el plan gratis
 
 
@@ -227,6 +232,34 @@ def _elevenlabs(texto: str, destino: Path, produccion: str) -> dict[str, Any]:
     return d.get("alignment") or d.get("normalized_alignment") or {}
 
 
+def _fal_tts(texto: str, destino: Path, produccion: str, antes: str = "", despues: str = "") -> None:
+    """ElevenLabs Multilingual v2 a través de fal (con el saldo de fal). `antes` y `despues` son el texto vecino:
+    así cada trozo de un vídeo largo se entona como parte de la misma narración."""
+    from . import visuales_api
+    if not config.FAL_KEY or config.SIN_PAGO:
+        raise RuntimeError("La voz de ElevenLabs por fal necesita FAL_KEY en .env (y STUDIO4_SIN_PAGO apagado).")
+    cuerpo = {"text": texto, "voice": VOZ_FAL, "language_code": "es"}
+    if antes:
+        cuerpo["previous_text"] = antes[-600:]
+    if despues:
+        cuerpo["next_text"] = despues[:600]
+    res = visuales_api._fal(FAL_TTS, cuerpo, limite_s=900)
+    url = (res.get("audio") or {}).get("url")
+    if not url:
+        raise RuntimeError(f"fal.ai no devolvió el audio: {str(res)[:160]}")
+    mp3 = destino.with_suffix(".mp3")
+    visuales_api._bajar(url, mp3)
+    medios.ffmpeg("-i", str(mp3), "-ac", "1", "-ar", "24000", str(destino))
+    mp3.unlink(missing_ok=True)
+    registro.apuntar("fal.ai · voz ElevenLabs", f"{len(texto)} caracteres", cantidad=len(texto), unidad="caracteres",
+                     produccion=produccion, usd=round(len(texto) / 1000 * FAL_TTS_POR_MIL, 4))
+
+
+def coste_voz(segmentos: list[str], proveedor: str) -> float:
+    """Lo que costará la locución (0 si es gratis)."""
+    return round(sum(len(" ".join(x.split())) for x in segmentos) / 1000 * FAL_TTS_POR_MIL, 2) if proveedor == "fal" else 0.0
+
+
 def _tiempos_alineados(texto: str, spans: list[tuple[int, int]], al: dict, total: float) -> tuple[list[float], list[dict]]:
     inicios = al.get("character_start_times_seconds", [])
     fines = al.get("character_end_times_seconds", [])
@@ -281,9 +314,54 @@ def acelerar(wav: Path, velocidad: float) -> None:
     tmp.replace(wav)
 
 
+def trozos(segmentos: list[str], limite: int | None = None) -> list[tuple[int, int]]:
+    """Escenas agrupadas en trozos de como mucho `limite` caracteres, sin partir ninguna escena: [(desde, hasta)]."""
+    limite = limite or LIMITE_TROZO
+    salida, desde, suma = [], 0, 0
+    for i, s in enumerate(segmentos):
+        n = len(" ".join(s.split())) + 1
+        if i > desde and suma + n > limite:
+            salida.append((desde, i))
+            desde, suma = i, 0
+        suma += n
+    salida.append((desde, len(segmentos)))
+    return salida
+
+
 def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
             direcciones: list[dict[str, str]] | None = None, voz_nombre: str | None = None,
             estilo_voz: str = "", velocidad: float = 1.0) -> dict[str, Any]:
+    """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
+    Un guion largo (más de ~3 min de voz) se graba por trozos de escenas enteras y se une: ninguna voz admite
+    15 minutos en una sola llamada. Los tiempos de cada trozo se recolocan sobre el total."""
+    grupos = trozos(segmentos)
+    if len(grupos) == 1:
+        return _locutar_uno(segmentos, destino, proveedor, produccion, direcciones, voz_nombre, estilo_voz, velocidad)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    partes, escenas, palabras, desplazamiento, resultado = [], [], [], 0.0, {}
+    for k, (a, b) in enumerate(grupos):
+        parte = destino.with_name(f"{destino.stem}_trozo{k + 1:02d}.wav")
+        contexto = (" ".join(segmentos[max(0, a - 3):a]), " ".join(segmentos[b:b + 3]))
+        resultado = _locutar_uno(segmentos[a:b], parte, proveedor, produccion, direcciones[a:b] if direcciones else None,
+                                 voz_nombre, estilo_voz, velocidad, contexto=contexto)
+        escenas += [{"ini": round(x["ini"] + desplazamiento, 3), "fin": round(x["fin"] + desplazamiento, 3)} for x in resultado["escenas"]]
+        palabras += [{**w, "ini": round(w["ini"] + desplazamiento, 3), "fin": round(w["fin"] + desplazamiento, 3)}
+                     for w in resultado["palabras"]]
+        desplazamiento += resultado["duracion"]
+        partes.append(parte)
+    entradas = [x for parte in partes for x in ("-i", str(parte))]
+    unir = "".join(f"[{i}:a]aresample=24000,aformat=channel_layouts=mono[a{i}];" for i in range(len(partes)))
+    unir += "".join(f"[a{i}]" for i in range(len(partes))) + f"concat=n={len(partes)}:v=0:a=1[o]"
+    medios.ffmpeg(*entradas, "-filter_complex", unir, "-map", "[o]", str(destino))
+    for parte in partes:
+        parte.unlink(missing_ok=True)
+    return {**resultado, "duracion": round(medios.duracion(destino), 3), "escenas": escenas, "palabras": palabras,
+            "trozos": len(partes)}
+
+
+def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
+                 direcciones: list[dict[str, str]] | None = None, voz_nombre: str | None = None,
+                 estilo_voz: str = "", velocidad: float = 1.0, contexto: tuple[str, str] = ("", "")) -> dict[str, Any]:
     """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
     Con `direcciones` (tono y ritmo por escena), Gemini TTS interpreta cada escena como toca."""
     limpios = [" ".join(s.split()) for s in segmentos]
@@ -294,6 +372,8 @@ def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", prod
     dirigida = False
     if proveedor == "elevenlabs":
         alineacion = _elevenlabs(texto, destino, produccion)
+    elif proveedor == "fal":   # sus tiempos se miden por los silencios, como con Gemini
+        _fal_tts(texto, destino, produccion, *contexto)
     else:
         dirigido = _texto_dirigido(limpios, direcciones)
         _gemini(dirigido, destino, produccion, voz_nombre, estilo_voz)
