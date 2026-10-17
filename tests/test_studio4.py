@@ -1561,7 +1561,7 @@ def test_metodologia_es_la_misma_para_todos_los_modelos_y_para_el_chat():
 
 
 
-def test_idea_del_dia_usa_imagen_real_del_tema_y_nunca_la_miniatura_ajena(monkeypatch):
+def test_idea_del_dia_usa_imagen_real_del_tema_y_nunca_la_miniatura_ajena(aislado, monkeypatch):
     import json as _json
     from studio4 import ideas
     monkeypatch.setattr(ideas, "en_vivo", lambda cid, n: [{"id": "abc123", "canal": "Otro", "titulo": "t", "url": "u",
