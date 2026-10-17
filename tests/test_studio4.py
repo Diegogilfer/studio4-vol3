@@ -1568,7 +1568,8 @@ def test_idea_del_dia_usa_imagen_real_del_tema_y_nunca_la_miniatura_ajena(aislad
                                                           "vistas_hora": 10, "segundos": 30}])
     monkeypatch.setattr(ideas, "inspirar", lambda cid, v: {"idea": "El Cheetah Classic de GTA 6", "fuente": {}})
     monkeypatch.setattr(ideas.galeria, "buscar", lambda *a, **k: [{"url": "https://www.gtabase.com/x/cheetah.jpg",
-                                                                  "pagina": "https://www.gtabase.com/gta-6/vehicles"}])
+                                                                  "pagina": "https://www.gtabase.com/gta-6/vehicles",
+                                                                  "aciertos": ["cheetah", "gta"]}])
     d = ideas.generar_diarias("fourlevel")["ideas"][0]
     assert d["miniatura"] == "https://www.gtabase.com/x/cheetah.jpg" and d["miniatura_fuente"] == "www.gtabase.com"
     assert "ytimg" not in _json.dumps(d)
