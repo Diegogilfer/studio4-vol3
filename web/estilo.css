@@ -1388,3 +1388,6 @@ html .progreso div { transition: width 1.2s var(--calma); }
 .td-formula li .boton { flex: none; white-space: nowrap; }
 /* Escenas: «Añadir escena al principio» en su propia fila, no como una tarjeta más */
 .anadir-principio { grid-column: 1 / -1; justify-self: start; }
+/* El selector de voz nunca ensancha la página (las opciones de pago traen texto largo) */
+#a-voz { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+@media (max-width: 640px) { #a-voz { flex: 1 1 100%; } .b-tema .b-codigo, .b-item .b-codigo { justify-self: start; } }
