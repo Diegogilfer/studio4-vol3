@@ -715,6 +715,9 @@ async function generarTodo(soloImagenes) {
 }
 $("api-todo").addEventListener("click", () => generarTodo(false));
 $("api-imagenes").addEventListener("click", () => generarTodo(true));
+$("api-reales").addEventListener("click", async () => {   // gratis: una captura real de tus fuentes para cada escena sin clip
+  try { await api("/api/reales/rellenar", {}); await refrescar(); } catch (e) { aviso(e); }
+});
 $("api-tarjetas").addEventListener("click", async () => {   // sin gastar: una tarjeta editorial por escena sin clip
   try { await api("/api/tarjetas", {}); await refrescar(); } catch (e) { aviso(e); }
 });
@@ -741,12 +744,13 @@ $("fichas").addEventListener("click", async (ev) => {
 const duracionEscena = (e) => (e.tipo_clip === "imagen" ? `${String(e.segundos).replace(".", ",")} s en pantalla`
   : `clip de ${Math.min(8, Math.max(4, Math.ceil(e.segundos)))} s`);
 let anadirTras = null;   // escena tras la que se está escribiendo una nueva (0 = al principio)
-let archivoPara = null;  // escena para la que se busca foto de archivo
+let archivoPara = null;  // escena para la que se busca foto de archivo o imagen real
+let fuenteFotos = "archivo";   // «archivo» (Wikimedia, dominio público) o «real» (capturas de tus fuentes)
 let fotosArchivo = [];   // resultados de la última búsqueda
 const formArchivo = (n) => `
       <article class="escena nueva-escena">
         <div class="escena-cuerpo">
-          <b>Foto de archivo para la escena ${n}</b>
+          <b>${fuenteFotos === "real" ? "Imagen real" : "Foto de archivo"} para la escena ${n}</b>
           <div class="acciones">
             <input class="campo" id="archivo-q" aria-label="Buscar foto de dominio público" placeholder="Qué buscar (personas, lugar, año…)">
             <button class="primario" type="button" data-buscar-archivo="${n}">Buscar</button>
@@ -754,8 +758,9 @@ const formArchivo = (n) => `
           </div>
           <div class="fotos-archivo" id="archivo-res">${fotosArchivo.map((f, i) => `
             <button type="button" data-usar-foto="${i}" data-orden="${n}" title="${esc(f.titulo)}">
-              <img src="${esc(f.url)}" alt="" loading="lazy"><span>${esc(f.fecha || "Sin fecha")} · usar</span></button>`).join("")}</div>
-          <p class="meta">Solo fotos de dominio público de Wikimedia Commons.</p>
+              <img src="${esc(f.url)}" alt="" loading="lazy" referrerpolicy="no-referrer"><span>${esc(f.fecha || f.descripcion || "")} · usar</span></button>`).join("")}</div>
+          <p class="meta">${fuenteFotos === "real" ? "Capturas de tus fuentes de confianza: úsalas con tu comentario y tu montaje."
+            : "Solo fotos de dominio público de Wikimedia Commons."}</p>
         </div>
       </article>`;
 const formNueva = (tras) => `
@@ -811,7 +816,8 @@ function pintarEscenas({ escenas, activa }) {
             ${importado ? `<button class="boton" data-guardar-texto="${e.orden}">Guardar texto</button>`
               : `<button class="boton" data-copiar-prompt="${e.orden}">Copiar prompt</button>`}
             <label class="boton">Subir clip<input type="file" accept="video/*,image/*" data-subir="${e.orden}"></label>
-            ${importado ? "" : `<button class="boton" type="button" data-archivo="${e.orden}" title="Buscar foto histórica de dominio público en Wikimedia Commons">Foto de archivo</button>
+            ${importado ? "" : `<button class="boton" type="button" data-real="${e.orden}" title="Capturas reales de tus fuentes de confianza">Imagen real</button>
+            <button class="boton" type="button" data-archivo="${e.orden}" title="Buscar foto histórica de dominio público en Wikimedia Commons">Foto de archivo</button>
             <button class="boton" data-anadir-tras="${e.orden}">Añadir escena después</button>
             <button class="boton" data-quitar-escena="${e.orden}">Quitar escena</button>`}
           </div>
@@ -842,8 +848,9 @@ $("escenas").addEventListener("click", async (ev) => {
       await api("/api/escena/anadir", { despues: Number(t.dataset.crearEscena), texto_voz: $("nueva-voz").value,
         que_se_ve: $("nueva-ve").value, tipo_clip: document.querySelector('input[name="nueva-tipo"]:checked').value });
       anadirTras = null;
-    } else if (t.dataset.archivo) {   // abre la búsqueda de fotos de archivo bajo la escena
-      archivoPara = Number(t.dataset.archivo); fotosArchivo = [];
+    } else if (t.dataset.archivo || t.dataset.real) {   // abre la búsqueda de fotos bajo la escena
+      fuenteFotos = t.dataset.real ? "real" : "archivo";
+      archivoPara = Number(t.dataset.archivo || t.dataset.real); fotosArchivo = [];
       pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
       $("archivo-q")?.focus();
       return;
@@ -855,16 +862,18 @@ $("escenas").addEventListener("click", async (ev) => {
       const q = $("archivo-q").value.trim();
       if (q.length < 2) return;
       t.disabled = true; t.textContent = "Buscando…";
-      try { fotosArchivo = (await api(`/api/archivo?q=${encodeURIComponent(q)}`)).fotos; }
+      try { fotosArchivo = (await api(`/api/${fuenteFotos === "real" ? "reales" : "archivo"}?q=${encodeURIComponent(q)}`)).fotos; }
       finally { t.disabled = false; t.textContent = "Buscar"; }
-      if (!fotosArchivo.length) aviso("No encontré fotos de dominio público para esa búsqueda.");
+      if (!fotosArchivo.length) aviso(fuenteFotos === "real" ? "Tus fuentes no tienen imágenes para esa búsqueda." : "No encontré fotos de dominio público para esa búsqueda.");
       pintarEscenas({ escenas: p.escenas, activa: p.escena_activa });
       $("archivo-q").value = q;
       return;
     } else if (t.closest("[data-usar-foto]")) {
       const b = t.closest("[data-usar-foto]");
       b.disabled = true;
-      await api("/api/escena/archivo", { orden: Number(b.dataset.orden), titulo: fotosArchivo[Number(b.dataset.usarFoto)].titulo });
+      const f = fotosArchivo[Number(b.dataset.usarFoto)];
+      if (fuenteFotos === "real") await api("/api/escena/real", { orden: Number(b.dataset.orden), url: f.url, pagina: f.pagina });
+      else await api("/api/escena/archivo", { orden: Number(b.dataset.orden), titulo: f.titulo });
       archivoPara = null; fotosArchivo = [];
     } else if (t.dataset.quitarEscena) {
       const n = Number(t.dataset.quitarEscena);

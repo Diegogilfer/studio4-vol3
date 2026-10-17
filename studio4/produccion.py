@@ -18,7 +18,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import (aprender, archivo, canales, carpetas, clips, config, director, entregas, medios, fuentes, guion, importar, investigacion, miniaturas,
+from . import (aprender, archivo, canales, carpetas, clips, config, director, entregas, medios, fuentes, galeria, guion, importar, investigacion, miniaturas,
                referencias, registro, render, subtitulos, tarjetas, tendencias, visuales_api, voz, youtube)
 
 logger = logging.getLogger("studio4.produccion")
@@ -498,6 +498,8 @@ def reintentar(pid: str) -> None:
         retomar(pid)
     elif nombre == "Tarjetas":
         rellenar_tarjetas(pid)
+    elif nombre == "Imágenes reales":
+        rellenar_reales(pid)
     elif nombre == "Personajes":
         afinar_personajes(pid)
     else:
@@ -801,6 +803,45 @@ def poner_foto_archivo(pid: str, orden: int, titulo: str) -> dict[str, Any]:
     modificar(pid, cambio)
     registro.apuntar("Archivo (Wikimedia Commons)", f"escena {orden} · {titulo[:60]}", unidad="tomas", produccion=pid)
     return toma
+
+
+def poner_imagen_real(pid: str, orden: int, url: str, pagina: str) -> dict[str, Any]:
+    """Una captura real de tus fuentes como toma de la escena."""
+    p = cargar(pid)
+    if not 1 <= orden <= len(p["escenas"]):
+        raise ValueError(f"No existe la escena {orden}")
+    fmt = config.FORMATOS[p["formato"]]
+    toma = galeria.toma(url, pagina, carpeta(pid), orden, fmt["ancho"], fmt["alto"])
+
+    def cambio(q):
+        esc = q["escenas"][orden - 1]
+        esc["tomas"].append({**toma, "ancho": fmt["ancho"], "alto": fmt["alto"], "recibida": time.strftime("%H:%M:%S")})
+        esc["elegida"] = len(esc["tomas"]) - 1
+    modificar(pid, cambio)
+    registro.apuntar("Imágenes reales (tus fuentes)", f"escena {orden} · {url.rsplit('/', 1)[-1][:60]}", unidad="tomas", produccion=pid)
+    return toma
+
+
+def rellenar_reales(pid: str) -> None:
+    """Gratis: a cada escena sin clip, la captura real de tus fuentes que mejor encaja con lo que se dice y se ve."""
+    p = cargar(pid)
+    if not p["escenas"]:
+        raise ValueError("Primero aprueba el guion: hacen falta las escenas.")
+
+    def fase():
+        q = cargar(pid)
+        _avisar(pid, "Buscando imágenes reales en tus fuentes", 10)
+        pool = galeria.buscar(q["canal"], f"{q.get('titulo') or q['tema']}", n=80, produccion=pid)
+        if not pool:
+            raise ValueError("Tus fuentes no tienen imágenes sobre este tema.")
+        reparto = galeria.repartir(q["escenas"], pool)
+        for k, (orden, img) in enumerate(reparto.items()):
+            _avisar(pid, f"Escena {orden}: {img['descripcion'][:40]}", 20 + int(75 * k / max(1, len(reparto))))
+            try:
+                poner_imagen_real(pid, orden, img["url"], img["pagina"])
+            except Exception as e:  # noqa: BLE001 - una imagen que no baja no frena las demás
+                logger.warning("Imagen real para la escena %d: %s", orden, e)
+    _en_fondo(pid, "Imágenes reales", fase)
 
 
 def estimar_visuales_api(pid: str) -> dict[str, Any]:

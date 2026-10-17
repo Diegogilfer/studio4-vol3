@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import (aprender, archivo, canales, carpetas, config, flow, guion, ideas, miniaturas, produccion, referencias, registro,
+from studio4 import (aprender, archivo, canales, carpetas, config, flow, galeria, guion, ideas, miniaturas, produccion, referencias, registro,
                      render, subtitulos, tendencias, voz, youtube)  # noqa: E402
 
 # Todo lo que pasa queda en producciones/servidor.log (y lo grave, también en caidas.log): si Studio 4 se cae,
@@ -228,6 +228,9 @@ class Panel(BaseHTTPRequestHandler):
             from studio4 import importar
             q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("url") or [""])[0].strip()
             return self._json(importar.vista_previa(q))
+        if ruta == "/api/reales":   # capturas reales de las fuentes de confianza del canal
+            q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0].strip()
+            return self._json({"fotos": galeria.buscar(canales.activo()["id"], q) if len(q) >= 2 else []})
         if ruta == "/api/archivo":
             q = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("q") or [""])[0].strip()
             return self._json({"fotos": archivo.buscar(q) if len(q) >= 2 else []})
@@ -461,6 +464,13 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/escena":
             d = self._cuerpo_json()
             produccion.editar_escena(pid, int(d.pop("orden")), d)
+            return self._json({"ok": True})
+        if ruta == "/api/escena/real":   # captura real de tus fuentes
+            d = self._cuerpo_json()
+            return self._json({"ok": True, "toma": produccion.poner_imagen_real(pid, int(d.get("orden", 0)), str(d.get("url", "")),
+                                                                                 str(d.get("pagina", "")))})
+        if ruta == "/api/reales/rellenar":   # gratis: una captura real para cada escena sin clip
+            produccion.rellenar_reales(pid)
             return self._json({"ok": True})
         if ruta == "/api/escena/archivo":   # foto histórica de dominio público (Wikimedia Commons)
             d = self._cuerpo_json()

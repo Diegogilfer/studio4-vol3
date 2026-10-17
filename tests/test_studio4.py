@@ -1373,3 +1373,25 @@ def test_transcripcion_va_diciendo_por_donde_va(monkeypatch, tmp_path):
     palabras = importar.transcribir(tmp_path / "a.wav", avance=lambda fr, t: pasos.append((round(fr, 2), t)))
     assert [w["palabra"] for w in palabras] == ["hola", "fin"]
     assert pasos == [(0.37, "Transcribiendo el vídeo · 6:30 de 17:45"), (1.0, "Transcribiendo el vídeo · 17:45 de 17:45")]
+
+
+def test_imagenes_reales_de_las_fuentes(monkeypatch):
+    """De cada imagen se queda la versión más grande; fuera logos e iconos; cada escena recibe la que mejor encaja."""
+    from PIL import Image
+    from studio4 import fuentes, galeria
+    pagina = ('<img src="/images/jch-optimize/logo.avif"><img src="/img/menu/icon-gta.png">'
+              '<a href="/igallery/lucia-caminos-01-1080.jpg"><img src="/igallery/lucia-caminos-01-468.jpg"></a>'
+              '<a href="/igallery/jason-duval-truck-1080.jpg"></a><meta property="og:image" content="/igallery/vice-beach-02-468.jpg">')
+    monkeypatch.setattr(fuentes, "_get", lambda url: type("R", (), {"text": pagina})())
+    imgs = galeria.imagenes_de("https://www.gtabase.com/gta-6/characters/lucia")
+    assert sorted(i["url"].rsplit("/", 1)[-1] for i in imgs) == ["jason-duval-truck-1080.jpg", "lucia-caminos-01-1080.jpg",
+                                                                   "vice-beach-02-468.jpg"]
+    escenas = [{"orden": 1, "texto_voz": "Jason la espera junto a su camioneta", "elegida": None, "personajes": ["JASON"]},
+               {"orden": 2, "texto_voz": "Lucía sale de la cárcel", "elegida": None, "accion_en": "LUCIA walks out", "personajes": ["LUCIA"]},
+               {"orden": 3, "texto_voz": "ya tiene clip", "elegida": 0}]
+    reparto = galeria.repartir(escenas, imgs)
+    assert reparto[1]["url"].endswith("jason-duval-truck-1080.jpg") and reparto[2]["url"].endswith("lucia-caminos-01-1080.jpg")
+    assert 3 not in reparto
+    vertical = galeria.encajar(Image.new("RGB", (1920, 1080), "red"), 1080, 1920)   # captura 16:9 en un vertical: entera
+    horizontal = galeria.encajar(Image.new("RGB", (1920, 1080), "red"), 1920, 1080)  # misma forma: llena
+    assert vertical.size == (1080, 1920) and vertical.getpixel((20, 960))[0] < 150 and horizontal.getpixel((5, 5)) == (255, 0, 0)
