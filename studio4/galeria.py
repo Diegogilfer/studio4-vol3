@@ -89,7 +89,8 @@ def buscar(cid: str, consulta: str, n: int = 24, produccion: str = "", paginas_p
             logger.info("No pude leer %s: %s", p, e)
     buscadas = {w for k in palabras for w in _palabras(k)}
     orden = sorted(vistas.values(), key=lambda i: -len(_palabras(i["descripcion"]) & buscadas))
-    return [i for i in orden if len(_palabras(i["descripcion"]) & buscadas) >= minimo][:n]
+    return [{**i, "aciertos": sorted(_palabras(i["descripcion"]) & buscadas)} for i in orden
+            if len(_palabras(i["descripcion"]) & buscadas) >= minimo][:n]
 
 
 def encajar(foto: Image.Image, ancho: int, alto: int) -> Image.Image:

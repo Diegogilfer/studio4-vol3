@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import re
 import logging
 import threading
 import time
@@ -88,20 +89,40 @@ def _hoy() -> str:
     return time.strftime("%Y-%m-%d")
 
 
+# Palabras que salen en casi cualquier imagen de las fuentes: coincidir solo en ellas no dice nada del tema.
+GENERICAS = {"gta", "grand", "theft", "auto", "screen", "screenshot", "screenshots", "main", "online", "rsc", "images",
+             "image", "temp", "igallery", "trailer", "official", "game", "games", "rockstar", "con", "del", "las", "los",
+             "una", "que", "real", "the", "and", "imagenes", "juego"}
+GTA6 = ("gta 6", "gta vi", "gta6", "vice city", "leonida")
+
+
+def _de(img: dict[str, Any]) -> dict[str, str]:
+    return {"url": img["url"], "fuente": urllib.parse.urlparse(img.get("pagina") or img["url"]).netloc}
+
+
 def imagen_de(cid: str, idea: str) -> dict[str, str]:
-    """La imagen de la tarjeta: una imagen REAL del tema de la idea, de las fuentes de confianza del canal o, si no
-    hay, una foto de dominio público. Nunca la miniatura del vídeo ajeno que la inspiró (no es nuestro contenido y
-    no muestra lo que propone la idea). {} si no hay ninguna que encaje."""
+    """La imagen de la tarjeta: una imagen REAL del tema de la idea. En orden:
+    1. de las fuentes de confianza del canal, que coincida en algo concreto (un auto, un lugar, un personaje);
+    2. si la idea es de GTA 6, una captura oficial de GTA 6 de esas fuentes;
+    3. una foto de dominio público cuyo título nombre el tema (historias reales: un pueblo, una persona).
+    Nunca la miniatura del vídeo ajeno que la inspiró. {} si nada encaja: mejor sin imagen que con una que no es."""
+    pool: list[dict[str, Any]] = []
     try:
-        img = galeria.buscar(cid, idea, n=1, paginas_por_fuente=2, minimo=2)
-        if img:
-            return {"url": img[0]["url"], "fuente": urllib.parse.urlparse(img[0].get("pagina") or img[0]["url"]).netloc}
+        pool = galeria.buscar(cid, idea, n=60, paginas_por_fuente=3)
     except Exception as e:  # noqa: BLE001 - sin fuentes o caídas se prueba con las fotos de archivo
         logger.info("Imagen de la idea en las fuentes: %s", e)
+    concretas = [i for i in pool if set(i.get("aciertos") or []) - GENERICAS]
+    if concretas:
+        return _de(concretas[0])
+    if any(k in idea.lower() for k in GTA6):
+        juego = [i for i in pool if re.search(r"gta-?6|gta-?vi\b", i["url"].lower())]
+        if juego:
+            return _de(juego[0])
     try:
-        foto = archivo.buscar(idea, cuantas=1)
-        if foto:
-            return {"url": foto[0]["url"], "fuente": "Wikimedia Commons (dominio público)"}
+        claves = {w for w in galeria._palabras(idea) if w not in GENERICAS and len(w) > 4}
+        for foto in archivo.buscar(idea, cuantas=5):
+            if claves & galeria._palabras(foto.get("titulo", "")):
+                return {"url": foto["url"], "fuente": "Wikimedia Commons (dominio público)"}
     except Exception as e:  # noqa: BLE001
         logger.info("Imagen de la idea en el archivo: %s", e)
     return {}

@@ -1595,3 +1595,20 @@ def test_imagenes_primero_de_las_paginas_del_guion_si_son_de_confianza(aislado, 
     p = {"investigacion": {"fuentes": [{"url": "https://www.gtabase.com/gta-6/vehicles/"},
                                        {"url": "https://es.wikipedia.org/wiki/Grand_Theft_Auto_VI"}]}}
     assert [i["url"] for i in produccion._imagenes_de_sus_fuentes(p)] == ["https://www.gtabase.com/gta-6/vehicles/a.jpg"]
+
+
+
+def test_imagen_de_la_idea_solo_si_encaja(aislado, monkeypatch):
+    from studio4 import ideas
+    generica = {"url": "https://www.gtabase.com/igallery/GTA5_Contender_Main.jpg", "pagina": "https://www.gtabase.com/gta-6/",
+                "aciertos": ["gta"]}
+    captura6 = {"url": "https://www.gtabase.com/igallery/gta-6-screenshots-trailer/gta6-beach.jpg",
+                "pagina": "https://www.gtabase.com/gta-6/", "aciertos": ["gta"]}
+    auto = {"url": "https://www.gtabase.com/images/gta-6/vehicles/cheetah-classic.jpg",
+            "pagina": "https://www.gtabase.com/gta-6/vehicles/", "aciertos": ["gta", "cheetah"]}
+    monkeypatch.setattr(ideas.archivo, "buscar", lambda *a, **k: [{"titulo": "File:Vampire painting.jpg", "url": "x"}])
+    monkeypatch.setattr(ideas.galeria, "buscar", lambda *a, **k: [generica, auto])
+    assert ideas.imagen_de("fourlevel", "El Cheetah Classic de GTA 6")["url"] == auto["url"]
+    monkeypatch.setattr(ideas.galeria, "buscar", lambda *a, **k: [generica, captura6])
+    assert ideas.imagen_de("fourlevel", "Miami o Vice City en GTA 6")["url"] == captura6["url"]
+    assert ideas.imagen_de("fourlevel", "El vampiro de Red Dead Redemption 2") == {}   # mejor sin imagen
