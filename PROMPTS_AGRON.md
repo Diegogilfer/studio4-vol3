@@ -3,6 +3,11 @@
 Lo que Agron entrega se pega en Studio 4 › Crear › **Biblioteca** (paquetes de guiones) o se usa a mano
 (títulos, calendario, posts). Pega primero el **0** al empezar una conversación nueva con Agron.
 
+Las reglas de los prompts 0 y 1 son las mismas que usa Studio 4 por dentro con DeepSeek, Gemini o cualquier
+otro modelo (`studio4/metodologia.py`): si cambias una, cámbiala en los dos sitios (una prueba lo vigila).
+Al guardar un paquete en la Biblioteca, Studio 4 lee también sus FUENTES: quedan en los créditos del vídeo y
+las imágenes reales salen primero de esas páginas (si son de las fuentes de confianza del canal).
+
 ---
 
 ## 0 · Contexto del canal (pegar siempre primero)
@@ -61,7 +66,10 @@ GUION:
 (sigue con CORTO b, c, d y e; el código cambia en cada tema: FL-002, FL-003…)
 
 Después de los 6 bloques, añade:
-FUENTES: las páginas que respaldan los datos.
+FUENTES: una dirección completa por línea (https://…) y, a continuación, entre paréntesis, qué datos sacaste
+de ella. Usa las páginas concretas, no la portada: p. ej. https://www.gtabase.com/gta-6/weapons/ y
+https://www.gtabase.com/gta-6/vehicles/ (Studio 4 saca de esas mismas páginas las imágenes reales del vídeo),
+https://www.rockstargames.com/VI y la Wikipedia del juego.
 CONTROL DE CALIDAD (marca cada punto; si alguno falla, reescribe antes de entregar):
 [ ] Datos verificables; lo no confirmado, marcado como rumor.
 [ ] Primera frase con un dato fuerte; nadie se pierde.

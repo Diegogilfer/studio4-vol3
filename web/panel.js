@@ -1719,7 +1719,43 @@ async function refrescar() {
   siCambia("textos", { id: p.id, t: p.titulo, d: p.descripcion, h: p.hashtags }, () => pintarTextos(p));
 }
 
-refrescar().catch(aviso);
+// Precarga: la pantalla de Studio 4 se queda hasta que el panel está entero (datos, ideas, fuentes de letra y
+// todas las imágenes, también las de las pestañas que aún no se ven). Nunca más de 45 s: si algo no carga, entra igual.
+async function precargar() {
+  const estadoP = (texto, parte) => {
+    $("precarga-estado").textContent = texto;
+    if (parte != null) $("precarga-barra").style.width = `${Math.round(parte * 100)}%`;
+  };
+  const todo = (async () => {
+    estadoP("Cargando el panel…", 0.1);
+    await refrescar();
+    estadoP("Cargando las ideas de hoy…", 0.3);
+    await pintarIdeasHoy();
+    estadoP("Cargando las letras…", 0.4);
+    await document.fonts.ready;
+    const fuentes = [...new Set([...document.images].map((i) => i.currentSrc || i.src).filter(Boolean))];
+    let hechas = 0;
+    estadoP(`Cargando imágenes… 0 de ${fuentes.length}`, 0.45);
+    await Promise.all(fuentes.map((src) => new Promise((listo) => {
+      const im = new Image();   // la descarga queda en caché: al pintarse en su pestaña ya está
+      im.referrerPolicy = "no-referrer";
+      im.onload = im.onerror = () => { hechas += 1; estadoP(`Cargando imágenes… ${hechas} de ${fuentes.length}`, 0.45 + 0.55 * hechas / fuentes.length); listo(); };
+      im.src = src;
+    })));
+    document.querySelectorAll('img[loading="lazy"]').forEach((i) => { i.loading = "eager"; });
+  })();
+  try {
+    await Promise.race([todo, new Promise((listo) => setTimeout(listo, 45000))]);
+  } catch (e) {
+    aviso(e);
+  }
+  estadoP("Listo", 1);
+  const capa = $("precarga");
+  capa.style.opacity = "0";
+  setTimeout(() => capa.remove(), 400);
+}
+
+precargar();
 cargarYoutube();
 setInterval(() => refrescar().catch(() => {}), 2000);
 setInterval(cargarYoutube, 5 * 60 * 1000);

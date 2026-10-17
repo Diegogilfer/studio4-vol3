@@ -63,9 +63,11 @@ def _palabras(texto: str) -> set[str]:
 
 
 def buscar(cid: str, consulta: str, n: int = 24, produccion: str = "", paginas_por_fuente: int = PAGINAS,
-           minimo: int = 0) -> list[dict[str, Any]]:
+           minimo: int = 0, sitio_entero: bool = False) -> list[dict[str, Any]]:
     """Imágenes reales de las fuentes del canal que encajan con la consulta (en español o en inglés).
-    Con «minimo», solo las que comparten al menos esas palabras con la consulta (para no mostrar una cualquiera)."""
+    Con «minimo», solo las que comparten al menos esas palabras con la consulta (para no mostrar una cualquiera).
+    Con «sitio_entero», busca en toda la web de cada fuente y no solo en su sección (p. ej. todo gtabase.com y no
+    solo /gta-6/: así un tema de San Andreas o de Red Dead también encuentra sus imágenes)."""
     canal = canales.obtener(cid)
     if not canal.get("fuentes"):
         raise ValueError("Añade las fuentes de confianza del canal (Canales) para buscar sus imágenes reales.")
@@ -75,7 +77,10 @@ def buscar(cid: str, consulta: str, n: int = 24, produccion: str = "", paginas_p
         logger.info("Claves de búsqueda: %s", e)
         palabras = sorted(_palabras(consulta))
     paginas: list[str] = []
-    for f in canal["fuentes"]:
+    sitios = canal["fuentes"]
+    if sitio_entero:
+        sitios = list(dict.fromkeys(f"{urllib.parse.urlparse(f).scheme}://{urllib.parse.urlparse(f).netloc}/" for f in sitios))
+    for f in sitios:
         try:
             paginas += fuentes.elegir(fuentes.indice(f), palabras, n=paginas_por_fuente)
         except Exception as e:  # noqa: BLE001 - una fuente caída no frena la búsqueda

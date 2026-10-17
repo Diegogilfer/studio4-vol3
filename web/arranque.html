@@ -45,7 +45,7 @@ const inicio = Date.now();
 async function probar() {
   try {
     await fetch(`${panel}/api/estado?t=${Date.now()}`, { mode: "no-cors", cache: "no-store" });
-    document.getElementById("estado").textContent = "Listo";
+    document.getElementById("estado").textContent = "Cargando el panel…";   // el panel sigue con la misma pantalla
     location.replace(`${panel}/#inicio`);
     return;
   } catch (_) { /* aún no responde */ }

@@ -107,13 +107,15 @@ def imagen_de(cid: str, idea: str) -> dict[str, str]:
     3. una foto de dominio público cuyo título nombre el tema (historias reales: un pueblo, una persona).
     Nunca la miniatura del vídeo ajeno que la inspiró. {} si nada encaja: mejor sin imagen que con una que no es."""
     pool: list[dict[str, Any]] = []
-    try:
-        pool = galeria.buscar(cid, idea, n=60, paginas_por_fuente=3)
-    except Exception as e:  # noqa: BLE001 - sin fuentes o caídas se prueba con las fotos de archivo
-        logger.info("Imagen de la idea en las fuentes: %s", e)
-    concretas = [i for i in pool if set(i.get("aciertos") or []) - GENERICAS]
-    if concretas:
-        return _de(concretas[0])
+    for entero in (False, True):   # primero la sección de confianza (p. ej. /gta-6/), luego toda esa web
+        try:
+            pool = galeria.buscar(cid, idea, n=60, paginas_por_fuente=3, sitio_entero=entero) + pool
+        except Exception as e:  # noqa: BLE001 - sin fuentes o caídas se prueba con las fotos de archivo
+            logger.info("Imagen de la idea en las fuentes: %s", e)
+        concretas = sorted((i for i in pool if set(i.get("aciertos") or []) - GENERICAS),
+                           key=lambda i: -len(set(i["aciertos"]) - GENERICAS))
+        if concretas:
+            return _de(concretas[0])
     if any(k in idea.lower() for k in GTA6):
         juego = [i for i in pool if re.search(r"gta-?6|gta-?vi\b", i["url"].lower())]
         if juego:
