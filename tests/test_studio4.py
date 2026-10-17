@@ -1613,3 +1613,22 @@ def test_imagen_de_la_idea_solo_si_encaja(aislado, monkeypatch):
     monkeypatch.setattr(ideas.galeria, "buscar", lambda *a, **k: [generica, captura6])
     assert ideas.imagen_de("fourlevel", "Miami o Vice City en GTA 6")["url"] == captura6["url"]
     assert ideas.imagen_de("fourlevel", "El vampiro de Red Dead Redemption 2") == {}   # mejor sin imagen
+
+
+def test_imagen_de_wikipedia_solo_del_articulo_del_tema(aislado, monkeypatch):
+    from studio4 import ideas
+
+    class R:
+        def __init__(self, paginas):
+            self.p = paginas
+
+        def json(self):
+            return {"query": {"pages": {str(i): x for i, x in enumerate(self.p)}}}
+    paginas = [{"index": 1, "title": "Mary Elizabeth McGlynn", "thumbnail": {"source": "https://x/actriz.jpg"}},
+               {"index": 2, "title": "Nintendo Switch 2", "thumbnail": {"source": "https://x/switch2.png?utm=1"}}]
+    monkeypatch.setattr(ideas.fuentes, "claves", lambda idea, p: ["nintendo switch 2", "mario"])
+    monkeypatch.setattr(ideas.requests, "get", lambda *a, **k: R(paginas))
+    assert ideas._de_wikipedia("El bundle de Switch 2 de Nintendo") == {"url": "https://x/switch2.png",
+                                                                       "fuente": "Wikipedia · Nintendo Switch 2"}
+    paginas.pop()
+    assert ideas._de_wikipedia("El bundle de Switch 2 de Nintendo") == {}   # la actriz no tiene nada que ver

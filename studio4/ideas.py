@@ -14,16 +14,19 @@ import logging
 import threading
 import time
 import urllib.parse
+
+import requests
 from typing import Any
 
-from . import aprender, archivo, canales, config, galeria, registro, tendencias, youtube
+from . import aprender, archivo, canales, config, fuentes, galeria, registro, tendencias, youtube
 
 logger = logging.getLogger("studio4.ideas")
 
 SISTEMA = """Eres jefe de contenidos de un canal de vídeo en español. Te doy un vídeo que está funcionando AHORA en el
 nicho del canal (con sus vistas y, si la hay, su transcripción). NO copies su tema exacto, su título ni sus frases:
 propón una idea ORIGINAL para el canal (otro juego, otro caso, otro personaje u otro ángulo) que aproveche lo que hace
-funcionar al vídeo. Todo concreto y verdadero: si no sabes un dato, no lo inventes. Devuelve JSON:
+funcionar al vídeo. Todo concreto y verdadero: si no sabes un dato, no lo inventes. Nunca dejes huecos para
+rellenar como «[nombre]»: quien habla es el narrador del canal. Devuelve JSON:
 {"idea": "la idea en una frase concreta, con nombre propio", "por_que": "por qué va a funcionar, apoyado en el vídeo",
  "original": "de qué trata el vídeo original, con pelos y detalles: qué cuenta y en qué orden",
  "gancho": "la primera frase propuesta para nuestro vídeo", "estructura": ["paso 1", "paso 2", "..."],
@@ -100,11 +103,40 @@ def _de(img: dict[str, Any]) -> dict[str, str]:
     return {"url": img["url"], "fuente": urllib.parse.urlparse(img.get("pagina") or img["url"]).netloc}
 
 
+def _de_wikipedia(idea: str) -> dict[str, str]:
+    """La imagen libre del artículo de Wikipedia del juego o la consola de la idea (Mario Kart, Nintendo Switch 2…).
+    Se busca por sus nombres propios y solo vale un artículo cuyo título esté entero dentro de la idea: así nunca
+    sale otro tema parecido."""
+    try:
+        consultas = [c for c in fuentes.claves(idea, "") if " " in c][:4]   # «mario kart world», «nintendo switch 2»
+    except Exception as e:  # noqa: BLE001
+        logger.info("Claves para Wikipedia: %s", e)
+        consultas = []
+    numeros = lambda t: set(re.findall(r"\b\d\b", t))  # noqa: E731 - el «2» de «Switch 2» cuenta
+    palabras = galeria._palabras(idea + " " + " ".join(consultas)) | numeros(idea)
+    for consulta in consultas:
+        for lengua in ("en", "es"):
+            try:
+                r = requests.get(f"https://{lengua}.wikipedia.org/w/api.php", headers=archivo.CABECERAS, timeout=20, params=dict(
+                    action="query", format="json", generator="search", gsrsearch=consulta, gsrlimit=5,
+                    prop="pageimages", piprop="thumbnail", pithumbsize=960)).json()
+            except (requests.RequestException, ValueError) as e:
+                logger.info("Wikipedia (%s): %s", lengua, e)
+                continue
+            for pag in sorted(((r.get("query") or {}).get("pages") or {}).values(), key=lambda x: x.get("index", 99)):
+                titulo = re.sub(r"\(.*?\)", "", pag.get("title", ""))
+                suyas = galeria._palabras(titulo) | numeros(titulo)
+                if (pag.get("thumbnail") or {}).get("source") and suyas and suyas <= palabras and suyas - GENERICAS:
+                    return {"url": pag["thumbnail"]["source"].split("?")[0], "fuente": f"Wikipedia · {pag['title']}"}
+    return {}
+
+
 def imagen_de(cid: str, idea: str) -> dict[str, str]:
     """La imagen de la tarjeta: una imagen REAL del tema de la idea. En orden:
     1. de las fuentes de confianza del canal, que coincida en algo concreto (un auto, un lugar, un personaje);
     2. si la idea es de GTA 6, una captura oficial de GTA 6 de esas fuentes;
-    3. una foto de dominio público cuyo título nombre el tema (historias reales: un pueblo, una persona).
+    3. la imagen libre del artículo de Wikipedia del juego o la consola (temas fuera de esas webs);
+    4. una foto de dominio público cuyo título nombre el tema (historias reales: un pueblo, una persona).
     Nunca la miniatura del vídeo ajeno que la inspiró. {} si nada encaja: mejor sin imagen que con una que no es."""
     pool: list[dict[str, Any]] = []
     for entero in (False, True):   # primero la sección de confianza (p. ej. /gta-6/), luego toda esa web
@@ -120,6 +152,8 @@ def imagen_de(cid: str, idea: str) -> dict[str, str]:
         juego = [i for i in pool if re.search(r"gta-?6|gta-?vi\b", i["url"].lower())]
         if juego:
             return _de(juego[0])
+    if img := _de_wikipedia(idea):
+        return img
     try:
         claves = {w for w in galeria._palabras(idea) if w not in GENERICAS and len(w) > 4}
         for foto in archivo.buscar(idea, cuantas=5):
