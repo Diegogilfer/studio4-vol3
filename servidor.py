@@ -217,6 +217,13 @@ class Panel(BaseHTTPRequestHandler):
             if not MEDIOS_PERMITIDOS.match(m.group(2)):
                 raise Error(404, "No existe")
             return self._archivo(produccion.carpeta(m.group(1)) / m.group(2))
+        if ruta.startswith("/material/"):
+            try:
+                return self._archivo(carpetas.archivo_material(urllib.parse.unquote(ruta[10:])))
+            except FileNotFoundError as e:
+                raise Error(404, "No existe") from e
+        if ruta == "/api/material":
+            return self._json({"items": carpetas.listar_material(canales.activo()["id"])})
         if ruta == "/api/estado":
             return self._json(self._estado())
         if ruta == "/api/producciones":
@@ -450,6 +457,22 @@ class Panel(BaseHTTPRequestHandler):
             canales.activar(produccion.cargar(pid)["canal"])   # abrir una producción abre su canal
             produccion.activar(pid)
             return self._json({"ok": True})
+        if ruta == "/api/carpeta/abrir":
+            d = self._cuerpo_json()
+            video = str(d.get("video", "")).strip()
+            if video:
+                destino = carpetas.carpeta_material(canales.activo()["id"], video)
+            else:
+                pid = produccion.activa()
+                if not pid:
+                    raise Error(409, "No hay producción activa")
+                base = produccion.preparar_carpeta(pid)
+                sub = str(d.get("sub", ""))
+                p_act = produccion.cargar(pid)
+                destino = (base / carpetas.subcarpeta(p_act, sub)
+                           if sub in (carpetas.CLIPS, carpetas.GUION, carpetas.ENTREGAS, carpetas.MATERIAL) else base)
+            os.startfile(str(destino))  # noqa: S606 - abre el Explorador de Windows en tu propio PC
+            return self._json({"ok": True, "ruta": str(destino)})
 
         pid = produccion.activa()
         if not pid:
@@ -522,13 +545,6 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/entregas":
             produccion.preparar_entregas(pid)
             return self._json({"ok": True})
-        if ruta == "/api/carpeta/abrir":
-            base = produccion.preparar_carpeta(pid)
-            sub = str(self._cuerpo_json().get("sub", ""))
-            p_act = produccion.cargar(pid)
-            destino = base / carpetas.subcarpeta(p_act, sub) if sub in (carpetas.CLIPS, carpetas.GUION, carpetas.ENTREGAS) else base
-            os.startfile(str(destino))  # noqa: S606 - abre el Explorador de Windows en tu propio PC
-            return self._json({"ok": True, "ruta": str(destino)})
         if ruta == "/api/escenas/tipos":
             produccion.recomendar_tipos(pid)
             return self._json({"ok": True})

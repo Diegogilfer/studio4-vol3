@@ -320,6 +320,7 @@ def generar_escenas(escenas: list[dict], aspecto: str, presupuesto: Presupuesto,
     """Genera lo que falta en cada escena y lo entrega con `recibir(archivo, mime, orden)` (la misma vía que Flow).
     Primero los retratos de los personajes (se guardan en `retratos` y se reutilizan si ya estaban)."""
     hechas, estilo, revisiones = [], None, []
+    config.PRODUCCIONES.mkdir(parents=True, exist_ok=True)
     trabajo = Path(tempfile.mkdtemp(prefix="studio4_api_", dir=config.PRODUCCIONES))
     caras: dict[str, Path] = {}
     pendientes = [e for e in escenas if e.get("elegida") is None]

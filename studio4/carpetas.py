@@ -235,3 +235,118 @@ def exportar(p: dict[str, Any], archivos: list[tuple[Path, str]], textos: str) -
             shutil.copy(origen, destino / f"{c} - {_limpio(nombre_final)}")
     (destino / f"{c} - Descripciones para publicar.txt").write_text(f"«{p.get('titulo') or p['tema']}»\n\n{textos}", encoding="utf-8")
     return destino
+
+
+EXTENSIONES_MATERIAL = {".wav", ".mp3", ".jpg", ".jpeg", ".png", ".webp", ".mp4"}
+
+
+def _tipo_material(ext: str) -> str:
+    if ext in (".wav", ".mp3"):
+        return "voz"
+    return "clip" if ext == ".mp4" else "imagen"
+
+
+def _etiqueta_item(nombre_archivo: str, tipo: str, sub: str) -> str:
+    if tipo == "voz":
+        return "Voz"
+    if sub.lower() == "retratos":
+        return f"Retrato · {Path(nombre_archivo).stem.removeprefix('retrato_').capitalize()}"
+    m = re.search(r"escena\s*0*(\d+)", nombre_archivo, re.IGNORECASE)
+    if m:
+        es_orig = "original" in nombre_archivo.lower()
+        return f"Escena {int(m.group(1)):02d}" + (" · original" if es_orig else "")
+    return Path(nombre_archivo).stem
+
+
+def _creditos_de(carpeta_mat: Path) -> dict[int, str]:
+    """De dónde salió cada escena según «Fuentes y créditos.txt», para distinguir si dos escenas usaron la misma foto."""
+    txt = next(carpeta_mat.glob("* - Fuentes y créditos.txt"), None)
+    if not txt or not txt.is_file():
+        return {}
+    origenes: dict[int, str] = {}
+    for linea in txt.read_text(encoding="utf-8", errors="ignore").splitlines():
+        m = re.match(r"^Escena\s+0*(\d+)\s*·\s*(.+)$", linea.strip())
+        if m:
+            origenes[int(m.group(1))] = m.group(2).strip()
+    return origenes
+
+
+def archivo_material(relativo: str) -> Path:
+    """Resuelve un archivo dentro de RAIZ_USUARIO; rechaza cualquier intento de salir o extensión no permitida."""
+    if not relativo or Path(relativo).is_absolute() or "\\" in relativo.lstrip("\\") and ":" in relativo:
+        raise FileNotFoundError("Ruta no permitida")
+    base = RAIZ_USUARIO.resolve()
+    destino = (base / relativo).resolve()
+    if not destino.is_relative_to(base) or destino.suffix.lower() not in EXTENSIONES_MATERIAL or not destino.is_file():
+        raise FileNotFoundError("No existe")
+    return destino
+
+
+def carpeta_material(cid: str, video: str) -> Path:
+    """Calcula la carpeta «4 Voz y material» de un vídeo del canal sin aceptar rutas libres."""
+    if not video or "/" in video or "\\" in video or ".." in video:
+        raise FileNotFoundError("Carpeta no válida")
+    canal_dir = (RAIZ_USUARIO / _limpio(canales.obtener(cid)["nombre"])).resolve()
+    base_video = (canal_dir / video).resolve()
+    if not base_video.is_relative_to(canal_dir) or not base_video.is_dir():
+        raise FileNotFoundError("No existe la carpeta del vídeo")
+    mat = next((d for d in sorted(base_video.glob(f"{MATERIAL}*")) if d.is_dir()), base_video)
+    return mat
+
+
+def listar_material(cid: str) -> list[dict[str, Any]]:
+    """Todo el material guardado del canal en «4 Voz y material» (voces, imágenes y clips), con sus repeticiones."""
+    canal_dir = RAIZ_USUARIO / _limpio(canales.obtener(cid)["nombre"])
+    if not canal_dir.is_dir():
+        return []
+    base_raiz = RAIZ_USUARIO.resolve()
+    items: list[dict[str, Any]] = []
+    for dir_video in sorted((d for d in canal_dir.iterdir() if d.is_dir()), key=lambda d: d.name, reverse=True):
+        partes = dir_video.name.split(" · ", 1)
+        fecha_v = partes[0] if len(partes) > 1 else ""
+        titulo_v = partes[1] if len(partes) > 1 else dir_video.name
+        for dir_mat in sorted(d for d in dir_video.glob(f"{MATERIAL}*") if d.is_dir()):
+            creditos = _creditos_de(dir_mat)
+            archivos = sorted((f for f in dir_mat.rglob("*") if f.is_file() and f.suffix.lower() in EXTENSIONES_MATERIAL),
+                              key=lambda f: f.name)
+            for f in archivos:
+                if " - original." in f.name.lower():
+                    continue   # la versión recortada ya representa a la escena en la galería
+                res = f.resolve()
+                if not res.is_relative_to(base_raiz):
+                    continue
+                ext = f.suffix.lower()
+                tipo = _tipo_material(ext)
+                sub = f.parent.name if f.parent != dir_mat else ""
+                m_esc = re.search(r"escena\s*0*(\d+)", f.name, re.IGNORECASE)
+                n_esc = int(m_esc.group(1)) if m_esc else 0
+                credito = creditos.get(n_esc, "")
+                url_fuente = next((u for u in re.findall(r"https?://\S+", credito)), "")
+                import hashlib
+                huella = (url_fuente or f"{ext}:{hashlib.sha1(res.read_bytes()).hexdigest()}"
+                          if tipo != "voz" else f"voz:{res.as_posix()}")
+                items.append({
+                    "ruta": res.relative_to(base_raiz).as_posix(),
+                    "tipo": tipo,
+                    "etiqueta": _etiqueta_item(f.name, tipo, sub),
+                    "video": dir_video.name,
+                    "titulo": titulo_v,
+                    "fecha": fecha_v,
+                    "fuente": url_fuente.rsplit("/", 1)[-1][:50] if url_fuente else credito.split("·")[0].strip(),
+                    "_huella": huella,
+                })
+    # Contar en cuántos vídeos o escenas aparece cada pieza para destacar «Lo más usado».
+    usos: dict[str, int] = {}
+    videos_por_huella: dict[str, list[str]] = {}
+    for it in items:
+        h = it.pop("_huella")
+        usos[h] = usos.get(h, 0) + 1
+        if it["titulo"] not in videos_por_huella.setdefault(h, []):
+            videos_por_huella[h].append(it["titulo"])
+        it["_h"] = h
+    for it in items:
+        h = it.pop("_h")
+        it["usos"] = usos[h]
+        it["videos_usado"] = len(videos_por_huella[h])
+    return items
+

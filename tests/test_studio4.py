@@ -905,7 +905,7 @@ def test_flow_anima_la_imagen_de_api():
     assert not flow.por_animar({**esc, "tomas": [{"archivo": "tomas/t.png", "tipo": "imagen", "origen": "tarjeta"}]})
 
 
-def test_escena_rechazada_por_el_filtro_se_suaviza_y_no_tumba_el_lote(monkeypatch, tmp_path):
+def test_escena_rechazada_por_el_filtro_se_suaviza_y_no_tumba_el_lote(aislado, monkeypatch, tmp_path):
     """El filtro rechaza el plano de la pistola: se pide sin lo explícito; si una escena falla igual, las demás siguen."""
     from studio4 import visuales_api as v
     pedidos = []
@@ -1735,3 +1735,52 @@ def test_clave_gemini_nueva_se_prueba_antes_de_guardarse(aislado, monkeypatch, t
     gemini._bloquear(1800, "sin saldo")
     gemini.cambiar_clave(clave)
     assert config.GEMINI_API_KEY == clave and clave in (tmp_path / ".env").read_text() and not gemini.bloqueado()
+
+
+def test_biblioteca_de_material_y_seguridad_de_rutas(servidor, aislado, monkeypatch):
+    import os
+    import urllib.parse
+    pedir, _ = servidor
+    for i, pid in enumerate(("p-mat-1", "p-mat-2"), 1):
+        _produccion(pid, escenas=2, titulo=f"Vídeo {i} de GTA 6", creado=f"2026-10-1{i} 10:00:00")
+        base = produccion.carpeta(pid)
+        (base / "tomas").mkdir()
+        (base / "voz.wav").write_bytes(f"RIFF voz {i}".encode())
+        (base / "tomas" / "e1.png").write_bytes(b"misma imagen repetida")
+        (base / "tomas" / "e2.mp4").write_bytes(f"clip {i}".encode())
+
+        def armar(q, n=i):
+            q["voz"] = {"archivo": "voz.wav", "proveedor": "gemini", "duracion": 12.0}
+            q["escenas"][0].update(tomas=[{"archivo": "tomas/e1.png", "tipo": "imagen", "origen": "real",
+                                           "url": "https://www.gtabase.com/x/cheetah.jpg"}], elegida=0)
+            q["escenas"][1].update(tomas=[{"archivo": "tomas/e2.mp4", "tipo": "video", "origen": "flow"}], elegida=0)
+        produccion.modificar(pid, armar)
+        carpetas.guardar_material(produccion.cargar(pid), base)
+
+    estado, cuerpo = pedir("GET", "/api/material")
+    assert estado == 200
+    items = json.loads(cuerpo)["items"]
+    assert [x["tipo"] for x in items].count("voz") == 2
+    assert [x["tipo"] for x in items].count("imagen") == 2
+    assert [x["tipo"] for x in items].count("clip") == 2
+    repetidas = [x for x in items if x["usos"] > 1]
+    assert len(repetidas) == 2 and all(x["tipo"] == "imagen" and x["videos_usado"] == 2 for x in repetidas)
+
+    # Se puede descargar un archivo válido de material, pero no textos ni salir con ../ o rutas absolutas.
+    ruta_ok = urllib.parse.quote(items[0]["ruta"])
+    assert pedir("GET", f"/material/{ruta_ok}")[0] == 200
+    env_abs = urllib.parse.quote(str((config.RAIZ / ".env").resolve()))
+    txt_rel = urllib.parse.quote(f"{items[0]['ruta'].rsplit('/', 1)[0]}/créditos.txt")
+    for mala in ("/material/../../.env", "/material/..%2F..%2F.env", f"/material/{env_abs}",
+                 "/material/C:/Windows/win.ini", f"/material/{txt_rel}"):
+        assert pedir("GET", mala)[0] == 404, mala
+
+    # /api/carpeta/abrir solo abre carpetas de Studio 4 calculadas por el servidor; rechaza rutas libres.
+    abiertas = []
+    monkeypatch.setattr(os, "startfile", lambda r: abiertas.append(r), raising=False)
+    cab = {"Content-Type": "application/json"}
+    assert pedir("POST", "/api/carpeta/abrir", cab, json.dumps({"video": items[0]["video"]}).encode())[0] == 200
+    assert abiertas and Path(abiertas[-1]).resolve().is_relative_to(carpetas.RAIZ_USUARIO.resolve())
+    for intento in ("../..", "C:\\Windows", "FourLevel/../../secreto"):
+        assert pedir("POST", "/api/carpeta/abrir", cab, json.dumps({"video": intento}).encode())[0] == 400
+
