@@ -300,17 +300,34 @@ function pintarPlan() {
       <span class="b-estado">${!t.guiones ? `<button class="boton" type="button" data-b-pedir="${esc(t.codigo)}">Copiar pedido para Agron</button>`
         : `<small>${t.guiones} guiones · ${t.creados} creados</small>`}</span></div>`).join("")}`;
 }
+// La biblioteca por temas (FL-001, FL-002…): cada tema se abre para crear un guion suelto o el tema entero.
+// Se abre solo el primer tema con algo pendiente; los que abras o cierres se recuerdan mientras no recargues.
+let temasAbiertos = null;
 function pintarBiblioteca() {
   pintarPlan();
   const pendientes = guionesBib.filter((x) => !x.producido).length;
   $("b-crear-todos").disabled = !pendientes;
-  $("b-crear-todos").textContent = pendientes ? `Crear los ${pendientes} pendientes` : "Nada pendiente";
-  $("b-lista").innerHTML = guionesBib.map((x) => `<div class="b-item ${x.producido ? "hecho" : ""}">
-      <span class="b-codigo">${esc(x.codigo)} · ${x.tipo === "largo" ? "Largo" : `Corto ${esc(x.etiqueta)}`}</span>
-      <span><b>${esc(x.titulo || x.guion.slice(0, 60))}</b><br><small>${x.palabras} palabras${x.producido ? " · ya creado" : ""}</small></span>
-      <span class="fila">${x.producido ? "" : `<button class="primario" type="button" data-b-crear="${esc(x.id)}">Crear</button>`}
-        <button class="boton" type="button" data-b-quitar="${esc(x.id)}">Quitar</button></span></div>`).join("")
-    || `<p class="meta">La biblioteca está vacía: pega un paquete de guiones arriba.</p>`;
+  $("b-crear-todos").textContent = pendientes ? `Crear todo (${pendientes})` : "Nada pendiente";
+  const temas = new Map();
+  guionesBib.forEach((x) => { if (!temas.has(x.codigo)) temas.set(x.codigo, []); temas.get(x.codigo).push(x); });
+  if (!temasAbiertos) {
+    const primero = [...temas].find(([, gs]) => gs.some((g) => !g.producido));
+    temasAbiertos = new Set(primero ? [primero[0]] : []);
+  }
+  $("b-lista").innerHTML = [...temas].map(([codigo, gs]) => {
+    const largo = gs.find((g) => g.tipo === "largo");
+    const faltan = gs.filter((g) => !g.producido).length;
+    return `<details class="b-grupo" data-b-tema="${esc(codigo)}" ${temasAbiertos.has(codigo) ? "open" : ""}>
+      <summary><span class="b-codigo">${esc(codigo)}</span>
+        <span><b>${esc((largo || gs[0]).titulo || codigo)}</b><br><small>${gs.length} guiones · ${gs.length - faltan} creados</small></span>
+        ${faltan ? `<button class="boton" type="button" data-b-crear-tema="${esc(codigo)}">Crear el tema (${faltan})</button>` : "<small>Hecho</small>"}</summary>
+      ${gs.map((x) => `<div class="b-item ${x.producido ? "hecho" : ""}">
+        <span class="b-codigo">${x.tipo === "largo" ? "Largo · 16:9" : `Corto ${esc(x.etiqueta.split(/[\s:]/)[0])} · 9:16`}</span>
+        <span><b>${esc(x.titulo || x.guion.slice(0, 60))}</b><br><small>${x.palabras} palabras${x.producido ? " · ya creado" : ""}</small></span>
+        <span class="fila">${x.producido ? "" : `<button class="primario" type="button" data-b-crear="${esc(x.id)}">Crear este</button>`}
+          <button class="boton" type="button" data-b-quitar="${esc(x.id)}">Quitar</button></span></div>`).join("")}
+    </details>`;
+  }).join("") || `<p class="meta">La biblioteca está vacía: pega un paquete de guiones arriba.</p>`;
 }
 async function crearDesdeBiblioteca(ids, boton) {
   boton.disabled = true;
@@ -361,8 +378,24 @@ $("b-plan").addEventListener("click", async (ev) => {
   }
   try { await navigator.clipboard.writeText(texto); b.textContent = "Copiado: pégalo en Agron"; } catch (_) { prompt("Copia esto para Agron:", texto); }
 });
-$("b-crear-todos").addEventListener("click", (ev) => crearDesdeBiblioteca(guionesBib.filter((x) => !x.producido).map((x) => x.id), ev.currentTarget));
+$("b-crear-todos").addEventListener("click", (ev) => {
+  const ids = guionesBib.filter((x) => !x.producido).map((x) => x.id);
+  // Muchas producciones a la vez gastan voz y tiempo: se confirma antes.
+  if (ids.length > 1 && !confirm(`Vas a crear ${ids.length} vídeos a la vez (cada uno con su voz). ¿Seguro?\n\nPara ir uno a uno, abre un tema y pulsa «Crear este».`)) return;
+  crearDesdeBiblioteca(ids, ev.currentTarget);
+});
+$("b-lista").addEventListener("toggle", (ev) => {
+  const d = ev.target.closest?.("[data-b-tema]");
+  if (d && temasAbiertos) d.open ? temasAbiertos.add(d.dataset.bTema) : temasAbiertos.delete(d.dataset.bTema);
+}, true);
 $("b-lista").addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-b-crear-tema]");
+  if (t) {   // el botón vive en el <summary>: que no abra ni cierre el tema
+    ev.preventDefault();
+    const ids = guionesBib.filter((x) => x.codigo === t.dataset.bCrearTema && !x.producido).map((x) => x.id);
+    if (ids.length > 1 && !confirm(`Vas a crear los ${ids.length} vídeos de ${t.dataset.bCrearTema}. ¿Seguro?`)) return;
+    return crearDesdeBiblioteca(ids, t);
+  }
   const c = ev.target.closest("[data-b-crear]");
   if (c) return crearDesdeBiblioteca([c.dataset.bCrear], c);
   const q = ev.target.closest("[data-b-quitar]");
