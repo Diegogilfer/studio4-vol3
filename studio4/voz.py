@@ -577,12 +577,12 @@ def _tiempos_alineados(texto: str, spans: list[tuple[int, int]], al: dict, total
 
 
 def reserva(proveedor: str) -> str | None:
-    """La otra voz, si está configurada (Gemini, ElevenLabs o Xiaomi MiMo)."""
+    """La otra voz, si está configurada (prioriza Xiaomi MiMo gratis antes que ElevenLabs)."""
     if proveedor == "gemini":
-        if config.ELEVENLABS_API_KEY:
-            return "elevenlabs"
         if config.XIAOMIMIMO_API_KEY:
             return "mimo"
+        if config.ELEVENLABS_API_KEY:
+            return "elevenlabs"
     if proveedor in ("elevenlabs", "mimo"):
         if config.GEMINI_API_KEY:
             return "gemini"

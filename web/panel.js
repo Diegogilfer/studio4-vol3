@@ -939,14 +939,16 @@ function pintarTrabajo(t) {
     // la voz de pago de fal queda como segunda opción, con su coste para este guion.
     const letras = (p?.escenas || []).reduce((n, e) => n + (e.texto_voz || "").length, 0);
     const sinSaldo = t.error && /\(402\)/.test(t.error) && !t.ocupado;
-    const gratis = sinSaldo ? `<span class="clave-gratis"><b>Sigue gratis con tus voces del panel:</b> crea una clave en
+    const conMimo = sinSaldo && estado?.opciones?.mimo_ok
+      ? `<button class="primario" type="button" data-voz-mimo="1">Usar voz Xiaomi MiMo · gratis (0 $)</button>` : "";
+    const gratis = sinSaldo ? `<span class="clave-gratis"><b>Sigue gratis con tus voces del panel:</b> ${estado?.opciones?.mimo_ok ? "pulsa «Usar voz Xiaomi MiMo · gratis (0 $)» abajo o " : ""}crea una clave en
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>
         → «Create API key» → <b>en un proyecto nuevo</b> (sin facturación) y pégala aquí.
         <span class="fila"><input class="campo" type="password" autocomplete="off" placeholder="AIza…" data-clave-gemini>
         <button class="primario" type="button" data-guardar-clave="1">Probar y usar</button></span></span>` : "";
     const conFal = sinSaldo && estado?.fal && letras
       ? `<button class="boton" type="button" data-voz-fal="1">O voz de pago ElevenLabs por fal (≈ ${(letras / 1000 * 0.10).toFixed(2).replace(".", ",")} $)</button>` : "";
-    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${gratis}${conFal}${!t.ocupado && t.reintentable !== false && !sinSaldo
+    $(id).innerHTML = t.error ? `<span>${esc(t.error)}</span>${gratis}<span class="fila">${conMimo}${conFal}</span>${!t.ocupado && t.reintentable !== false && !sinSaldo
       ? `<button class="boton" type="button" data-reintentar="1"><svg width="14" height="14"><use href="#i-renovar"/></svg>Reintentar</button>` : ""}` : "";
   }
 }
@@ -960,6 +962,12 @@ document.addEventListener("click", async (ev) => {
       g.textContent = "Clave guardada · repitiendo";
       await api("/api/reintentar", {}); await refrescar();
     } catch (e) { aviso(e); g.textContent = "Probar y usar"; } finally { g.disabled = false; }
+    return;
+  }
+  const m = ev.target.closest("[data-voz-mimo]");
+  if (m) {   // rehace la voz gratis con Xiaomi MiMo (mimo-v2.5-tts)
+    m.disabled = true; m.textContent = "Generando voz gratis con Xiaomi MiMo…";
+    try { await api("/api/voz", { proveedor: "mimo" }); await refrescar(); } catch (e) { aviso(e); } finally { m.disabled = false; }
     return;
   }
   const f = ev.target.closest("[data-voz-fal]");
