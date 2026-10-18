@@ -72,6 +72,7 @@
 | Registro y caídas | `producciones/servidor.log`, `producciones/caidas.log` |
 | Arranque con pantalla de carga | `iniciar.bat`, `web/arranque.html` |
 | Términos y licencias | `web/legal.html` (ruta `/legal`) |
+| **Skill de Ingeniería Inversa (alta complejidad · Antigravity y Claude)** | `.agents/skills/ingenieria-inversa/SKILL.md`, `.claude/skills/ingenieria-inversa/SKILL.md` |
 
 ## Nota para Claude: por qué se hicieron estos cambios (Voz Xiaomi MiMo + ElevenLabs)
 
@@ -80,7 +81,7 @@
    - Se verificó contra `https://api.xiaomimimo.com/v1`:
      - `mimo-v2.5-tts` responde **`200 OK` gratis**, devolviendo audio WAV base64 a 24 kHz mono (16-bit PCM) mediante `/v1/chat/completions` con el texto a locutar en el mensaje de rol `assistant` y la dirección/estilo en el rol `user`.
      - Los modelos de texto (`mimo-v2.6-flash` / `mimo-v2.5`) quedaron configurados en `studio4/deepseek.py` como respaldo detrás de DeepSeek, aunque actualmente la cuenta de Xiaomi devuelve `402 Insufficient account balance` para texto (el cortocircuito de `_sin_saldo` en `deepseek.py` lo detecta al instante y no reintenta en balde).
-   - Con `mimo` en `voz.PROVEEDORES` y en `config.SIN_PAGO`, el autor puede elegir las voces `Milo`, `Dean`, `Mia`, `Chloe` o `mimo_default` sin coste, y además `voz.reserva("gemini")` cae automáticamente a `mimo` cuando no hay ElevenLabs o cuando Gemini TTS agota su cuota diaria.
+   - Con `mimo` en `voz.PROVEEDORES` y en `config.SIN_PAGO`, el autor puede elegir las voces `Milo`, `Dean`, `Mia`, `Chloe` o `mimo_default` sin coste, `voz.reserva("gemini")` prioriza `mimo` gratis antes que `elevenlabs`, y el cartel rojo de error `402` de Google en `web/panel.js` (`pintarTrabajo`) muestra directamente el botón **«Usar voz Xiaomi MiMo · gratis (0 $)»** (`data-voz-mimo="1"`).
 
 2. **Por qué se separó la selección de voz de la generación en ElevenLabs:**
    - Antes, cambiar de voz o pulsar el botón de voz en el panel ejecutaba directamente `POST /api/voz` (`produccion.rehacer_voz`), consumiendo créditos de ElevenLabs sin dejar explorar el catálogo ni escuchar muestras gratuitas primero, y usaba siempre el `ELEVENLABS_VOICE_ID` fijo de `.env`.
@@ -107,10 +108,11 @@
   rutas seguras en `/material/` (`is_relative_to(RAIZ_USUARIO)` y solo extensiones de audio/imagen/vídeo) y apertura de carpeta
   calculada en el servidor en `/api/carpeta/abrir`; además se asegura `config.PRODUCCIONES` en `visuales_api.generar_escenas`
   (commits `85c4a20` y `2ea420a`, 117 pruebas en verde).
-- 2026-10-17 · Antigravity (rama `antigravity` → unida en `reestructura-google`, commit `6518e53`): catálogo oficial y selector
-  de voces de ElevenLabs (`GET /api/voces/elevenlabs` con caché en disco de 1 h, muestras gratuitas `preview_url`, selección
-  persistida como `voice_id` en `POST /api/voz/seleccionar` separada de la generación `POST /api/voz`, estimación de
+- 2026-10-17 · Antigravity (rama `antigravity` → unida en `reestructura-google`, commits `6518e53`, `08352d6`): catálogo oficial y
+  selector de voces de ElevenLabs (`GET /api/voces/elevenlabs` con caché en disco de 1 h, muestras gratuitas `preview_url`,
+  selección persistida como `voice_id` en `POST /api/voz/seleccionar` separada de la generación `POST /api/voz`, estimación de
   caracteres/créditos/USD y confirmación antes de consumir créditos) + integración de Xiaomi MiMo (`XIAOMIMIMO_API_KEY`,
-  proveedor gratis `mimo` con `mimo-v2.5-tts` y voces `Milo`, `Dean`, `Mia`, `Chloe`, más reserva automática cuando Gemini TTS
-  agota cuota; 119 pruebas en verde).
+  proveedor gratis `mimo` con `mimo-v2.5-tts` y voces `Milo`, `Dean`, `Mia`, `Chloe`, botón directo en cartel `402` y reserva
+  automática prioritaria) + creación de la skill `ingenieria-inversa` (`.agents/skills/ingenieria-inversa/` y
+  `.claude/skills/ingenieria-inversa/`, con sonda `sondar_api.py`; 119 pruebas en verde).
 
