@@ -26,18 +26,22 @@ logger = logging.getLogger("studio4.voz")
 
 PROVEEDORES = {
     "gemini": "Voz de Google (gratis)",
-    "mimo": "Voz Xiaomi MiMo (gratis · mimo-v2.5-tts)",
+    "mimo": "Voz en español gratis (narrador nativo + Xiaomi MiMo)",
     "elevenlabs": "Voz ElevenLabs",
     "fal": "Voz ElevenLabs por fal (de pago · ~0,10 $ cada 1.000 letras)",
 }
 VOCES_MIMO = {
-    "Milo": "Narrador masculino claro y dinámico",
-    "Dean": "Narrador masculino profundo y sereno",
-    "Mia": "Narradora femenina cálida y natural",
-    "Chloe": "Narradora femenina expresiva y ágil",
-    "mimo_default": "Voz automática de Xiaomi MiMo",
+    "es_mx_002": "Narrador masculino en español latino (nativo · gratis)",
+    "es-US": "Narradora en español latino neutro (nativa · gratis)",
+    "es-ES": "Narradora en español de España (nativa · gratis)",
+    "Milo": "Milo · Xiaomi MiMo (inglés / multilingüe)",
+    "Dean": "Dean · Xiaomi MiMo (inglés / multilingüe)",
+    "Mia": "Mia · Xiaomi MiMo (inglés / multilingüe)",
+    "Chloe": "Chloe · Xiaomi MiMo (inglés / multilingüe)",
+    "mimo_default": "Automática · Xiaomi MiMo",
 }
-VOZ_MIMO_POR_DEFECTO = "Milo"
+VOZ_MIMO_POR_DEFECTO = "es_mx_002"
+VOCES_ESPANOL_NATIVO = {"es_mx_002", "es-US", "es-ES", "es-MX"}
 FAL_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
 FAL_TTS_POR_MIL = 0.10   # $ por cada 1.000 caracteres (ficha de fal, octubre de 2026)
 VOZ_FAL = "George"       # voz de narrador de ElevenLabs; el modelo multilingüe habla en español
@@ -429,13 +433,106 @@ def _elevenlabs(texto: str, destino: Path, produccion: str, voice_id: str | None
     return d.get("alignment") or d.get("normalized_alignment") or {}
 
 
+def _trocear_frase_es(texto: str, max_bytes: int = 200) -> list[str]:
+    """Divide un texto en fragmentos de como mucho `max_bytes` UTF-8 respetando signos de puntuación y palabras."""
+    clausulas = [c.strip() for c in re.split(r"(?<=[.!?;:,])\s+", " ".join(texto.split())) if c.strip()]
+    salida: list[str] = []
+    actual = ""
+    for c in clausulas:
+        candidato = f"{actual} {c}".strip() if actual else c
+        if len(candidato.encode("utf-8")) <= max_bytes:
+            actual = candidato
+            continue
+        if actual:
+            salida.append(actual)
+            actual = ""
+        if len(c.encode("utf-8")) <= max_bytes:
+            actual = c
+            continue
+        for pal in c.split():
+            cand_p = f"{actual} {pal}".strip() if actual else pal
+            if len(cand_p.encode("utf-8")) <= max_bytes:
+                actual = cand_p
+            else:
+                if actual:
+                    salida.append(actual)
+                actual = pal
+    if actual:
+        salida.append(actual)
+    return salida or [texto[:120]]
+
+
+def _sintetizar_trozo_es(trozo: str, voz_es: str = "es_mx_002") -> bytes:
+    """Obtiene los bytes MP3 de un fragmento en español nativo (primero narrador es_mx_002; respaldo Google es-US)."""
+    if voz_es == "es_mx_002":
+        try:
+            r = requests.post(
+                "https://tiktok-tts.weilnet.workers.dev/api/generation",
+                json={"text": trozo, "voice": "es_mx_002"},
+                timeout=15,
+            )
+            if r.status_code == 200:
+                b64 = (r.json() or {}).get("data") or ""
+                if b64:
+                    return base64.b64decode(b64)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Respaldo español es_mx_002 a Google es-US: %s", e)
+    tl = voz_es if voz_es.startswith("es-") else "es-US"
+    rg = requests.get(
+        "https://translate.google.com/translate_tts",
+        params={"ie": "UTF-8", "tl": tl, "client": "tw-ob", "q": trozo},
+        timeout=15,
+    )
+    if rg.status_code != 200 or not rg.content:
+        raise RuntimeError(f"Voz en español respondió {rg.status_code}")
+    return rg.content
+
+
+def _espanol_gratis_tts(segmentos: list[str], destino: Path, produccion: str = "", voz_es: str = "es_mx_002") -> list[float]:
+    """Locuta cada escena en español nativo gratis, une a 24.000 Hz mono y devuelve el instante exacto de inicio de cada escena."""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    frecuencia = 24000
+    pausa_frames = b"\x00\x00" * int(0.18 * frecuencia)
+    cortes: list[float] = []
+    frames_totales = 0
+    with wave.open(str(destino), "wb") as salida:
+        salida.setnchannels(1)
+        salida.setsampwidth(2)
+        salida.setframerate(frecuencia)
+        for idx, seg in enumerate(segmentos):
+            if idx > 0:
+                salida.writeframes(pausa_frames)
+                frames_totales += len(pausa_frames) // 2
+            cortes.append(round(frames_totales / frecuencia, 3))
+            trozos_mp3 = b"".join(_sintetizar_trozo_es(t, voz_es) for t in _trocear_frase_es(seg, 200))
+            tmp_mp3 = destino.with_name(f"{destino.stem}_es_{idx:03d}.mp3")
+            tmp_wav = destino.with_name(f"{destino.stem}_es_{idx:03d}.wav")
+            tmp_mp3.write_bytes(trozos_mp3)
+            try:
+                medios.ffmpeg("-i", str(tmp_mp3), "-ac", "1", "-ar", str(frecuencia), str(tmp_wav))
+                with wave.open(str(tmp_wav), "rb") as w_in:
+                    pcm = w_in.readframes(w_in.getnframes())
+                salida.writeframes(pcm)
+                frames_totales += len(pcm) // 2
+            finally:
+                tmp_mp3.unlink(missing_ok=True)
+                tmp_wav.unlink(missing_ok=True)
+    total_chars = sum(len(s) for s in segmentos)
+    registro.apuntar("Voz en español (gratis)", f"{total_chars} caracteres · {voz_es}",
+                     cantidad=total_chars, unidad="caracteres", produccion=produccion)
+    return cortes
+
+
 def _mimo_tts(texto: str, destino: Path, produccion: str, voice_id: str | None = None, estilo_voz: str = "") -> str:
-    """Voz de Xiaomi MiMo (mimo-v2.5-tts) por su API compatible con OpenAI: devuelve WAV a 24.000 Hz mono."""
-    if not config.XIAOMIMIMO_API_KEY:
-        raise RuntimeError("Falta XIAOMIMIMO_API_KEY en .env (api.xiaomimimo.com).")
+    """Voz de Xiaomi MiMo (mimo-v2.5-tts) o narrador nativo en español: devuelve WAV a 24.000 Hz mono."""
     voz_mimo = (voice_id or "").strip()
     if voz_mimo not in VOCES_MIMO:
         voz_mimo = VOZ_MIMO_POR_DEFECTO
+    if voz_mimo in VOCES_ESPANOL_NATIVO:
+        _espanol_gratis_tts([texto], destino, produccion, voz_mimo)
+        return voz_mimo
+    if not config.XIAOMIMIMO_API_KEY:
+        raise RuntimeError("Falta XIAOMIMIMO_API_KEY en .env (api.xiaomimimo.com).")
     instruccion = (estilo_voz or config.ESTILO_VOZ or "Narra en español latino neutro, con ritmo ágil y claro.").strip()
     r = requests.post(
         f"{config.XIAOMIMIMO_URL}/chat/completions",
@@ -682,12 +779,19 @@ def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini",
     destino.parent.mkdir(parents=True, exist_ok=True)
 
     alineacion = None
+    cortes_exactos: list[float] | None = None
     dirigida = False
     voz_el_id = (voice_id or "").strip() or config.ELEVENLABS_VOICE_ID or VOZ_ELEVENLABS_POR_DEFECTO
     if proveedor == "elevenlabs":
         alineacion = _elevenlabs(texto, destino, produccion, voice_id=voz_el_id)
     elif proveedor == "mimo":
-        voz_el_id = _mimo_tts(texto, destino, produccion, voice_id=voice_id or voz_nombre, estilo_voz=estilo_voz)
+        cand_mimo = (voice_id or voz_nombre or "").strip()
+        voz_mimo = cand_mimo if cand_mimo in VOCES_MIMO else VOZ_MIMO_POR_DEFECTO
+        if voz_mimo in VOCES_ESPANOL_NATIVO:
+            cortes_exactos = _espanol_gratis_tts(limpios, destino, produccion, voz_mimo)
+            voz_el_id = voz_mimo
+        else:
+            voz_el_id = _mimo_tts(texto, destino, produccion, voice_id=voz_mimo, estilo_voz=estilo_voz)
     elif proveedor == "fal":   # sus tiempos se miden por los silencios, como con Gemini
         _fal_tts(texto, destino, produccion, *contexto)
     else:
@@ -701,15 +805,21 @@ def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini",
     if abs(float(velocidad) - 1.0) >= 0.01:   # los tiempos se miden después, sobre la voz ya acelerada
         acelerar(destino, velocidad)
         alineacion = None
+        if cortes_exactos is not None:
+            cortes_exactos = [round(c / float(velocidad), 3) for c in cortes_exactos]
     total = medios.duracion(destino)
 
-    try:
-        if alineacion is None:
-            raise ValueError("sin alineación")
-        cortes, palabras = _tiempos_alineados(texto, spans, alineacion, total)
-    except ValueError:
-        cortes = _cortes_por_silencio(destino, texto, spans)
+    if cortes_exactos is not None and len(cortes_exactos) == len(spans):
+        cortes = cortes_exactos
         palabras = _palabras_proporcionales(texto, spans, cortes, total)
+    else:
+        try:
+            if alineacion is None:
+                raise ValueError("sin alineación")
+            cortes, palabras = _tiempos_alineados(texto, spans, alineacion, total)
+        except ValueError:
+            cortes = _cortes_por_silencio(destino, texto, spans)
+            palabras = _palabras_proporcionales(texto, spans, cortes, total)
 
     escenas = [{"ini": round(c, 3), "fin": round(cortes[i + 1] if i + 1 < len(cortes) else total, 3)}
                for i, c in enumerate(cortes)]
