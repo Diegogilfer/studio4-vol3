@@ -51,6 +51,12 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")   # o deepseek-v4-pro, más fino y más caro
 DEEPSEEK_URL = os.getenv("DEEPSEEK_URL", "https://api.deepseek.com").rstrip("/")
 
+# --- Xiaomi MiMo (API compatible con OpenAI en api.xiaomimimo.com/v1): guionista y voz TTS --------
+XIAOMIMIMO_API_KEY = os.getenv("XIAOMIMIMO_API_KEY", "").strip()
+XIAOMIMIMO_MODEL = os.getenv("XIAOMIMIMO_MODEL", "mimo-v2.6-flash")
+XIAOMIMIMO_TTS_MODEL = os.getenv("XIAOMIMIMO_TTS_MODEL", "mimo-v2.5-tts")
+XIAOMIMIMO_URL = os.getenv("XIAOMIMIMO_URL", "https://api.xiaomimimo.com/v1").rstrip("/")
+
 # --- YouTube (solo lectura). Con la clave basta para datos públicos: búsquedas y estadísticas de tu canal.
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "").strip()
 YOUTUBE_CANAL = os.getenv("YOUTUBE_CANAL", "").strip()   # @usuario o id UC… de tu canal
@@ -67,11 +73,12 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
 ELEVENLABS_MODEL = os.getenv("ELEVENLABS_MODEL", "eleven_v3")   # el más natural; eleven_multilingual_v2 como alternativa
 ELEVENLABS_CREDITOS_MES = int(os.getenv("ELEVENLABS_CREDITOS_MES", "10000"))
 
-# --- Modo sin coste: STUDIO4_SIN_PAGO=1 apaga todo lo que se cobra (DeepSeek, ElevenLabs, fal.ai).
+# --- Modo sin coste: STUDIO4_SIN_PAGO=1 apaga todo lo que se cobra (DeepSeek, Xiaomi MiMo, ElevenLabs, fal.ai).
 # El guion lo escribe Gemini y la voz es Gemini TTS: sirve para probar la secuencia entera gratis.
 SIN_PAGO = os.getenv("STUDIO4_SIN_PAGO", "").strip().lower() in ("1", "true", "si", "sí")
 if SIN_PAGO:
     DEEPSEEK_API_KEY = ""
+    XIAOMIMIMO_API_KEY = ""
     ELEVENLABS_API_KEY = ""
     FAL_KEY = ""
 
@@ -108,7 +115,7 @@ def salud() -> list[str]:
         faltas.append("Falta FFmpeg (ffmpeg y ffprobe) en el PATH: sin él no hay voz ni render.")
     if SIN_PAGO:
         faltas.append("Modo sin coste (STUDIO4_SIN_PAGO=1): el guion lo escribe Gemini y no se usa nada de pago.")
-    elif not DEEPSEEK_API_KEY:
+    elif not DEEPSEEK_API_KEY and not XIAOMIMIMO_API_KEY:
         faltas.append("Sin DEEPSEEK_API_KEY en .env: los guiones los escribirá Gemini (platform.deepseek.com › API keys).")
     if not GEMINI_API_KEY:
         faltas.append("Falta GEMINI_API_KEY en .env (gratis en https://aistudio.google.com/apikey).")

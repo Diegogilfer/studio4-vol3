@@ -9,8 +9,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import json
 import logging
 import re
+import time
 import wave
 from pathlib import Path
 from typing import Any
@@ -23,14 +26,67 @@ logger = logging.getLogger("studio4.voz")
 
 PROVEEDORES = {
     "gemini": "Voz de Google (gratis)",
+    "mimo": "Voz Xiaomi MiMo (gratis · mimo-v2.5-tts)",
     "elevenlabs": "Voz ElevenLabs",
     "fal": "Voz ElevenLabs por fal (de pago · ~0,10 $ cada 1.000 letras)",
 }
+VOCES_MIMO = {
+    "Milo": "Narrador masculino claro y dinámico",
+    "Dean": "Narrador masculino profundo y sereno",
+    "Mia": "Narradora femenina cálida y natural",
+    "Chloe": "Narradora femenina expresiva y ágil",
+    "mimo_default": "Voz automática de Xiaomi MiMo",
+}
+VOZ_MIMO_POR_DEFECTO = "Milo"
 FAL_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
 FAL_TTS_POR_MIL = 0.10   # $ por cada 1.000 caracteres (ficha de fal, octubre de 2026)
 VOZ_FAL = "George"       # voz de narrador de ElevenLabs; el modelo multilingüe habla en español
 LIMITE_TROZO = 3200      # caracteres por llamada (~3 min de voz): un vídeo largo se graba por partes y se une
 VOZ_ELEVENLABS_POR_DEFECTO = "JBFqnCBsd6RMkjVDRZzb"  # «George», voz prediseñada disponible en el plan gratis
+CACHE_CATALOGO_S = 3600  # 1 hora de caché del catálogo de ElevenLabs para no consultar de más
+
+VOCES_ELEVENLABS_BASE: list[dict[str, Any]] = [
+    {
+        "voice_id": "JBFqnCBsd6RMkjVDRZzb",
+        "nombre": "George",
+        "categoria": "premade",
+        "idioma": "Multilingüe (español / inglés)",
+        "acento": "británico cálido",
+        "descripcion": "Narrador cálido y resonante, ideal para documentales y relatos.",
+        "etiquetas": ["narración", "cálida", "masculina", "madura"],
+        "preview_url": "",
+    },
+    {
+        "voice_id": "pNInz6obpgDQGcFmaJgB",
+        "nombre": "Adam",
+        "categoria": "premade",
+        "idioma": "Multilingüe (español / inglés)",
+        "acento": "americano profundo",
+        "descripcion": "Voz grave y firme para historias intensas y divulgación.",
+        "etiquetas": ["narración", "profunda", "masculina"],
+        "preview_url": "",
+    },
+    {
+        "voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "nombre": "Rachel",
+        "categoria": "premade",
+        "idioma": "Multilingüe (español / inglés)",
+        "acento": "americano claro",
+        "descripcion": "Voz serena, clara y equilibrada para explicar temas complejos.",
+        "etiquetas": ["calmada", "femenina", "joven"],
+        "preview_url": "",
+    },
+    {
+        "voice_id": "EXAVITQu4vr4xnSDxMaL",
+        "nombre": "Bella",
+        "categoria": "premade",
+        "idioma": "Multilingüe (español / inglés)",
+        "acento": "americano suave",
+        "descripcion": "Voz suave y cercana para relatos expresivos.",
+        "etiquetas": ["suave", "femenina", "narración"],
+        "preview_url": "",
+    },
+]
 
 
 def _spans_palabras(texto: str) -> list[tuple[int, int]]:
@@ -206,20 +262,161 @@ def _palabras_proporcionales(texto: str, spans: list[tuple[int, int]], cortes: l
 
 
 # --- ElevenLabs -------------------------------------------------------------------------------
-def _elevenlabs(texto: str, destino: Path, produccion: str) -> dict[str, Any]:
+def _normalizar_voz_elevenlabs(v: dict[str, Any]) -> dict[str, Any]:
+    """Convierte un elemento de /v1/voices de ElevenLabs al formato del panel."""
+    etiquetas_raw = v.get("labels") or {}
+    idioma = str(etiquetas_raw.get("language") or (v.get("fine_tuning") or {}).get("language") or "").strip()
+    acento = str(etiquetas_raw.get("accent") or "").strip()
+    desc = str(v.get("description") or etiquetas_raw.get("description") or "").strip()
+    etiquetas: list[str] = []
+    for k in ("use_case", "use case", "gender", "age", "descriptive", "accent", "language"):
+        val = str(etiquetas_raw.get(k) or "").strip()
+        if val and val not in etiquetas:
+            etiquetas.append(val)
+    for k, val in etiquetas_raw.items():
+        s = str(val or "").strip()
+        if k != "description" and s and s not in etiquetas:
+            etiquetas.append(s)
+    url_muestra = str(v.get("preview_url") or "").strip()
+    if url_muestra and not url_muestra.startswith(("https://", "http://")):
+        url_muestra = ""
+    return {
+        "voice_id": str(v.get("voice_id") or "").strip(),
+        "nombre": str(v.get("name") or v.get("nombre") or v.get("voice_id") or "").strip(),
+        "categoria": str(v.get("category") or "premade").strip(),
+        "idioma": idioma,
+        "acento": acento,
+        "descripcion": desc,
+        "etiquetas": etiquetas[:8],
+        "preview_url": url_muestra,
+    }
+
+
+def _combinar_voces_elevenlabs(remotas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Une las voces de la cuenta con las predeterminadas sin duplicar voice_id."""
+    vistas: set[str] = set()
+    salida: list[dict[str, Any]] = []
+    for v in remotas + [dict(b) for b in VOCES_ELEVENLABS_BASE]:
+        vid = v.get("voice_id", "")
+        if not vid or vid in vistas:
+            continue
+        vistas.add(vid)
+        salida.append(v)
+    return salida
+
+
+def catalogo_elevenlabs(forzar: bool = False) -> dict[str, Any]:
+    """Consulta el catálogo oficial de ElevenLabs (/v1/voices) con caché en disco, sin generar audio TTS."""
+    por_defecto = config.ELEVENLABS_VOICE_ID or VOZ_ELEVENLABS_POR_DEFECTO
+    restantes = registro.creditos_elevenlabs_restantes()
+    base_resp = {
+        "modelo": config.ELEVENLABS_MODEL,
+        "creditos_restantes": restantes,
+        "creditos_mes": config.ELEVENLABS_CREDITOS_MES,
+        "por_defecto": por_defecto,
+    }
+    if not config.ELEVENLABS_API_KEY:
+        return {
+            **base_resp,
+            "ok": False,
+            "codigo_error": "sin_clave",
+            "error": "Falta ELEVENLABS_API_KEY en .env (elevenlabs.io › Profile › API keys). Se muestran las voces predeterminadas.",
+            "cache": False,
+            "voces": [dict(b) for b in VOCES_ELEVENLABS_BASE],
+        }
+    huella_clave = hashlib.sha256(config.ELEVENLABS_API_KEY.encode("utf-8")).hexdigest()[:12]
+    archivo_cache = config.PRODUCCIONES / "_voces" / "catalogo_elevenlabs.json"
+    if not forzar and archivo_cache.exists():
+        try:
+            guardado = json.loads(archivo_cache.read_text(encoding="utf-8"))
+            if (guardado.get("huella") == huella_clave
+                    and time.time() - float(guardado.get("ts") or 0) < CACHE_CATALOGO_S
+                    and isinstance(guardado.get("voces"), list) and guardado["voces"]):
+                return {**base_resp, "ok": True, "codigo_error": "", "error": "", "cache": True, "voces": guardado["voces"]}
+        except (OSError, ValueError, TypeError):
+            pass
+    try:
+        r = requests.get(
+            "https://api.elevenlabs.io/v1/voices",
+            headers={"xi-api-key": config.ELEVENLABS_API_KEY},
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        return {
+            **base_resp,
+            "ok": False,
+            "codigo_error": "catalogo",
+            "error": f"No se pudo conectar con el catálogo de ElevenLabs: {e}",
+            "cache": False,
+            "voces": [dict(b) for b in VOCES_ELEVENLABS_BASE],
+        }
+    if r.status_code in (401, 403):
+        return {
+            **base_resp,
+            "ok": False,
+            "codigo_error": "autenticacion",
+            "error": f"ElevenLabs rechazó la clave ({r.status_code}): revisa ELEVENLABS_API_KEY y sus permisos en elevenlabs.io.",
+            "cache": False,
+            "voces": [dict(b) for b in VOCES_ELEVENLABS_BASE],
+        }
+    if r.status_code == 429 or "quota" in r.text.lower():
+        return {
+            **base_resp,
+            "ok": False,
+            "codigo_error": "cuota",
+            "error": f"Límite o cuota de ElevenLabs alcanzado ({r.status_code}): {r.text[:180]}",
+            "cache": False,
+            "voces": [dict(b) for b in VOCES_ELEVENLABS_BASE],
+        }
+    if r.status_code != 200:
+        return {
+            **base_resp,
+            "ok": False,
+            "codigo_error": "catalogo",
+            "error": f"ElevenLabs respondió {r.status_code} al pedir el catálogo: {r.text[:180]}",
+            "cache": False,
+            "voces": [dict(b) for b in VOCES_ELEVENLABS_BASE],
+        }
+    try:
+        datos = r.json()
+        remotas = [_normalizar_voz_elevenlabs(x) for x in (datos.get("voices") or []) if isinstance(x, dict) and x.get("voice_id")]
+    except (ValueError, TypeError) as e:
+        return {
+            **base_resp,
+            "ok": False,
+            "codigo_error": "catalogo",
+            "error": f"Respuesta de catálogo no válida de ElevenLabs: {e}",
+            "cache": False,
+            "voces": [dict(b) for b in VOCES_ELEVENLABS_BASE],
+        }
+    voces = _combinar_voces_elevenlabs(remotas)
+    try:
+        archivo_cache.parent.mkdir(parents=True, exist_ok=True)
+        archivo_cache.write_text(json.dumps({"huella": huella_clave, "ts": time.time(), "voces": voces}, ensure_ascii=False, indent=2),
+                                 encoding="utf-8")
+    except OSError:
+        pass
+    return {**base_resp, "ok": True, "codigo_error": "", "error": "", "cache": False, "voces": voces}
+
+
+def _elevenlabs(texto: str, destino: Path, produccion: str, voice_id: str | None = None) -> dict[str, Any]:
     if not config.ELEVENLABS_API_KEY:
         raise RuntimeError("Falta ELEVENLABS_API_KEY en .env (elevenlabs.io › Profile › API keys).")
     restantes = registro.creditos_elevenlabs_restantes()
     if len(texto) > restantes:
         raise RuntimeError(f"ElevenLabs: este guion usa {len(texto)} créditos y te quedan ~{restantes} este mes. Usa Gemini TTS.")
-    voz = config.ELEVENLABS_VOICE_ID or VOZ_ELEVENLABS_POR_DEFECTO
+    voz_id = (voice_id or "").strip() or config.ELEVENLABS_VOICE_ID or VOZ_ELEVENLABS_POR_DEFECTO
     r = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voz}/with-timestamps",
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voz_id}/with-timestamps",
         params={"output_format": "mp3_44100_128"},
         headers={"xi-api-key": config.ELEVENLABS_API_KEY},
         json={"text": texto, "model_id": config.ELEVENLABS_MODEL},
         timeout=180,
     )
+    if r.status_code in (401, 403):
+        raise RuntimeError(f"ElevenLabs rechazó la autenticación ({r.status_code}): revisa ELEVENLABS_API_KEY en .env.")
+    if r.status_code == 429 or "quota_exceeded" in r.text.lower():
+        raise RuntimeError(f"Cuota de ElevenLabs agotada ({r.status_code}): {r.text[:240]}")
     if r.status_code != 200:
         raise RuntimeError(f"ElevenLabs respondió {r.status_code}: {r.text[:300]}")
     d = r.json()
@@ -227,9 +424,49 @@ def _elevenlabs(texto: str, destino: Path, produccion: str) -> dict[str, Any]:
     mp3.write_bytes(base64.b64decode(d["audio_base64"]))
     medios.ffmpeg("-i", str(mp3), "-ac", "1", "-ar", "24000", str(destino))
     mp3.unlink(missing_ok=True)
-    registro.apuntar("ElevenLabs", f"{len(texto)} caracteres · {config.ELEVENLABS_MODEL}", cantidad=len(texto),
+    registro.apuntar("ElevenLabs", f"{len(texto)} caracteres · {config.ELEVENLABS_MODEL} · {voz_id}", cantidad=len(texto),
                      unidad="créditos", produccion=produccion)
     return d.get("alignment") or d.get("normalized_alignment") or {}
+
+
+def _mimo_tts(texto: str, destino: Path, produccion: str, voice_id: str | None = None, estilo_voz: str = "") -> str:
+    """Voz de Xiaomi MiMo (mimo-v2.5-tts) por su API compatible con OpenAI: devuelve WAV a 24.000 Hz mono."""
+    if not config.XIAOMIMIMO_API_KEY:
+        raise RuntimeError("Falta XIAOMIMIMO_API_KEY en .env (api.xiaomimimo.com).")
+    voz_mimo = (voice_id or "").strip()
+    if voz_mimo not in VOCES_MIMO:
+        voz_mimo = VOZ_MIMO_POR_DEFECTO
+    instruccion = (estilo_voz or config.ESTILO_VOZ or "Narra en español latino neutro, con ritmo ágil y claro.").strip()
+    r = requests.post(
+        f"{config.XIAOMIMIMO_URL}/chat/completions",
+        headers={"Authorization": f"Bearer {config.XIAOMIMIMO_API_KEY}"},
+        json={
+            "model": config.XIAOMIMIMO_TTS_MODEL,
+            "messages": [
+                {"role": "user", "content": instruccion},
+                {"role": "assistant", "content": texto},
+            ],
+            "audio": {"voice": voz_mimo, "format": "wav"},
+        },
+        timeout=180,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"Xiaomi MiMo TTS respondió {r.status_code}: {r.text[:300]}")
+    d = r.json()
+    audio_b64 = (((d.get("choices") or [{}])[0].get("message") or {}).get("audio") or {}).get("data")
+    if not audio_b64:
+        raise RuntimeError(f"Xiaomi MiMo TTS no devolvió audio: {str(d)[:200]}")
+    crudo = base64.b64decode(audio_b64)
+    tmp = destino.with_name(destino.stem + "_mimo.wav")
+    tmp.write_bytes(crudo)
+    try:
+        medios.ffmpeg("-i", str(tmp), "-ac", "1", "-ar", "24000", str(destino))
+        tmp.unlink(missing_ok=True)
+    except Exception:
+        tmp.replace(destino)
+    registro.apuntar("Xiaomi MiMo TTS", f"{len(texto)} caracteres · {config.XIAOMIMIMO_TTS_MODEL} · {voz_mimo}",
+                     cantidad=len(texto), unidad="caracteres", produccion=produccion)
+    return voz_mimo
 
 
 def _fal_tts(texto: str, destino: Path, produccion: str, antes: str = "", despues: str = "") -> None:
@@ -260,6 +497,74 @@ def coste_voz(segmentos: list[str], proveedor: str) -> float:
     return round(sum(len(" ".join(x.split())) for x in segmentos) / 1000 * FAL_TTS_POR_MIL, 2) if proveedor == "fal" else 0.0
 
 
+def estimar_voz(segmentos: list[str], proveedor: str, voice_id: str = "") -> dict[str, Any]:
+    """Calcula los caracteres y el coste estimado de la locución según el proveedor y el modelo configurados."""
+    limpios = [" ".join(s.split()) for s in segmentos if s and s.strip()]
+    texto, _ = _spans_escenas(limpios) if limpios else ("", [])
+    caracteres = len(texto)
+    estimable = caracteres > 0
+    if proveedor == "elevenlabs":
+        restantes = registro.creditos_elevenlabs_restantes()
+        vid = (voice_id or "").strip() or config.ELEVENLABS_VOICE_ID or VOZ_ELEVENLABS_POR_DEFECTO
+        resumen = (f"{caracteres} caracteres · {caracteres} créditos en {config.ELEVENLABS_MODEL} "
+                   f"(quedan ~{restantes} créditos este mes)"
+                   if estimable else "No se pudo estimar el costo: aún no hay escenas con texto.")
+        return {
+            "proveedor": "elevenlabs",
+            "modelo": config.ELEVENLABS_MODEL,
+            "voice_id": vid,
+            "caracteres": caracteres,
+            "creditos": caracteres if estimable else 0,
+            "creditos_restantes": restantes,
+            "usd": 0.0,
+            "consume_creditos": True,
+            "estimable": estimable,
+            "resumen": resumen,
+        }
+    if proveedor == "fal":
+        usd = round(caracteres / 1000 * FAL_TTS_POR_MIL, 2) if estimable else 0.0
+        resumen = (f"{caracteres} caracteres · ~{usd:.2f} $ en fal.ai ({FAL_TTS})"
+                   if estimable else "No se pudo estimar el costo: aún no hay escenas con texto.")
+        return {
+            "proveedor": "fal",
+            "modelo": FAL_TTS,
+            "voice_id": VOZ_FAL,
+            "caracteres": caracteres,
+            "creditos": 0,
+            "creditos_restantes": 0,
+            "usd": usd,
+            "consume_creditos": True,
+            "estimable": estimable,
+            "resumen": resumen,
+        }
+    if proveedor == "mimo":
+        vid = (voice_id or "").strip() if (voice_id or "").strip() in VOCES_MIMO else VOZ_MIMO_POR_DEFECTO
+        return {
+            "proveedor": "mimo",
+            "modelo": config.XIAOMIMIMO_TTS_MODEL,
+            "voice_id": vid,
+            "caracteres": caracteres,
+            "creditos": 0,
+            "creditos_restantes": 0,
+            "usd": 0.0,
+            "consume_creditos": False,
+            "estimable": estimable,
+            "resumen": f"{caracteres} caracteres · gratis con Xiaomi MiMo ({config.XIAOMIMIMO_TTS_MODEL} · {vid})" if estimable else f"Gratis con Xiaomi MiMo ({vid})",
+        }
+    return {
+        "proveedor": "gemini",
+        "modelo": config.MODELO_TTS,
+        "voice_id": "",
+        "caracteres": caracteres,
+        "creditos": 0,
+        "creditos_restantes": 0,
+        "usd": 0.0,
+        "consume_creditos": False,
+        "estimable": estimable,
+        "resumen": f"{caracteres} caracteres · gratis con Gemini TTS ({config.MODELO_TTS})" if estimable else "Gratis con Gemini TTS",
+    }
+
+
 def _tiempos_alineados(texto: str, spans: list[tuple[int, int]], al: dict, total: float) -> tuple[list[float], list[dict]]:
     inicios = al.get("character_start_times_seconds", [])
     fines = al.get("character_end_times_seconds", [])
@@ -272,11 +577,17 @@ def _tiempos_alineados(texto: str, spans: list[tuple[int, int]], al: dict, total
 
 
 def reserva(proveedor: str) -> str | None:
-    """La otra voz, si está configurada (Gemini siempre lo está si hay GEMINI_API_KEY)."""
-    if proveedor == "gemini" and config.ELEVENLABS_API_KEY:
-        return "elevenlabs"
-    if proveedor == "elevenlabs" and config.GEMINI_API_KEY:
-        return "gemini"
+    """La otra voz, si está configurada (Gemini, ElevenLabs o Xiaomi MiMo)."""
+    if proveedor == "gemini":
+        if config.ELEVENLABS_API_KEY:
+            return "elevenlabs"
+        if config.XIAOMIMIMO_API_KEY:
+            return "mimo"
+    if proveedor in ("elevenlabs", "mimo"):
+        if config.GEMINI_API_KEY:
+            return "gemini"
+        if proveedor == "elevenlabs" and config.XIAOMIMIMO_API_KEY:
+            return "mimo"
     return None
 
 
@@ -330,20 +641,21 @@ def trozos(segmentos: list[str], limite: int | None = None) -> list[tuple[int, i
 
 def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
             direcciones: list[dict[str, str]] | None = None, voz_nombre: str | None = None,
-            estilo_voz: str = "", velocidad: float = 1.0) -> dict[str, Any]:
+            estilo_voz: str = "", velocidad: float = 1.0, voice_id: str | None = None) -> dict[str, Any]:
     """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
     Un guion largo (más de ~3 min de voz) se graba por trozos de escenas enteras y se une: ninguna voz admite
     15 minutos en una sola llamada. Los tiempos de cada trozo se recolocan sobre el total."""
     grupos = trozos(segmentos)
+    extra = {"voice_id": voice_id} if voice_id else {}
     if len(grupos) == 1:
-        return _locutar_uno(segmentos, destino, proveedor, produccion, direcciones, voz_nombre, estilo_voz, velocidad)
+        return _locutar_uno(segmentos, destino, proveedor, produccion, direcciones, voz_nombre, estilo_voz, velocidad, **extra)
     destino.parent.mkdir(parents=True, exist_ok=True)
     partes, escenas, palabras, desplazamiento, resultado = [], [], [], 0.0, {}
     for k, (a, b) in enumerate(grupos):
         parte = destino.with_name(f"{destino.stem}_trozo{k + 1:02d}.wav")
         contexto = (" ".join(segmentos[max(0, a - 3):a]), " ".join(segmentos[b:b + 3]))
         resultado = _locutar_uno(segmentos[a:b], parte, proveedor, produccion, direcciones[a:b] if direcciones else None,
-                                 voz_nombre, estilo_voz, velocidad, contexto=contexto)
+                                 voz_nombre, estilo_voz, velocidad, contexto=contexto, **extra)
         escenas += [{"ini": round(x["ini"] + desplazamiento, 3), "fin": round(x["fin"] + desplazamiento, 3)} for x in resultado["escenas"]]
         palabras += [{**w, "ini": round(w["ini"] + desplazamiento, 3), "fin": round(w["fin"] + desplazamiento, 3)}
                      for w in resultado["palabras"]]
@@ -361,7 +673,8 @@ def locutar(segmentos: list[str], destino: Path, proveedor: str = "gemini", prod
 
 def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini", produccion: str = "",
                  direcciones: list[dict[str, str]] | None = None, voz_nombre: str | None = None,
-                 estilo_voz: str = "", velocidad: float = 1.0, contexto: tuple[str, str] = ("", "")) -> dict[str, Any]:
+                 estilo_voz: str = "", velocidad: float = 1.0, contexto: tuple[str, str] = ("", ""),
+                 voice_id: str | None = None) -> dict[str, Any]:
     """Genera la locución y devuelve {'duracion', 'escenas': [{ini, fin}], 'palabras': [{palabra, ini, fin}]}.
     Con `direcciones` (tono y ritmo por escena), Gemini TTS interpreta cada escena como toca."""
     limpios = [" ".join(s.split()) for s in segmentos]
@@ -370,8 +683,11 @@ def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini",
 
     alineacion = None
     dirigida = False
+    voz_el_id = (voice_id or "").strip() or config.ELEVENLABS_VOICE_ID or VOZ_ELEVENLABS_POR_DEFECTO
     if proveedor == "elevenlabs":
-        alineacion = _elevenlabs(texto, destino, produccion)
+        alineacion = _elevenlabs(texto, destino, produccion, voice_id=voz_el_id)
+    elif proveedor == "mimo":
+        voz_el_id = _mimo_tts(texto, destino, produccion, voice_id=voice_id or voz_nombre, estilo_voz=estilo_voz)
     elif proveedor == "fal":   # sus tiempos se miden por los silencios, como con Gemini
         _fal_tts(texto, destino, produccion, *contexto)
     else:
@@ -398,4 +714,5 @@ def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini",
     escenas = [{"ini": round(c, 3), "fin": round(cortes[i + 1] if i + 1 < len(cortes) else total, 3)}
                for i, c in enumerate(cortes)]
     return {"proveedor": proveedor, "duracion": round(total, 3), "escenas": escenas, "palabras": palabras,
-            "dirigida": dirigida, "voz_nombre": voz_nombre or config.VOZ_GEMINI if proveedor == "gemini" else ""}
+            "dirigida": dirigida, "voz_nombre": voz_nombre or config.VOZ_GEMINI if proveedor == "gemini" else (voz_el_id if proveedor == "mimo" else (voz_nombre or "")),
+            "voice_id": voz_el_id if proveedor in ("elevenlabs", "mimo") else ""}

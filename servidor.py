@@ -254,6 +254,10 @@ class Panel(BaseHTTPRequestHandler):
                                "canales": [canales.resumen(c["id"], leer, produccion.listar(c["id"])) for c in canales.listar()]})
         if ruta == "/api/canales":
             return self._json({"canales": canales.listar(), "activo": canales.activo()["id"], "redes": canales.REDES})
+        if ruta == "/api/voces/elevenlabs":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            forzar = (q.get("forzar") or [""])[0] in ("1", "true", "si")
+            return self._json(voz.catalogo_elevenlabs(forzar=forzar))
         if ruta == "/api/voz/oir":   # frase de presentación de una voz (se graba una vez y se guarda)
             nombre = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("voz", [""])[0]
             return self._archivo(voz.muestra_generica(nombre))
@@ -281,6 +285,11 @@ class Panel(BaseHTTPRequestHandler):
             except OSError:
                 p["carpeta_clips"] = None
             p["hermanas"] = [x for x in produccion.listar() if p.get("familia") and x["familia"] == p["familia"]]
+            p["estimacion_voz"] = voz.estimar_voz(
+                [e["texto_voz"] for e in p.get("escenas", [])],
+                p.get("proveedor_voz", "gemini"),
+                p.get("voice_id", ""),
+            )
         canal = canales.activo()
         return {
             "produccion": p,
@@ -296,12 +305,17 @@ class Panel(BaseHTTPRequestHandler):
             "opciones": {
                 "formatos": {k: v["nombre"] for k, v in config.FORMATOS.items()},
                 "estilos": list(config.ESTILOS),
-                "voces": {k: v for k, v in voz.PROVEEDORES.items() if k != "elevenlabs" or config.ELEVENLABS_API_KEY},
+                "voces": dict(voz.PROVEEDORES),
                 "paletas": {k: v["nombre"] for k, v in subtitulos.PALETAS.items()},
                 "gemini_ok": bool(config.GEMINI_API_KEY),
-                "deepseek_ok": bool(config.DEEPSEEK_API_KEY),
+                "deepseek_ok": bool(config.DEEPSEEK_API_KEY or config.XIAOMIMIMO_API_KEY),
+                "mimo_ok": bool(config.XIAOMIMIMO_API_KEY),
+                "elevenlabs_ok": bool(config.ELEVENLABS_API_KEY),
+                "elevenlabs_modelo": config.ELEVENLABS_MODEL,
+                "elevenlabs_por_defecto": config.ELEVENLABS_VOICE_ID or voz.VOZ_ELEVENLABS_POR_DEFECTO,
                 "sin_pago": config.SIN_PAGO,
                 "voces_gemini": config.VOCES_GEMINI, "voz_por_defecto": config.VOZ_GEMINI,
+                "voces_mimo": voz.VOCES_MIMO, "voz_mimo_por_defecto": voz.VOZ_MIMO_POR_DEFECTO,
                 "versiones": config.VERSIONES,
                 "salud": config.salud(),
                 "plataformas": {k: v["nombre"] for k, v in miniaturas.PLATAFORMAS.items()},
@@ -361,6 +375,8 @@ class Panel(BaseHTTPRequestHandler):
                                     d.get("voz", "gemini"), segundos=segundos, guion_propio=propio,
                                     formato_propio=d.get("formato", "vertical"), tono=str(d.get("tono", "")),
                                     publico=str(d.get("publico", "")), voz_nombre=str(d.get("voz_nombre", "")),
+                                    voice_id=str(d.get("voice_id", "")),
+                                    voz_elevenlabs_nombre=str(d.get("voz_elevenlabs_nombre", "")),
                                     velocidad_voz=float(d.get("velocidad_voz") or 1.0),
                                     reparto=[{"nombre": str(r.get("nombre", ""))[:40], "ficha": str(r.get("ficha", ""))[:600]}
                                              for r in d.get("reparto") or [] if isinstance(r, dict) and r.get("nombre")],
@@ -571,8 +587,23 @@ class Panel(BaseHTTPRequestHandler):
         if ruta == "/api/voz/elegir":
             produccion.elegir_voz(pid, str(self._cuerpo_json().get("voz", "")))
             return self._json({"ok": True})
+        if ruta == "/api/voz/seleccionar":
+            d = self._cuerpo_json()
+            res = produccion.seleccionar_voz(
+                pid,
+                str(d.get("proveedor") or "gemini"),
+                voice_id=str(d.get("voice_id") or ""),
+                voz_nombre=str(d.get("voz_nombre") or ""),
+            )
+            return self._json({"ok": True, **res})
         if ruta == "/api/voz":
-            produccion.rehacer_voz(pid, str(self._cuerpo_json().get("proveedor", "gemini")))
+            d = self._cuerpo_json()
+            produccion.rehacer_voz(
+                pid,
+                str(d.get("proveedor") or "gemini"),
+                voice_id=str(d.get("voice_id") or ""),
+                voz_nombre=str(d.get("voz_nombre") or ""),
+            )
             return self._json({"ok": True})
         if ruta == "/api/subtitulos":
             produccion.ajustar_subtitulos(pid, self._cuerpo_json())

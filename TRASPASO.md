@@ -87,4 +87,9 @@
   `/material/` (`is_relative_to(RAIZ_USUARIO)` y solo extensiones de audio/imagen/vídeo) y apertura de carpeta calculada
   en el servidor en `/api/carpeta/abrir`; además se asegura `config.PRODUCCIONES` en `visuales_api.generar_escenas`
   (commits `85c4a20` y `2ea420a`, 117 pruebas en verde).
+- 2026-10-17 · Antigravity (rama `antigravity`): catálogo oficial y selector de voces de ElevenLabs (`GET /api/voces/elevenlabs`
+  con caché en disco de 1 h, muestras gratuitas `preview_url`, selección persistida como `voice_id` en `POST /api/voz/seleccionar`
+  separada de la generación `POST /api/voz`, estimación de caracteres/créditos/USD y confirmación antes de consumir créditos)
+  + integración de Xiaomi MiMo (`XIAOMIMIMO_API_KEY`, proveedor gratis `mimo` con `mimo-v2.5-tts` y voces `Milo`, `Dean`, `Mia`,
+  `Chloe`, más reserva automática cuando Gemini TTS agota cuota; 119 pruebas en verde).
 

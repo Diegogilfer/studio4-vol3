@@ -108,10 +108,20 @@ document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && !$("aj
 // Escuchar una voz antes de elegirla: frase de presentación (la primera vez se graba; después, al instante).
 let botonSonando = null;
 const velocidadVoz = () => Number(document.querySelector('input[name="velocidad"]:checked')?.value || 1);
-function oirVoz(boton, voz) {
+function oirVoz(boton, voz, previewUrl = "") {
   const audio = $("oir-voz");
   if (botonSonando === boton && !audio.paused) { audio.pause(); return; }
   if (botonSonando) botonSonando.classList.remove("sonando", "cargando");
+  if (previewUrl) {
+    botonSonando = boton;
+    boton.classList.add("cargando");
+    audio.src = previewUrl;
+    audio.preservesPitch = true;
+    audio.defaultPlaybackRate = audio.playbackRate = velocidadVoz();
+    audio.play().then(() => { boton.classList.remove("cargando"); boton.classList.add("sonando"); })
+      .catch(() => { boton.classList.remove("cargando"); alertaError("No se pudo reproducir la muestra de ElevenLabs."); });
+    return;
+  }
   botonSonando = boton;
   boton.classList.add("cargando");
   audio.src = `/api/voz/oir?voz=${encodeURIComponent(voz)}`;
@@ -123,26 +133,121 @@ function oirVoz(boton, voz) {
 $("oir-voz").addEventListener("ended", () => botonSonando?.classList.remove("sonando"));
 $("oir-voz").addEventListener("pause", () => botonSonando?.classList.remove("sonando"));
 const botonOir = (voz) => `<button type="button" class="oir" data-oir="${esc(voz)}" title="Escuchar ${esc(voz)}"><svg><use href="#i-play"/></svg></button>`;
+const botonOirMuestra = (url, nombre) => url
+  ? `<button type="button" class="oir" data-oir-url="${esc(url)}" title="Escuchar muestra de ${esc(nombre)}"><svg><use href="#i-play"/></svg></button>`
+  : `<button type="button" class="oir sin-muestra" data-sin-muestra="${esc(nombre)}" title="Sin muestra disponible">Sin muestra</button>`;
 document.addEventListener("click", (ev) => {
+  const sinM = ev.target.closest("[data-sin-muestra]");
+  if (sinM) {
+    ev.preventDefault(); ev.stopPropagation();
+    alertaError(`«${sinM.dataset.sinMuestra}» no incluye muestra oficial en ElevenLabs (no se genera audio de pago al previsualizar).`);
+    return;
+  }
+  const bUrl = ev.target.closest("[data-oir-url]");
+  if (bUrl) {
+    ev.preventDefault(); ev.stopPropagation();
+    oirVoz(bUrl, "", bUrl.dataset.oirUrl);
+    return;
+  }
   const b = ev.target.closest("[data-oir]");
   if (!b) return;
   ev.preventDefault(); ev.stopPropagation();
   oirVoz(b, b.dataset.oir);
 }, true);
 
+// Catálogo de ElevenLabs (consultado al backend con caché, sin disparar TTS).
+let catalogoEl = null;
+let cargandoCatalogoEl = false;
+async function cargarCatalogoElevenLabs(forzar = false) {
+  if (cargandoCatalogoEl) return catalogoEl;
+  if (catalogoEl && !forzar) return catalogoEl;
+  cargandoCatalogoEl = true;
+  try {
+    catalogoEl = await api(`/api/voces/elevenlabs${forzar ? "?forzar=1" : ""}`);
+  } catch (e) {
+    catalogoEl = { ok: false, codigo_error: "catalogo", error: e.message || String(e), voces: [] };
+  } finally {
+    cargandoCatalogoEl = false;
+  }
+  return catalogoEl;
+}
+
+function tarjetaVozElevenLabs(v, actualId, attrSeleccion) {
+  const activo = v.voice_id === actualId;
+  const idiomaAcento = [v.idioma, v.acento].filter(Boolean).join(" · ");
+  const etiquetas = (v.etiquetas || []).map((t) => `<small class="el-tag">${esc(t)}</small>`).join("");
+  return `<label class="voz-op voz-el ${activo ? "si actual" : ""}" ${attrSeleccion}="${esc(v.voice_id)}" data-voz-nombre="${esc(v.nombre)}">
+    <div class="voz-el-cab"><b>${esc(v.nombre)}${activo ? " · seleccionada" : ""}</b><code class="el-id">${esc(v.voice_id)}</code></div>
+    ${idiomaAcento ? `<span class="el-idioma">${esc(idiomaAcento)}</span>` : ""}
+    ${v.descripcion ? `<span>${esc(v.descripcion)}</span>` : ""}
+    ${etiquetas ? `<div class="el-tags">${etiquetas}</div>` : ""}
+    <div class="voz-el-pie">${botonOirMuestra(v.preview_url, v.nombre)}</div>
+  </label>`;
+}
+
 // Asistente, paso 3: elegir la voz escuchándola
 let vozElegida = "";
-function pintarVocesAsistente(voces, porDefecto) {
+let voiceIdElegido = "";
+let vozNombreElevenLabs = "";
+let vozMimoElegida = "Milo";
+async function pintarVocesAsistente(voces, porDefecto) {
+  const prov = $("a-voz")?.value || "gemini";
   vozElegida = vozElegida || porDefecto;
-  $("a-voces").innerHTML = Object.entries(voces).map(([v, d]) => `
+  if (prov === "elevenlabs") {
+    $("a-voces").innerHTML = `<p class="meta">Consultando catálogo de voces de ElevenLabs…</p>`;
+    const cat = await cargarCatalogoElevenLabs(false);
+    voiceIdElegido = voiceIdElegido || cat?.por_defecto || estado?.opciones?.elevenlabs_por_defecto || "JBFqnCBsd6RMkjVDRZzb";
+    const elegidaObj = (cat?.voces || []).find((x) => x.voice_id === voiceIdElegido);
+    if (elegidaObj) vozNombreElevenLabs = elegidaObj.nombre;
+    const avisoCat = cat?.error ? `<p class="meta el-aviso">${esc(cat.error)}</p>` : "";
+    const infoCat = `<div class="fila el-barra"><span class="meta">Modelo: <b>${esc(cat?.modelo || "eleven_v3")}</b> · Créditos restantes: <b>${esc(String(cat?.creditos_restantes ?? "—"))}</b></span>
+      <button type="button" class="boton" data-recargar-el="asistente">Actualizar catálogo</button></div>`;
+    $("a-voces").innerHTML = infoCat + avisoCat + (cat?.voces || []).map((v) => tarjetaVozElevenLabs(v, voiceIdElegido, "data-voz-el")).join("");
+    pintarResumen();
+    return;
+  }
+  if (prov === "mimo") {
+    const vocesMimo = estado?.opciones?.voces_mimo || { Milo: "Narrador masculino claro y dinámico" };
+    vozMimoElegida = vozMimoElegida || estado?.opciones?.voz_mimo_por_defecto || "Milo";
+    $("a-voces").innerHTML = Object.entries(vocesMimo).map(([v, d]) => `
+      <label class="voz-op ${v === vozMimoElegida ? "si" : ""}" data-voz-mimo="${esc(v)}">
+        <b>${esc(v)}</b><span>${esc(d)}</span></label>`).join("");
+    return;
+  }
+  if (prov === "fal") {
+    $("a-voces").innerHTML = `<p class="meta">Voz ElevenLabs Multilingual v2 a través de fal.ai (~0,10 $ cada 1.000 caracteres).</p>`;
+    return;
+  }
+  $("a-voces").innerHTML = Object.entries(voces || estado?.opciones?.voces_gemini || {}).map(([v, d]) => `
     <label class="voz-op ${v === vozElegida ? "si" : ""}" data-voz="${esc(v)}">
       <b>${esc(v)}</b><span>${esc(d)}</span>${botonOir(v)}</label>`).join("");
 }
-$("a-voces").addEventListener("click", (ev) => {
+$("a-voces").addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-oir],[data-oir-url],[data-sin-muestra]")) return;
+  const rec = ev.target.closest("[data-recargar-el]");
+  if (rec) {
+    await cargarCatalogoElevenLabs(true);
+    return pintarVocesAsistente(estado.opciones.voces_gemini, estado.opciones.voz_por_defecto);
+  }
+  const el = ev.target.closest("[data-voz-el]");
+  if (el) {
+    voiceIdElegido = el.dataset.vozEl;
+    vozNombreElevenLabs = el.dataset.vozNombre || "";
+    await pintarVocesAsistente(estado.opciones.voces_gemini, estado.opciones.voz_por_defecto);
+    pintarResumen();
+    return;
+  }
+  const mimo = ev.target.closest("[data-voz-mimo]");
+  if (mimo) {
+    vozMimoElegida = mimo.dataset.vozMimo;
+    await pintarVocesAsistente(estado.opciones.voces_gemini, estado.opciones.voz_por_defecto);
+    pintarResumen();
+    return;
+  }
   const l = ev.target.closest("[data-voz]");
-  if (!l || ev.target.closest("[data-oir]")) return;
+  if (!l) return;
   vozElegida = l.dataset.voz;
-  pintarVocesAsistente(estado.opciones.voces_gemini, estado.opciones.voz_por_defecto);
+  await pintarVocesAsistente(estado.opciones.voces_gemini, estado.opciones.voz_por_defecto);
   pintarResumen();
 });
 
@@ -269,7 +374,12 @@ function pintarResumen() {
     : [$("a-corto").checked && `corto de ${$("a-corto-s").value} s en ${Math.round($("a-corto-s").value / CLIP_S)} clips (Shorts y Reels)`,
        $("a-largo").checked && `largo de ${$("a-largo-m").value.replace(".", ",")} min (YouTube)`].filter(Boolean).join(" y ");
   const vel = velocidadVoz() === 1 ? "" : ` a ${String(velocidadVoz()).replace(".", ",")}×`;
-  const voz = ($("a-voz").value === "gemini" && vozElegida ? `voz ${vozElegida}` : $("a-voz").selectedOptions[0]?.textContent || "") + vel;
+  const provVoz = $("a-voz").value;
+  const etiquetaVoz = provVoz === "gemini" && vozElegida ? `voz ${vozElegida}`
+    : provVoz === "elevenlabs" && (vozNombreElevenLabs || voiceIdElegido) ? `ElevenLabs · ${vozNombreElevenLabs || voiceIdElegido}`
+    : provVoz === "mimo" && vozMimoElegida ? `Xiaomi MiMo · ${vozMimoElegida}`
+    : $("a-voz").selectedOptions[0]?.textContent || "";
+  const voz = etiquetaVoz + vel;
   const nRefs = refs.items.length + refs.enlaces.length + ($("ref-datos").value.trim() ? 1 : 0);
   const conRefs = nRefs ? `${nRefs} ${nRefs === 1 ? "referencia" : "referencias"}` : "";
   const palabras = $("a-guion").value.trim().split(/\s+/).filter(Boolean).length;
@@ -278,7 +388,11 @@ function pintarResumen() {
     : [formatos, elegido("publico") === "todos" ? "para todos" : `para ${elegido("publico")}`, ESTILOS[estiloElegido][0], voz, conRefs];
   $("a-resumen").innerHTML = partes.filter(Boolean).map((x) => `<b>${esc(x)}</b>`).join(" · ");
 }
-["a-voz", "a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
+$("a-voz").addEventListener("change", () => {
+  pintarVocesAsistente(estado?.opciones?.voces_gemini || {}, estado?.opciones?.voz_por_defecto || "Charon");
+  pintarResumen();
+});
+["a-corto", "a-largo", "a-corto-s", "a-largo-m"].forEach((id) => $(id).addEventListener("change", pintarResumen));
 $("a-guion").addEventListener("input", pintarResumen);
 // Biblioteca de guiones: pegar paquetes (escritos fuera) y convertirlos en producciones con un clic.
 let guionesBib = [];
@@ -463,12 +577,16 @@ $("a-crear").addEventListener("click", async () => {
   const falta = faltaParaCrear();
   if (falta) return alertaError(falta);
   const propio = modo() === "propio";
+  const provVoz = $("a-voz").value;
   const datos = {
-    idea: $("a-idea").value, guion_propio: propio ? $("a-guion").value : "", estilo: estiloElegido, voz: $("a-voz").value,
+    idea: $("a-idea").value, guion_propio: propio ? $("a-guion").value : "", estilo: estiloElegido, voz: provVoz,
     versiones: ["corto", "largo"].filter((v) => $(`a-${v}`).checked),
     segundos: { corto: Number($("a-corto-s").value), largo: Math.round(Number($("a-largo-m").value) * 60) },
     formato: document.querySelector('input[name="formato"]:checked').value,
-    publico: elegido("publico"), voz_nombre: vozElegida, velocidad_voz: velocidadVoz(),
+    publico: elegido("publico"), voz_nombre: vozElegida,
+    voice_id: provVoz === "elevenlabs" ? voiceIdElegido : provVoz === "mimo" ? vozMimoElegida : "",
+    voz_elevenlabs_nombre: provVoz === "elevenlabs" ? vozNombreElevenLabs : "",
+    velocidad_voz: velocidadVoz(),
     referencias: { items: refs.items.map(({ id, tipo, nombre }) => ({ id, tipo, nombre })), enlaces: refs.enlaces, datos: $("ref-datos").value },
     reparto: propio ? repartoDelArchivo : [],
   };
@@ -1100,7 +1218,7 @@ $("abrir-flow").addEventListener("click", () => {
     `popup,left=${screen.availLeft + ancho},top=${screen.availTop},width=${ancho},height=${screen.availHeight}`);
 });
 
-function pintarVoz({ voz, proveedor, opciones }) {
+async function pintarVoz({ voz, proveedor, opciones, voice_id = "", voz_el_nombre = "", estimacion = null }) {
   llenarSelect($("v-proveedor"), opciones, proveedor);
   const audio = $("v-audio");
   if (voz) {
@@ -1109,7 +1227,71 @@ function pintarVoz({ voz, proveedor, opciones }) {
   } else {
     audio.removeAttribute("src"); audio.dataset.src = "";
   }
+  const est = estimacion || estado?.produccion?.estimacion_voz;
+  if ($("v-estimacion")) {
+    $("v-estimacion").textContent = est?.resumen || "";
+  }
+  if ($("v-bloque-gemini")) $("v-bloque-gemini").hidden = proveedor !== "gemini";
+  const cajaEl = $("v-elevenlabs");
+  if (!cajaEl) return;
+  if (proveedor === "elevenlabs") {
+    cajaEl.hidden = false;
+    const cat = await cargarCatalogoElevenLabs(false);
+    const idActual = voice_id || cat?.por_defecto || estado?.opciones?.elevenlabs_por_defecto || "JBFqnCBsd6RMkjVDRZzb";
+    const avisoCat = cat?.error ? `<p class="meta el-aviso">${esc(cat.error)}</p>` : "";
+    const barra = `<div class="fila el-barra">
+      <span class="meta">Voz seleccionada: <b>${esc(voz_el_nombre || idActual)}</b> (<code class="el-id">${esc(idActual)}</code>) · Modelo: <b>${esc(cat?.modelo || "eleven_v3")}</b></span>
+      <button type="button" class="boton" data-recargar-el="render">Actualizar catálogo</button></div>`;
+    cajaEl.innerHTML = barra + avisoCat + `<div class="voces-lista">${(cat?.voces || []).map((v) => tarjetaVozElevenLabs(v, idActual, "data-sel-el")).join("")}</div>`;
+  } else if (proveedor === "mimo") {
+    cajaEl.hidden = false;
+    const vocesMimo = estado?.opciones?.voces_mimo || { Milo: "Narrador masculino claro y dinámico" };
+    const idActual = voice_id || estado?.opciones?.voz_mimo_por_defecto || "Milo";
+    cajaEl.innerHTML = `<div class="voces-lista">${Object.entries(vocesMimo).map(([v, d]) => `
+      <label class="voz-op ${v === idActual ? "si actual" : ""}" data-sel-mimo="${esc(v)}">
+        <b>${esc(v)}${v === idActual ? " · seleccionada" : ""}</b><span>${esc(d)}</span></label>`).join("")}</div>`;
+  } else {
+    cajaEl.hidden = true;
+    cajaEl.innerHTML = "";
+  }
 }
+$("v-proveedor").addEventListener("change", async () => {
+  const prov = $("v-proveedor").value;
+  const p = estado?.produccion;
+  const vid = prov === "elevenlabs"
+    ? (p?.voice_id || voiceIdElegido || estado?.opciones?.elevenlabs_por_defecto || "JBFqnCBsd6RMkjVDRZzb")
+    : prov === "mimo" ? (p?.voice_id in (estado?.opciones?.voces_mimo || {}) ? p.voice_id : vozMimoElegida || "Milo") : "";
+  try {
+    await api("/api/voz/seleccionar", { proveedor: prov, voice_id: vid, voz_nombre: prov === "elevenlabs" ? (p?.voz_elevenlabs_nombre || vozNombreElevenLabs) : (p?.voz_nombre || "") });
+    firmas.voz = "";
+    await refrescar();
+  } catch (e) { aviso(e); }
+});
+$("v-elevenlabs")?.addEventListener("click", async (ev) => {
+  if (ev.target.closest("[data-oir],[data-oir-url],[data-sin-muestra]")) return;
+  if (ev.target.closest("[data-recargar-el]")) {
+    await cargarCatalogoElevenLabs(true);
+    firmas.voz = "";
+    return refrescar();
+  }
+  const el = ev.target.closest("[data-sel-el]");
+  if (el) {
+    try {
+      await api("/api/voz/seleccionar", { proveedor: "elevenlabs", voice_id: el.dataset.selEl, voz_nombre: el.dataset.vozNombre || "" });
+      firmas.voz = "";
+      await refrescar();
+    } catch (e) { aviso(e); }
+    return;
+  }
+  const mimo = ev.target.closest("[data-sel-mimo]");
+  if (mimo) {
+    try {
+      await api("/api/voz/seleccionar", { proveedor: "mimo", voice_id: mimo.dataset.selMimo, voz_nombre: mimo.dataset.selMimo });
+      firmas.voz = "";
+      await refrescar();
+    } catch (e) { aviso(e); }
+  }
+});
 // Probar voces: hasta 3 marcadas → muestras → «Usar esta voz».
 const vocesMarcadas = new Set();
 function pintarVoces({ voces, actual, muestras }) {
@@ -1146,7 +1328,23 @@ $("v-muestras").addEventListener("click", async (ev) => {
 });
 
 $("v-rehacer").addEventListener("click", async () => {
-  try { await api("/api/voz", { proveedor: $("v-proveedor").value }); await refrescar(); } catch (e) { aviso(e); }
+  const prov = $("v-proveedor").value;
+  const p = estado?.produccion;
+  const vid = prov === "elevenlabs"
+    ? (p?.voice_id || voiceIdElegido || estado?.opciones?.elevenlabs_por_defecto || "JBFqnCBsd6RMkjVDRZzb")
+    : prov === "mimo" ? (p?.voice_id || vozMimoElegida || "Milo") : "";
+  const est = p?.estimacion_voz;
+  if (prov === "elevenlabs" || prov === "fal") {
+    const extracto = (p?.escenas || []).slice(0, 2).map((e) => e.texto_voz).join(" ").slice(0, 140);
+    const detalleCosto = est?.resumen || "El costo exacto depende de los caracteres del guion.";
+    if (!confirm(`Vas a generar la narración definitiva con ${prov === "elevenlabs" ? `ElevenLabs (voice_id: ${vid})` : "fal.ai"}.\n\n`
+      + (extracto ? `Texto: «${extracto}…»\n` : "")
+      + `Estimación: ${detalleCosto}\n\n¿Confirmas la generación?`)) return;
+  }
+  try {
+    await api("/api/voz", { proveedor: prov, voice_id: vid, voz_nombre: prov === "elevenlabs" ? (p?.voz_elevenlabs_nombre || "") : (p?.voz_nombre || "") });
+    await refrescar();
+  } catch (e) { aviso(e); }
 });
 // Colores de resalte de cada paleta (los mismos que usa el render, en CSS).
 const COLOR_PALETA = { amarillo: "#ffe500", cian: "#00e1ff", rosa: "#ff20b0", verde: "#7fff00", blanco: "#ffffff" };
@@ -1895,7 +2093,8 @@ async function refrescar() {
   siCambia("fichas", p.fichas || [], pintarFichas);
   siCambia("flow-todo", { id: p.id, c: p.carpeta_clips, e: p.escenas.map((e) => e.elegida), v: !!p.voz }, () => pintarFlowTodo(p));
   siCambia("todo-api", { id: p.id, e: p.escenas.map((e) => [e.elegida, e.tipo_clip, e.segundos]), f: (p.fichas || []).length }, pintarTodoApi);
-  siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces }, pintarVoz);
+  siCambia("voz", { id: p.id, voz: p.voz, proveedor: p.proveedor_voz, opciones: o.voces,
+    voice_id: p.voice_id, voz_el_nombre: p.voz_elevenlabs_nombre, estimacion: p.estimacion_voz }, pintarVoz);
   siCambia("voces", { id: p.id, voces: o.voces_gemini, actual: p.voz_nombre || o.voz_por_defecto, muestras: p.muestras_voz,
     marcadas: [...vocesMarcadas] }, (x) => pintarVoces(x));
   siCambia("subtitulos", { id: p.id, subtitulos: p.subtitulos, paletas: o.paletas,

@@ -40,7 +40,7 @@ def cargar(pid: str) -> dict[str, Any]:
     # Producciones de antes del paso «Guion»: si ya tenían escenas, su guion cuenta como aprobado.
     p.setdefault("guion_aprobado", bool(p.get("escenas")))
     for campo, vacio in (("version", ""), ("familia", ""), ("investigacion", None), ("ganchos", []),
-                         ("avisos", []), ("autor_guion", "")):
+                         ("avisos", []), ("autor_guion", ""), ("voice_id", ""), ("voz_elevenlabs_nombre", "")):
         p.setdefault(campo, vacio)
     p.setdefault("canal", canales.listar()[0]["id"])   # las de antes de los canales son del primero
     if p.get("escenas") and any("segundos" not in e for e in p["escenas"]):   # de antes de las duraciones por escena
@@ -251,13 +251,16 @@ def _nueva(pid: str, **campos: Any) -> dict[str, Any]:
 def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
           segundos: dict[str, int] | None = None, guion_propio: str = "", formato_propio: str = "vertical",
           tono: str = "", publico: str = "", voz_nombre: str = "", refs: dict[str, Any] | None = None,
-          reparto: list[dict[str, str]] | None = None, velocidad_voz: float = 1.0) -> list[str]:
+          reparto: list[dict[str, str]] | None = None, velocidad_voz: float = 1.0,
+          voice_id: str = "", voz_elevenlabs_nombre: str = "") -> list[str]:
     """Desde una idea: una producción por versión (corto y/o largo), investigadas y escritas juntas.
     Con tu guion: una sola producción, con tu texto tal cual, lista para aprobar."""
     if proveedor_voz not in voz.PROVEEDORES:
         raise ValueError(f"Voz desconocida: {proveedor_voz}")
     sello = time.strftime("%Y%m%d-%H%M%S")
     voz_nombre = voz_nombre if voz_nombre in config.VOCES_GEMINI else config.VOZ_GEMINI
+    voice_id = (voice_id or "").strip()
+    voz_elevenlabs_nombre = (voz_elevenlabs_nombre or "").strip()
     velocidad_voz = min(config.VELOCIDADES, key=lambda v: abs(v - float(velocidad_voz or 1.0)))
     if guion_propio.strip():
         if formato_propio not in config.FORMATOS:
@@ -269,7 +272,8 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
             pid = f"{sello}-{n}-{_slug(idea or texto[:40])}"
             n += 1
         _nueva(pid, tema=idea.strip() or texto[:80], formato=formato_propio, estilo=estilo, proveedor_voz=proveedor_voz,
-               voz_nombre=voz_nombre, velocidad_voz=velocidad_voz,
+               voz_nombre=voz_nombre, voice_id=voice_id, voz_elevenlabs_nombre=voz_elevenlabs_nombre,
+               velocidad_voz=velocidad_voz,
                version="propio", guion=texto, autor_guion="Tú", reparto=list(reparto or [])[:6],
                segundos=int(len(texto.split()) / guion.PALABRAS_POR_SEGUNDO), tono=tono.strip()[:80])
         _guardar_referencias([pid], refs)
@@ -290,7 +294,7 @@ def crear(idea: str, versiones: list[str], estilo: str, proveedor_voz: str,
         pid = f"{sello}-{v}-{_slug(idea)}"
         _nueva(pid, tema=idea.strip(), formato=config.VERSIONES[v]["formato"], version=v, familia=sello,
                estilo=estilo, proveedor_voz=proveedor_voz, segundos=segundos[v], estado="investigando", voz_nombre=voz_nombre,
-               velocidad_voz=velocidad_voz,
+               voice_id=voice_id, voz_elevenlabs_nombre=voz_elevenlabs_nombre, velocidad_voz=velocidad_voz,
                tono=tono.strip()[:80], publico=publico.strip()[:80])
         pids.append(pid)
     _guardar_referencias(pids, refs)
@@ -661,10 +665,12 @@ def _generar_voz(pid: str) -> None:
     modelo = aprender.voz_modelo(p["canal"])                    # y el vídeo modelo, si el autor puso uno
     estilo_voz = ". ".join(x for x in (config.ESTILO_VOZ if arquetipo or modelo else "",
                                        f"Interpreta a este narrador: {arquetipo}" if arquetipo else "", modelo) if x)
+    vid = (p.get("voice_id") or "").strip()
+    extra = {"voice_id": vid} if vid else {}
     try:
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
                               direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz,
-                              velocidad=float(p.get("velocidad_voz") or 1.0))
+                              velocidad=float(p.get("velocidad_voz") or 1.0), **extra)
     except RuntimeError as e:
         # Cupo diario de Gemini TTS agotado (o ElevenLabs sin créditos): se prueba con la otra voz si existe.
         otra = voz.reserva(p["proveedor_voz"])
@@ -673,7 +679,7 @@ def _generar_voz(pid: str) -> None:
         logger.warning("Voz %s falló (%s); probando %s", p["proveedor_voz"], e, otra)
         _avisar(pid, f"{voz.PROVEEDORES[p['proveedor_voz']]} falló; uso {voz.PROVEEDORES[otra]}", 75)
         tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones,
-                              voz_nombre=p.get("voz_nombre"), velocidad=float(p.get("velocidad_voz") or 1.0))
+                              voz_nombre=p.get("voz_nombre"), velocidad=float(p.get("velocidad_voz") or 1.0), **extra)
     def con_voz(q):
         q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")})
         director.poner_duraciones(q["escenas"], tiempos["escenas"], q.get("biblia") or {}, q.get("estilo_en", ""),
@@ -712,10 +718,51 @@ def elegir_voz(pid: str, voz_nombre: str) -> None:
         _en_fondo(pid, "Voz", lambda: _generar_voz(pid))
 
 
-def rehacer_voz(pid: str, proveedor: str) -> None:
+def seleccionar_voz(pid: str, proveedor: str, voice_id: str = "", voz_nombre: str = "") -> dict[str, Any]:
+    """Guarda en el proyecto el proveedor y el voice_id seleccionado SIN ejecutar la generación de texto a voz."""
     if proveedor not in voz.PROVEEDORES:
         raise ValueError(f"Voz desconocida: {proveedor}")
-    modificar(pid, lambda p: p.update(proveedor_voz=proveedor))
+    vid = (voice_id or "").strip()
+    vnom = (voz_nombre or "").strip()
+    if proveedor == "elevenlabs" and not vid:
+        raise ValueError("Selecciona una voz de ElevenLabs (falta voice_id).")
+
+    def aplicar(p: dict[str, Any]) -> None:
+        p["proveedor_voz"] = proveedor
+        if proveedor == "elevenlabs":
+            p["voice_id"] = vid
+            if vnom:
+                p["voz_elevenlabs_nombre"] = vnom
+        elif proveedor == "mimo":
+            p["voice_id"] = vid if vid in voz.VOCES_MIMO else (p.get("voice_id") if p.get("voice_id") in voz.VOCES_MIMO else voz.VOZ_MIMO_POR_DEFECTO)
+        elif proveedor == "gemini" and vnom in config.VOCES_GEMINI:
+            p["voz_nombre"] = vnom
+    p = modificar(pid, aplicar)
+    segmentos = [e["texto_voz"] for e in p.get("escenas", [])]
+    return {
+        "proveedor_voz": p["proveedor_voz"],
+        "voice_id": p.get("voice_id", ""),
+        "voz_nombre": p.get("voz_nombre", ""),
+        "voz_elevenlabs_nombre": p.get("voz_elevenlabs_nombre", ""),
+        "estimacion": voz.estimar_voz(segmentos, p["proveedor_voz"], p.get("voice_id", "")),
+    }
+
+
+def rehacer_voz(pid: str, proveedor: str, voice_id: str = "", voz_nombre: str = "") -> None:
+    if proveedor not in voz.PROVEEDORES:
+        raise ValueError(f"Voz desconocida: {proveedor}")
+    vid = (voice_id or "").strip()
+    vnom = (voz_nombre or "").strip()
+
+    def aplicar(p: dict[str, Any]) -> None:
+        p["proveedor_voz"] = proveedor
+        if vid:
+            p["voice_id"] = vid
+        if proveedor == "elevenlabs" and vnom:
+            p["voz_elevenlabs_nombre"] = vnom
+        elif proveedor == "gemini" and vnom in config.VOCES_GEMINI:
+            p["voz_nombre"] = vnom
+    modificar(pid, aplicar)
     _en_fondo(pid, "Voz", lambda: _generar_voz(pid))
 
 

@@ -32,6 +32,7 @@ def aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "YOUTUBE_API_KEY", "")
     monkeypatch.setattr(config, "FAL_KEY", "")   # nunca se gasta saldo de fal en una prueba
     monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "")
+    monkeypatch.setattr(config, "XIAOMIMIMO_API_KEY", "")
     monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "")
     from studio4 import tarjetas   # las pruebas no abren el navegador: el render sale sin carátula
 
@@ -1793,5 +1794,155 @@ def test_panel_muestra_material_en_inicio_sin_retrasar_precarga():
     assert '["usado", "Lo más usado"]' in js and "let visiblesMaterial = 12;" in js
     assert "data-sin-precarga" in js and '!i.dataset.sinPrecarga' in js
     assert '<audio controls preload="none"' in js and '<video src="${src}" controls preload="none">' in js
+
+
+def test_catalogo_seleccion_y_generacion_voces_elevenlabs(servidor, monkeypatch):
+    """El catálogo se abre sin generar TTS, guarda el voice_id sin locutar y la generación final usa ese voice_id."""
+    import base64
+    import time
+    pedir, _ = servidor
+    _produccion("p-el", escenas=2)
+
+    # 1. Sin clave, el catálogo informa el motivo y entrega las voces predeterminadas sin llamar a TTS.
+    tts_llamadas = []
+    elevenlabs_real = voz._elevenlabs
+    monkeypatch.setattr(voz, "_elevenlabs", lambda *a, **k: tts_llamadas.append((a, k)) or {})
+    estado, cuerpo = pedir("GET", "/api/voces/elevenlabs")
+    assert estado == 200
+    d0 = json.loads(cuerpo)
+    assert not d0["ok"] and d0["codigo_error"] == "sin_clave" and d0["voces"]
+    assert not tts_llamadas
+
+    # 2. Con clave, consulta /v1/voices, normaliza campos, guarda en caché y respeta preview_url.
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "xi-clave-prueba")
+    consultas_cat = []
+
+    class RespCat:
+        status_code = 200
+        text = "ok"
+
+        def json(self):
+            return {
+                "voices": [
+                    {
+                        "voice_id": "voz_cuenta_123",
+                        "name": "Mateo Documental",
+                        "category": "cloned",
+                        "description": "Narrador en español neutro",
+                        "labels": {"language": "es", "accent": "latino", "gender": "male", "use_case": "narration"},
+                        "preview_url": "https://storage.googleapis.com/eleven-public/muestra.mp3",
+                    },
+                    {
+                        "voice_id": "voz_sin_muestra_456",
+                        "name": "Voz Sin Muestra",
+                        "category": "generated",
+                        "description": "Sin audio de muestra",
+                        "labels": {"language": "es"},
+                        "preview_url": None,
+                    },
+                ]
+            }
+
+    def get_mock(url, headers=None, timeout=15):
+        consultas_cat.append((url, headers))
+        return RespCat()
+
+    monkeypatch.setattr(voz.requests, "get", get_mock)
+    estado, cuerpo = pedir("GET", "/api/voces/elevenlabs")
+    assert estado == 200
+    cat = json.loads(cuerpo)
+    assert cat["ok"] and not cat["cache"] and len(consultas_cat) == 1
+    mateo = next(v for v in cat["voces"] if v["voice_id"] == "voz_cuenta_123")
+    sin_m = next(v for v in cat["voces"] if v["voice_id"] == "voz_sin_muestra_456")
+    assert mateo["nombre"] == "Mateo Documental" and mateo["idioma"] == "es" and mateo["acento"] == "latino"
+    assert mateo["preview_url"].startswith("https://") and sin_m["preview_url"] == ""
+    assert not tts_llamadas   # abrir el catálogo nunca ejecuta TTS
+
+    # Segunda consulta usa la caché en disco sin volver a pedir a ElevenLabs.
+    cat2 = json.loads(pedir("GET", "/api/voces/elevenlabs")[1])
+    assert cat2["ok"] and cat2["cache"] and len(consultas_cat) == 1
+
+    # 3. Errores de autenticación (401) y cuota (429) en el catálogo se informan con claridad.
+    class RespErr:
+        def __init__(self, code, txt):
+            self.status_code = code
+            self.text = txt
+
+    monkeypatch.setattr(voz.requests, "get", lambda *a, **k: RespErr(401, "invalid_api_key"))
+    err_auth = json.loads(pedir("GET", "/api/voces/elevenlabs?forzar=1")[1])
+    assert not err_auth["ok"] and err_auth["codigo_error"] == "autenticacion"
+    monkeypatch.setattr(voz.requests, "get", lambda *a, **k: RespErr(429, "quota_exceeded"))
+    err_cuota = json.loads(pedir("GET", "/api/voces/elevenlabs?forzar=1")[1])
+    assert not err_cuota["ok"] and err_cuota["codigo_error"] == "cuota"
+
+    # 4. Seleccionar una voz guarda el voice_id en el proyecto, devuelve el costo estimado y NO ejecuta TTS.
+    cab = {"Content-Type": "application/json"}
+    est_sel, c_sel = pedir("POST", "/api/voz/seleccionar", cab, json.dumps({
+        "proveedor": "elevenlabs",
+        "voice_id": "voz_cuenta_123",
+        "voz_nombre": "Mateo Documental",
+    }).encode())
+    assert est_sel == 200
+    r_sel = json.loads(c_sel)
+    assert r_sel["ok"] and r_sel["voice_id"] == "voz_cuenta_123"
+    assert r_sel["estimacion"]["estimable"] and r_sel["estimacion"]["creditos"] == len("frase 1 frase 2")
+    assert not tts_llamadas
+
+    # Persiste al recargar el proyecto o pedir /api/estado.
+    cargado = produccion.cargar("p-el")
+    assert cargado["proveedor_voz"] == "elevenlabs" and cargado["voice_id"] == "voz_cuenta_123"
+    assert cargado["voz_elevenlabs_nombre"] == "Mateo Documental"
+
+    # 5. La generación definitiva (POST /api/voz) envía exactamente el voice_id seleccionado al endpoint TTS.
+    urls_post = []
+
+    class RespTts:
+        status_code = 200
+        text = "ok"
+
+        def json(self):
+            return {"audio_base64": base64.b64encode(b"mp3-falso").decode(), "alignment": {}}
+
+    def post_tts(url, params=None, headers=None, json=None, timeout=180):
+        urls_post.append((url, headers, json))
+        return RespTts()
+
+    monkeypatch.setattr(voz, "_elevenlabs", elevenlabs_real)
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "xi-clave-prueba")
+    monkeypatch.setattr(voz.requests, "post", post_tts)
+    monkeypatch.setattr(voz.medios, "ffmpeg", lambda *a: Path(a[-1]).write_bytes(b"RIFF wav"))
+    monkeypatch.setattr(voz.medios, "duracion", lambda _p: 3.0)
+    monkeypatch.setattr(voz.medios, "silencios", lambda _p: [(1.4, 1.6)])
+
+    voz.locutar(["frase 1", "frase 2"], produccion.carpeta("p-el") / "voz.wav", "elevenlabs",
+                produccion="p-el", voice_id=produccion.cargar("p-el")["voice_id"])
+    assert urls_post and "/v1/text-to-speech/voz_cuenta_123/with-timestamps" in urls_post[0][0]
+    assert urls_post[0][1]["xi-api-key"] == "xi-clave-prueba"
+
+
+def test_xiaomi_mimo_tts_y_reserva(aislado, monkeypatch):
+    """Xiaomi MiMo TTS (mimo-v2.5-tts) genera audio WAV usando rol assistant y sirve de reserva gratuita."""
+    import base64
+    monkeypatch.setattr(config, "XIAOMIMIMO_API_KEY", "sk-mimo-prueba")
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "")
+    assert voz.reserva("gemini") == "mimo"
+    enviados = []
+
+    class RespMimo:
+        status_code = 200
+        text = "ok"
+
+        def json(self):
+            return {"choices": [{"message": {"role": "assistant", "audio": {"data": base64.b64encode(b"RIFF wav").decode()}}}]}
+
+    monkeypatch.setattr(voz.requests, "post", lambda url, headers=None, json=None, timeout=180: enviados.append((url, json)) or RespMimo())
+    monkeypatch.setattr(voz.medios, "ffmpeg", lambda *a: Path(a[-1]).write_bytes(b"RIFF wav"))
+    monkeypatch.setattr(voz.medios, "duracion", lambda _p: 2.5)
+    monkeypatch.setattr(voz.medios, "silencios", lambda _p: [])
+    res = voz.locutar(["Hola desde Xiaomi MiMo."], aislado / "mimo.wav", "mimo", voice_id="Milo")
+    assert res["proveedor"] == "mimo" and res["voice_id"] == "Milo"
+    assert enviados[0][1]["model"] == "mimo-v2.5-tts"
+    assert enviados[0][1]["messages"][-1] == {"role": "assistant", "content": "Hola desde Xiaomi MiMo."}
+    assert enviados[0][1]["audio"] == {"voice": "Milo", "format": "wav"}
 
 

@@ -406,7 +406,9 @@
           <p class="meta">Voz</p>
           <audio id="v-audio" controls preload="none"></audio>
           <div class="fila"><select id="v-proveedor" class="campo"></select><button id="v-rehacer" class="boton">Rehacer voz</button></div>
-          <div class="probar-voces">
+          <p class="meta v-estimacion" id="v-estimacion"></p>
+          <div class="catalogo-elevenlabs" id="v-elevenlabs" hidden></div>
+          <div class="probar-voces" id="v-bloque-gemini">
             <div class="voces-lista" id="v-lista"></div>
             <div class="fila"><button class="boton" id="v-probar" disabled>Escuchar muestras</button><span class="meta" id="v-cuenta"></span></div>
             <div class="muestras-voz" id="v-muestras"></div>
