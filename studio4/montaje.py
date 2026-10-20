@@ -15,6 +15,7 @@ rejilla de las transiciones, los paneles de texto y la miniatura.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -36,6 +37,10 @@ PALABRAS_POR_SEGUNDO = 2.5
 ESTILO_VOZ = ("Narra en español latino neutro, con acento latinoamericano (nunca de España), como un youtuber de "
               "videojuegos: cercano, con energía y ritmo ágil, dando datos con seguridad")
 _lock = threading.RLock()
+# Un trabajo pesado a la vez (render, voz, descargas en alta): el PC no tiene tarjeta gráfica y dos montajes a la
+# par se ahogan. Los demás esperan su turno y el panel lo dice.
+_turno = threading.Lock()
+PESADOS = {"Previa", "Vídeo final", "Short"}
 
 
 # --- Guardado -----------------------------------------------------------------------------------------------------
@@ -337,13 +342,47 @@ def _en_fondo(mid: str, nombre: str, fn: Callable[[], None]) -> None:
 
     def correr():
         try:
-            fn()
+            if nombre in PESADOS:
+                if not _turno.acquire(blocking=False):
+                    _avisar(mid, "En cola: espera a que termine el otro vídeo", 0)
+                    _turno.acquire()
+                try:
+                    fn()
+                finally:
+                    _turno.release()
+            else:
+                fn()
         except Exception as e:  # noqa: BLE001 - el motivo se ve en el panel
             logger.exception("%s falló", nombre)
             modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error=f"{nombre}: {str(e)[:300]}"))
         else:
             modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100, fase=f"{nombre}: listo"))
     threading.Thread(target=correr, name=f"montaje-{nombre}", daemon=True).start()
+
+
+def _tamano(ruta: Path) -> int:
+    return sum(f.stat().st_size for f in ruta.rglob("*") if f.is_file()) if ruta.exists() else 0
+
+
+def espacio() -> dict[str, Any]:
+    """Cuánto ocupa cada cosa y cuánto se puede liberar sin perder nada que se vea en el panel."""
+    temporales = sum(_tamano(d) for d in raiz().glob("*/render_previa")) + sum(_tamano(d) for d in raiz().glob("*/render_miniatura")) \
+        + sum(f.stat().st_size for d in raiz().glob("*/render") for f in d.glob("*") if f.is_file() and f.name not in ("cuerpo.mp4", "subs.ass"))
+    return {"montajes": _tamano(raiz()), "banco": _tamano(extractor.CACHE), "papelera": _tamano(config.PRODUCCIONES / "_papelera"),
+            "liberable": temporales}
+
+
+def liberar() -> int:
+    """Borra solo lo temporal de los renders (trozos ya unidos). El vídeo final, la previa, el Short, la miniatura,
+    la voz y lo necesario para rehacer el Short se quedan. Devuelve los bytes liberados."""
+    antes = espacio()["liberable"]
+    for d in list(raiz().glob("*/render_previa")) + list(raiz().glob("*/render_miniatura")):
+        shutil.rmtree(d, ignore_errors=True)
+    for d in raiz().glob("*/render"):
+        for f in d.glob("*"):
+            if f.is_file() and f.name not in ("cuerpo.mp4", "subs.ass"):
+                f.unlink(missing_ok=True)
+    return antes
 
 
 def recuperar_colgados() -> None:
@@ -405,20 +444,27 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     shutil.rmtree(trabajo, ignore_errors=True)
     trabajo.mkdir(parents=True)
     if final:
-        avisar("Grabando la voz", 5)
         segmentos = [f["texto"] for f in p["frases"]]
         wav = base / "voz.wav"
-        t = voz.locutar(segmentos, wav, "gemini", produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ)
-        tiempos = [(e["ini"] + ENTRADA, e["fin"] + ENTRADA) for e in t["escenas"]]
-        palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in t["palabras"]]
-        modificar(mid, lambda q: q.update(voz={"archivo": "voz.wav", "duracion": t["duracion"], "palabras": palabras,
-                                               "tiempos": tiempos}))
+        firma_voz = hashlib.sha1(json.dumps([segmentos, p["voz_nombre"], ESTILO_VOZ]).encode("utf-8")).hexdigest()
+        previa_voz = p.get("voz") or {}
+        if previa_voz.get("firma") == firma_voz and wav.exists():   # mismo texto y misma voz: no se regraba
+            avisar("Voz ya grabada (mismo guion)", 10)
+            tiempos, palabras = [tuple(x) for x in previa_voz["tiempos"]], previa_voz["palabras"]
+        else:
+            avisar("Grabando la voz", 5)
+            t = voz.locutar(segmentos, wav, "gemini", produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ)
+            tiempos = [(e["ini"] + ENTRADA, e["fin"] + ENTRADA) for e in t["escenas"]]
+            palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in t["palabras"]]
+            modificar(mid, lambda q: q.update(voz={"archivo": "voz.wav", "duracion": t["duracion"], "palabras": palabras,
+                                                   "tiempos": tiempos, "firma": firma_voz}))
     else:
         tiempos = _tiempos_estimados(p)
     # cada frase dura desde su inicio hasta el inicio de la siguiente (sin huecos); la primera empieza en 0
     tramos = [(0.0 if k == 0 else a, tiempos[k + 1][0] if k + 1 < len(tiempos) else b + 1.2) for k, (a, b) in enumerate(tiempos)]
     piezas: list[Path] = []
     fx_escenas: list[dict[str, Any]] = []
+    usados: list[dict[str, Any]] = []
     fuentes_ok = {fid: fuente(fid) for fid in p["fuentes"]}
     colores = {fid: list(animacion.COLORES.values())[k % len(animacion.COLORES)] for k, fid in enumerate(p["fuentes"])}
     cursor = 0.0
@@ -435,6 +481,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             clip = f["clip"]
             meta = fuentes_ok[clip["fuente"]]
             pl = meta["planos"][clip["plano"] - 1]
+            usados.append({"frase": f["n"], "fuente": meta["titulo"], "canal": meta.get("canal", ""), "url": meta["url"],
+                           "desde": round(meta["desde"] + pl["ini"], 2), "hasta": round(meta["desde"] + pl["fin"], 2)})
             if final:   # en alta solo los segundos de este plano
                 origen = extractor.descargar_tramo(meta["url"], meta["desde"] + pl["ini"], meta["desde"] + pl["fin"], alto=1080)
                 ini_local, fin_local = 0.0, pl["fin"] - pl["ini"]
@@ -465,6 +513,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                 fx_escenas.append({"ini": cursor, "fin": cursor + d, "imagenes": [{"etiqueta": f["rotulo"]}]})
         piezas.append(seg)
         cursor += d
+    if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
+        _creditos(base, p, usados)
     avisar("Uniendo los planos", 78)
     lista = trabajo / "lista.txt"
     lista.write_text("".join(f"file '{x.as_posix()}'\n" for x in piezas), encoding="utf-8")
@@ -530,6 +580,15 @@ def logo_de(canal: str) -> Path | None:
         im.putalpha(mascara.resize((lado, lado), Image.LANCZOS))
         im.save(redondo)
     return redondo
+
+
+def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]]) -> None:
+    reloj = lambda s: f"{int(s) // 3600}:{int(s) % 3600 // 60:02d}:{int(s) % 60:02d}"  # noqa: E731
+    lineas = [f"Fuentes y créditos · {p['titulo']}", "Fragmentos cortos, sin su audio, con comentario y edición propios.", ""]
+    lineas += [f"Frase {u['frase']}: {u['fuente']} ({u['canal']}) · {reloj(u['desde'])}–{reloj(u['hasta'])} · {u['url']}"
+               for u in usados]
+    (base / "Fuentes y créditos.txt").write_text("\n".join(lineas) + "\n", encoding="utf-8")
+    modificar(p["id"], lambda q: q.update(creditos=usados))
 
 
 def _sin_audio(origen: Path, destino: Path) -> Path:

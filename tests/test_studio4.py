@@ -2150,3 +2150,25 @@ def test_logo_del_canal_en_circulo_transparente(aislado, monkeypatch, tmp_path):
     r = Image.open(montaje.logo_de("c"))
     assert r.mode == "RGBA" and r.getpixel((2, 2))[3] == 0 and r.getpixel((100, 100))[3] == 255
     assert montaje.logo_de("sin-logo") is None
+
+
+
+def test_montaje_libera_solo_temporales(aislado, monkeypatch, tmp_path):
+    from studio4 import montaje
+    base = montaje.raiz() / "v1" / "render"
+    base.mkdir(parents=True)
+    for n in ("cuerpo.mp4", "subs.ass", "s001.mp4", "t002.jpg"):
+        (base / n).write_bytes(b"x" * 1000)
+    (montaje.raiz() / "v1" / "render_previa").mkdir()
+    (montaje.raiz() / "v1" / "render_previa" / "s.mp4").write_bytes(b"x" * 500)
+    (montaje.raiz() / "v1" / "final_16x9.mp4").write_bytes(b"x")
+    assert montaje.espacio()["liberable"] == 2500
+    assert montaje.liberar() == 2500
+    assert sorted(f.name for f in base.iterdir()) == ["cuerpo.mp4", "subs.ass"]
+    assert (montaje.raiz() / "v1" / "final_16x9.mp4").exists() and not (montaje.raiz() / "v1" / "render_previa").exists()
+
+
+def test_descargador_dice_si_esta_viejo():
+    from studio4 import extractor
+    d = extractor.descargador()
+    assert d["version"] and isinstance(d["viejo"], bool) and d["dias"] >= 0

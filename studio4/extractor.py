@@ -31,6 +31,29 @@ def opciones_ytdlp(**extra: Any) -> dict[str, Any]:
     return {"quiet": True, "no_warnings": True, "noplaylist": True, "js_runtimes": {"node": {}}, **extra}
 
 
+def descargador() -> dict[str, Any]:
+    """Versión de yt-dlp y si conviene actualizarla (YouTube cambia a menudo y una versión vieja da errores 403)."""
+    import datetime
+
+    import yt_dlp.version
+    v = yt_dlp.version.__version__
+    try:
+        dias = (datetime.date.today() - datetime.date(*map(int, v.split(".")[:3]))).days
+    except ValueError:
+        dias = 0
+    return {"version": v, "dias": dias, "viejo": dias > 30}
+
+
+def actualizar_descargador() -> str:
+    """pip install -U yt-dlp. Hace falta reiniciar Studio 4 para usar la versión nueva."""
+    import sys
+    r = subprocess.run([sys.executable, "-m", "pip", "install", "-U", "yt-dlp"], capture_output=True, text=True, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(f"No se pudo actualizar: {r.stderr[-300:]}")
+    m = re.findall(r"Successfully installed yt-dlp-([\d.]+)", r.stdout)
+    return m[0] if m else "ya estaba al día"
+
+
 def descargar(url: str) -> dict[str, Any]:
     """Baja el vídeo una vez (se reutiliza). Devuelve {archivo, titulo, canal, url, duracion}."""
     import yt_dlp

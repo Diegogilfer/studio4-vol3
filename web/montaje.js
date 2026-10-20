@@ -53,6 +53,7 @@ async function pintarInicio() {
           <small>${v.final ? "Terminado" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
         </article>`).join("")}
     </section>`;
+  pintarMantenimiento();
   $("abrir-nuevo").onclick = () => { $("nuevo-form").hidden = false; $("n-titulo").focus(); };
   $("n-cancelar").onclick = () => { $("nuevo-form").hidden = true; };
   $("nuevo-form").onsubmit = async (ev) => {
@@ -63,6 +64,32 @@ async function pintarInicio() {
     } catch (e) { aviso(e); }
   };
   document.querySelectorAll("[data-abrir]").forEach((t) => { t.onclick = () => { location.hash = `v=${t.dataset.abrir}`; }; });
+}
+
+// Mantenimiento: espacio en disco y descargador al día (sin sorpresas a mitad de un vídeo)
+const mb = (b) => b > 1e9 ? `${(b / 1e9).toFixed(1).replace(".", ",")} GB` : `${Math.round(b / 1e6)} MB`;
+async function pintarMantenimiento() {
+  try {
+    const m = await api("/api/m/mantenimiento");
+    const caja = document.createElement("section");
+    caja.className = "mantenimiento";
+    caja.innerHTML = `<span class="etiqueta">Mantenimiento</span>
+      <div class="fila"><span class="meta">Vídeos ${mb(m.espacio.montajes)} · banco de clips ${mb(m.espacio.banco)}${m.espacio.papelera ? ` · papelera del panel clásico ${mb(m.espacio.papelera)}` : ""}</span>
+        ${m.espacio.liberable > 50e6 ? `<button class="boton" id="liberar">Liberar ${mb(m.espacio.liberable)} de temporales</button>` : ""}</div>
+      <div class="fila"><span class="meta">Descargador ${esc(m.descargador.version)}${m.descargador.viejo ? ` · tiene ${m.descargador.dias} días: conviene actualizarlo` : " · al día"}</span>
+        ${m.descargador.viejo ? `<button class="boton" id="actualizar-dl">Actualizar descargador</button>` : ""}</div>`;
+    $("vista").appendChild(caja);
+    if ($("liberar")) $("liberar").onclick = async (ev) => {
+      if (!confirm("Se borran solo los trozos temporales de los montajes. Los vídeos, previas, Shorts y voces se quedan. ¿Seguir?")) return;
+      ev.target.disabled = true;
+      try { const r = await api("/api/m/liberar", {}); ev.target.textContent = `Liberados ${mb(r.liberado)}`; } catch (e) { aviso(e); }
+    };
+    if ($("actualizar-dl")) $("actualizar-dl").onclick = async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = "Actualizando…";
+      try { const r = await api("/api/m/actualizar-descargador", {}); ev.target.textContent = `Listo (${r.version}): reinicia Studio 4`; }
+      catch (e) { aviso(e); ev.target.disabled = false; ev.target.textContent = "Actualizar descargador"; }
+    };
+  } catch (_) { /* es un extra */ }
 }
 
 // ============================================================ un vídeo

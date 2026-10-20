@@ -95,7 +95,8 @@ class Panel(BaseHTTPRequestHandler):
         self.send_header("Content-Type", tipo)
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(fin - ini + 1))
-        self.send_header("Cache-Control", "no-cache")
+        # las páginas y su código nunca se guardan en el navegador: tras actualizar, se ve lo nuevo sin F5
+        self.send_header("Cache-Control", "no-store" if tipo.startswith(("text/html", "application/javascript", "text/css")) else "no-cache")
         if codigo == 206:
             self.send_header("Content-Range", f"bytes {ini}-{fin}/{tam}")
         self.end_headers()
@@ -221,6 +222,9 @@ class Panel(BaseHTTPRequestHandler):
             return self._json({"videos": montaje.listar(), "canal": canales.activo(),
                                "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
                                          for f in montaje.banco()]})
+        if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
+            from studio4 import extractor, montaje
+            return self._json({"espacio": montaje.espacio(), "descargador": extractor.descargador()})
         if ruta == "/api/m/ver":
             from studio4 import montaje
             mid = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("id") or [""])[0]
@@ -353,6 +357,11 @@ class Panel(BaseHTTPRequestHandler):
         from studio4 import montaje
         mid = str(d.get("id", ""))
         num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
+        if ruta == "/api/m/liberar":
+            return self._json({"ok": True, "liberado": montaje.liberar()})
+        if ruta == "/api/m/actualizar-descargador":
+            from studio4 import extractor
+            return self._json({"ok": True, "version": extractor.actualizar_descargador()})
         if ruta == "/api/m/nuevo":
             return self._json({"ok": True, "id": montaje.crear(str(d.get("titulo", "")), str(d.get("guion", "")))})
         if ruta == "/api/m/guion":
