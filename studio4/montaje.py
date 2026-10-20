@@ -31,7 +31,7 @@ logger = logging.getLogger("studio4.montaje")
 
 ANCHO, ALTO = 1920, 1080
 ANCHO_PREVIA, ALTO_PREVIA = 960, 540
-TRANSICION = 1.2        # segundos de rejilla con la tarjeta del bloque siguiente
+TRANSICION = 1.6        # segundos del cambio de bloque: el vídeo se encoge, entra la tarjeta nueva y crece
 ENTRADA = 0.25          # respiro antes de la primera palabra
 PAUSA_FRASE = 0.35      # silencio que se añade a la voz al acabar una oración (la voz de Google casi no respira)
 PAUSA_BLOQUE = 0.9      # y al cambiar de bloque, donde entra la transición
@@ -403,8 +403,10 @@ def asignar(mid: str, n: int, fid: str = "", plano: int = 0, rotulo: str | None 
             f.pop("panel", None)
         if panel is not None:
             items = [str(i).strip()[:80] for i in panel.get("items", []) if str(i).strip()][:5]
-            f["panel"] = {"titulo": str(panel.get("titulo", ""))[:60], "items": items, "nota": str(panel.get("nota", ""))[:90]} \
-                if items or panel.get("titulo") else None
+            # iconos elegidos a mano (si no, la animación los deduce del texto de cada punto)
+            iconos = [str(x) if str(x) in animacion.ICONOS_NOMBRES else "" for x in panel.get("iconos", [])][:len(items)]
+            f["panel"] = {"titulo": str(panel.get("titulo", ""))[:60], "items": items, "nota": str(panel.get("nota", ""))[:90],
+                          **({"iconos": iconos} if any(iconos) else {})} if items or panel.get("titulo") else None
             if not f["panel"]:
                 f.pop("panel")
         if rotulo is not None:
@@ -626,6 +628,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     # cada frase dura desde su inicio hasta el inicio de la siguiente (sin huecos); la primera empieza en 0
     tramos = [(0.0 if k == 0 else a, tiempos[k + 1][0] if k + 1 < len(tiempos) else b + 1.2) for k, (a, b) in enumerate(tiempos)]
     piezas: list[Path] = []
+    # paneles y cambios de bloque: se dibujan al final, cuando ya existen sus vecinos (sus puentes con el vídeo)
+    animadas: dict[Path, tuple[dict[str, Any], float]] = {}
     eventos: list[tuple[float, str, float]] = [(0.1, "impacto", 0.9)]   # (segundo, efecto, volumen)
     usados: list[dict[str, Any]] = []
     fuentes_ok = {fid: fuente(fid) for fid in p["fuentes"]}
@@ -636,11 +640,10 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         d = b - a
         nuevo_bloque = k > 0 and f["bloque"] != p["frases"][k - 1]["bloque"]
         seg = trabajo / f"s{k:03d}.mp4"
-        if f.get("panel"):   # un panel de texto (lista, recreación) sobre la rejilla, dibujado en el navegador
-            esc = [{"ini": 0, "fin": d, "panel": f["panel"]}]
-            animacion.renderizar(esc, d, seg, ancho, alto)
-            eventos.append((cursor + 0.05, "impacto", 0.7))
-            eventos += [(cursor + 0.45 + j * 0.45, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
+        if f.get("panel"):   # un panel de cristal sobre el propio vídeo desenfocado, dibujado en el navegador
+            animadas[seg] = ({"ini": 0, "fin": d, "panel": f["panel"]}, d)
+            eventos += [(cursor + 0.05, "whoosh", 0.45), (cursor + 0.3, "impacto", 0.7), (cursor + d - 0.62, "whoosh", 0.4)]
+            eventos += [(cursor + 0.8 + j * 0.42, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
         else:
             clip = f["clip"]
             meta = fuentes_ok[clip["fuente"]]
@@ -649,7 +652,6 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             pausas = [(x["fin"] + y["ini"]) / 2 - inicio_plano for x, y in zip(palabras, palabras[1:])
                       if inicio_plano < x["fin"] < b] if final else []
             cadena = _cadena(meta, clip, d - (TRANSICION if con_transicion else 0), pausas)
-            pl = cadena[0][0]
             for c, _dur in cadena:
                 usados.append({"frase": f["n"], "fuente": meta["titulo"], "canal": meta.get("canal", ""), "url": meta["url"],
                                "desde": round(meta["desde"] + c["ini"], 2), "hasta": round(meta["desde"] + c["fin"], 2)})
@@ -660,19 +662,15 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                 if final:
                     return extractor.descargar_tramo(meta["url"], meta["desde"] + c["ini"], meta["desde"] + c["fin"], alto=1080), c["ini"]
                 return extractor.CACHE / meta["baja"], 0.0
-            origen, base_t = de(pl)
-            ini_local = pl["ini"] - base_t
             if con_transicion:
-                # la transición: rejilla y la primera imagen del bloque nuevo entrando como tarjeta
-                foto = trabajo / f"t{k:03d}.jpg"
-                medios.ffmpeg("-ss", f"{ini_local + 0.2:.3f}", "-i", str(origen), "-frames:v", "1", str(foto))
+                # cambio de bloque: el vídeo se encoge a tarjeta, entra la del bloque nuevo con su rótulo y crece
                 tr = trabajo / f"t{k:03d}.mp4"
-                escena_tr = {"ini": 0, "fin": TRANSICION, "imagenes": [{"archivo": str(foto), "etiqueta": f.get("rotulo", ""),
-                                                                        "color": colores[clip["fuente"]]}]}
-                animacion.renderizar([escena_tr], TRANSICION, tr, ancho, alto)
-                piezas.append(_sin_audio(tr, trabajo / f"t{k:03d}b.mp4"))
-                # bloque nuevo: subida antes, cruce de lado a lado al entrar la tarjeta e impacto al llegar
-                eventos += [(cursor - 1.5, "subida", 0.6), (cursor, "cruce", 0.8), (cursor + 0.3, "impacto", 1.0)]
+                animadas[tr] = ({"ini": 0, "fin": TRANSICION, "etiqueta": f.get("rotulo", ""),
+                                 "color": colores[clip["fuente"]]}, TRANSICION)
+                piezas.append(tr)
+                # subida antes, cruce de lado a lado al entrar la tarjeta, impacto al llegar y whoosh al crecer
+                eventos += [(cursor - 1.5, "subida", 0.6), (cursor, "cruce", 0.8), (cursor + 0.5, "impacto", 1.0),
+                            (cursor + TRANSICION - 0.62, "whoosh", 0.45)]
                 cursor += TRANSICION
                 d -= TRANSICION
             trozos = []
@@ -702,6 +700,16 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                 eventos += [(cursor + 0.15, "impacto", 0.55), (cursor + 0.45, "pop", 0.9)]
         piezas.append(seg)
         cursor += d
+    for k, pieza in enumerate(piezas):   # las animaciones, con el último fotograma del anterior y el primero del siguiente
+        if pieza not in animadas:
+            continue
+        avisar("Paneles y transiciones", 76)
+        escena, dur = animadas.pop(pieza)
+        if k > 0:
+            escena["entra"] = str(_fotograma(piezas[k - 1], trabajo / f"{pieza.stem}_entra.png", ultimo=True))
+        if k + 1 < len(piezas) and piezas[k + 1] not in animadas:
+            escena["sale"] = str(_fotograma(piezas[k + 1], trabajo / f"{pieza.stem}_sale.png", ultimo=False))
+        animacion.renderizar([escena], dur, pieza, ancho, alto)
     if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
         _creditos(base, p, usados)
     avisar("Uniendo los planos", 78)
@@ -781,8 +789,13 @@ def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]]) -> No
     modificar(p["id"], lambda q: q.update(creditos=usados))
 
 
-def _sin_audio(origen: Path, destino: Path) -> Path:
-    medios.ffmpeg("-i", str(origen), "-an", "-c:v", "copy", str(destino))
+def _fotograma(video: Path, destino: Path, ultimo: bool) -> Path:
+    """El primer o el último fotograma de un plano ya montado, sin comprimir (PNG): la tarjeta que sale de él o
+    vuelve a él tiene exactamente la misma imagen y la misma calidad, y el paso no se nota."""
+    if ultimo:   # se escriben los últimos cuadros encima del mismo archivo: queda el último
+        medios.ffmpeg("-sseof", "-0.3", "-i", str(video), "-update", "1", "-c:v", "png", str(destino))
+    else:
+        medios.ffmpeg("-i", str(video), "-frames:v", "1", "-c:v", "png", str(destino))
     return destino
 
 

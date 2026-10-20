@@ -2046,6 +2046,29 @@ def test_animacion_de_pestanas_y_sus_sonidos(tmp_path):
     assert all(medios.duracion(f) > 0.05 for f in fx.values())
 
 
+def test_animacion_puentes_con_el_video(tmp_path):
+    """Un panel sale del último fotograma del plano anterior y acaba en el primero del siguiente, sin comprimir;
+    la página se diseña a 1920×1080 y la previa la reduce con zoom."""
+    from studio4 import animacion, medios, montaje
+    video = tmp_path / "v.mp4"
+    medios.ffmpeg("-f", "lavfi", "-i", "color=c=red:s=320x180:d=0.5,format=yuv420p", "-f", "lavfi",
+                  "-i", "color=c=blue:s=320x180:d=0.5,format=yuv420p", "-filter_complex", "[0][1]concat=n=2:v=1[v]",
+                  "-map", "[v]", str(video))
+    from PIL import Image
+    primero = Image.open(montaje._fotograma(video, tmp_path / "a.png", ultimo=False)).convert("RGB").getpixel((5, 5))
+    ultimo = Image.open(montaje._fotograma(video, tmp_path / "b.png", ultimo=True)).convert("RGB").getpixel((5, 5))
+    assert primero[0] > 200 > primero[2] and ultimo[2] > 200 > ultimo[0]
+    html = animacion._html([{"ini": 0, "fin": 3, "entra": "a.png", "sale": "b.png", "etiqueta": "GTA 6", "color": "rosa",
+                             "panel": {"titulo": "Lo que sabemos", "items": ["Vice City"], "iconos": ["mapa"]}}], 960, 540)
+    assert '"entra": "a.png"' in html and '"sale": "b.png"' in html and "zoom: 0.5000" in html and "1920" in html
+    assert animacion.ACENTO in html and "#ff3ea5" in html
+    # sin iconos elegidos, se deducen del texto; si nada encaja, va el número
+    assert [animacion.icono_para(t) for t in ("Sale el 19-11-2026", "Vice City", "Lucía y Jason", "Cuatro tornillos", "Hola")] \
+        == ["calendario", "mapa", "pareja", "herramienta", ""]
+    html = animacion._html([{"ini": 0, "fin": 2, "panel": {"titulo": "T", "items": ["Vice City", "Hola"]}}], 1920, 1080)
+    assert '"iconos": ["mapa", "2"]' in html
+
+
 def test_extractor_detecta_planos_y_corta_sin_audio(tmp_path):
     """Un vídeo con dos planos (rojo y azul): se detecta el corte y el fragmento sale sin audio."""
     from studio4 import extractor
