@@ -1,4 +1,5 @@
-// Studio 4 · panel de montaje: un vídeo 16:9 en 5 pasos (guion → material → montaje → previa → final).
+// Studio 4 · panel: seis pantallas (Inicio, Vídeos, Biblioteca, Tendencias, Canal, Herramientas) y, dentro de cada
+// vídeo, un paso por pantalla (guion → material → montaje → previa → final) con su línea de tiempo por pistas.
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -10,6 +11,7 @@ async function api(ruta, datos) {
   if (!r.ok) throw new Error(d.error || `Error ${r.status}`);
   return d;
 }
+const seguro = async (ruta) => { try { return await api(ruta); } catch (_) { return null; } };
 function aviso(e) {
   $("aviso").textContent = e.message || String(e);
   $("aviso").hidden = false;
@@ -23,59 +25,47 @@ function segundos(t) {
 }
 const reloj = (s) => { s = Math.round(s || 0); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const pad3 = (n) => String(n).padStart(3, "0");
+const num = (n) => Number(n || 0).toLocaleString("es");
+const corto = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".", ",")} M` : n >= 1e3 ? `${(n / 1e3).toFixed(1).replace(".", ",")} K` : String(n || 0);
+const mb = (b) => b > 1e9 ? `${(b / 1e9).toFixed(1).replace(".", ",")} GB` : `${Math.round(b / 1e6)} MB`;
+const cabecera = (titulo, sub) => `<div class="seccion-cab"><h1>${titulo}</h1>${sub ? `<p class="meta">${sub}</p>` : ""}</div>`;
+const tarjetaVideo = (v) => `
+  <article class="tarjeta" data-abrir="${esc(v.id)}">
+    <b>${esc(v.titulo)}</b>
+    <div class="puntos">${[1, 2, 3, 4, 5].map((n) => `<i class="${n < v.paso || v.final ? "si" : ""}"></i>`).join("")}</div>
+    <small>${v.final ? "Terminado" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
+  </article>`;
 
 let datos = null;          // el vídeo abierto: {video, paso, fuentes}
 let firma = "";            // para no repintar si nada cambió (y no borrar lo que estás escribiendo)
+let pasoVisto = 0;         // el paso que se está mirando dentro del vídeo
 let fraseEligiendo = 0, fuenteViendo = "";
 
-// ============================================================ inicio
-const num = (n) => Number(n || 0).toLocaleString("es");
-const corto = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".", ",")} M` : n >= 1e3 ? `${(n / 1e3).toFixed(1).replace(".", ",")} K` : String(n || 0);
-const seguro = async (ruta) => { try { return await api(ruta); } catch (_) { return null; } };
-let temasAbiertos = new Set();
-
-async function pintarInicio() {
-  datos = null; firma = "";
-  const [m, panel, ideasDia, bib, tend] = await Promise.all([api("/api/m"), seguro("/api/panel"), seguro("/api/ideas/diarias"),
-    seguro("/api/biblioteca"), seguro("/api/tendencias")]);
-  $("canal").textContent = m.canal?.nombre || "";
-  const activo = panel?.canales.find((c) => c.canal.id === panel.activo) || null;
+// ============================================================ Inicio
+async function vistaInicio() {
+  // se pinta enseguida con tus vídeos; el canal (YouTube tarda) y las ideas se rellenan al llegar
+  const m = await api("/api/m");
   $("vista").innerHTML = `
-    ${pintarCanal(activo, panel)}
-    ${pintarIdeas(ideasDia)}
+    <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
+      <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
+    <div id="i-ideas"></div>
     <section class="bloque-inicio">
-      <div class="seccion-cab"><h2>Tus <em>vídeos</em></h2><p class="meta">En 16:9 con material real, cinco pasos. De ahí sale el Short.</p></div>
-      <form class="nuevo-form" id="nuevo-form" hidden>
-        <input class="campo" id="n-titulo" placeholder="Título de trabajo" required>
-        <textarea class="campo" id="n-guion" placeholder="Pega aquí el guion: solo lo que dirá la voz. Deja una línea en blanco entre bloques: ahí irá la transición."></textarea>
-        <div class="fila"><button class="primario" type="submit">Crear vídeo</button><button class="boton" type="button" id="n-cancelar">Cancelar</button></div>
-      </form>
+      <div class="seccion-cab fila-entre"><h2>Sigue con <em>tus vídeos</em></h2><a class="boton" href="#videos">Ver todos</a></div>
       <div class="videos">
-        <article class="tarjeta nuevo" id="abrir-nuevo"><span>+</span><b>Nuevo vídeo</b><small>Pega tu guion y empieza</small></article>
-        ${m.videos.map((v) => `
-          <article class="tarjeta" data-abrir="${esc(v.id)}">
-            <b>${esc(v.titulo)}</b>
-            <div class="puntos">${[1, 2, 3, 4, 5].map((n) => `<i class="${n < v.paso || v.final ? "si" : ""}"></i>`).join("")}</div>
-            <small>${v.final ? "Terminado" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
-          </article>`).join("")}
-      </div>
-    </section>
-    ${pintarBiblioteca(bib, new Set(m.videos.map((v) => v.id)))}
-    ${pintarTendencias(tend)}
-    <section class="bloque-inicio">
-      <div class="seccion-cab"><h2>Más <em>herramientas</em></h2></div>
-      <div class="herramientas">
-        <a class="herramienta" href="/clasico#url"><b>Desde URL</b><small>Un vídeo tuyo por enlace → editado en los 3 formatos</small></a>
-        <a class="herramienta" href="/youtube" target="_blank"><b>Vista YouTube</b><small>Tus vídeos y miniaturas como se verán publicados</small></a>
-        <a class="herramienta" href="/clasico#canales"><b>Ajustes de canales</b><small>Redes, fuentes de confianza, voz y estilo</small></a>
-        <a class="herramienta" href="/clasico"><b>Panel clásico</b><small>Todo lo de antes, tal cual</small></a>
+        <article class="tarjeta nuevo" data-nuevo><span>+</span><b>Nuevo vídeo</b><small>Pega tu guion y empieza</small></article>
+        ${m.videos.slice(0, 5).map(tarjetaVideo).join("")}
       </div>
     </section>`;
-  pintarMantenimiento();
-  enlazarInicio(ideasDia, bib);
+  seguro("/api/ideas/diarias").then((d) => { if ($("i-ideas")) { $("i-ideas").innerHTML = pintarIdeas(d); enlazarIdeas(); } });
+  seguro("/api/panel").then((panel) => {
+    if (!$("i-canal")) return;
+    const activo = panel?.canales.find((c) => c.canal.id === panel.activo) || null;
+    $("i-canal").innerHTML = pintarCanalHero(activo, panel);
+    enlazarCanal();
+  });
 }
 
-function pintarCanal(c, panel) {
+function pintarCanalHero(c, panel) {
   if (!c) return "";
   const yt = c.youtube || {};
   const otros = (panel.canales || []).filter((x) => x.canal.id !== c.canal.id);
@@ -95,6 +85,12 @@ function pintarCanal(c, panel) {
       ${c.error ? `<p class="meta">YouTube: ${esc(c.error)}</p>` : ""}
     </div></section>`;
 }
+function enlazarCanal() {
+  if ($("cambiar-canal")) $("cambiar-canal").onchange = async (ev) => {
+    if (!ev.target.value) return;
+    try { await api("/api/canales/activar", { id: ev.target.value }); ir(); } catch (e) { aviso(e); }
+  };
+}
 
 function pintarIdeas(d) {
   const ideas = d?.ideas || [];
@@ -111,68 +107,96 @@ function pintarIdeas(d) {
           <button class="primario" type="button" data-idea="${i}">Escribir guion y crear</button></div>
       </article>`).join("")}</div></section>`;
 }
-
-function pintarBiblioteca(d, mios = new Set()) {
-  const guiones = d?.guiones || [];
-  if (!guiones.length) return "";
-  const temas = new Map();
-  guiones.forEach((g) => { if (!temas.has(g.codigo)) temas.set(g.codigo, []); temas.get(g.codigo).push(g); });
-  return `<section class="bloque-inicio">
-    <div class="seccion-cab"><h2>Biblioteca de <em>guiones</em></h2>
-      <p class="meta">${temas.size} temas de Agron. El largo se monta en 16:9 y de él salen los Shorts.</p></div>
-    <div class="temas">${[...temas].map(([codigo, gs]) => {
-      const largo = gs.find((g) => g.tipo === "largo") || gs[0];
-      const repe = gs.some((g) => g.parecido_a?.length);
-      return `<article class="tema ${mios.has(largo.producido) ? "hecho" : ""}">
-        <span class="tema-cod">${esc(codigo)}</span>
-        <div><b>${esc(largo.titulo || largo.guion.slice(0, 70))}</b>
-          <small>${largo.palabras} palabras · ${gs.length - 1} cortos${largo.producido && !mios.has(largo.producido) ? " · ya empezado en el panel clásico" : ""}${repe ? ` · <span class="repe">algún corto se parece a otro tema</span>` : ""}</small></div>
-        ${mios.has(largo.producido) ? `<button class="boton" type="button" data-abrir="${esc(largo.producido)}">Abrir</button>`
-          : `<button class="primario" type="button" data-bib="${esc(largo.id)}">${largo.producido ? "Crear en 16:9" : "Crear vídeo"}</button>`}
-      </article>`; }).join("")}</div></section>`;
+function enlazarIdeas() {
+  document.querySelectorAll("[data-idea]").forEach((b) => { b.onclick = async () => {
+    b.disabled = true; b.textContent = "Investigando…";
+    try { location.hash = `v=${(await api("/api/m/desde-idea", { n: Number(b.dataset.idea) })).id}`; } catch (e) { aviso(e); b.disabled = false; }
+  }; });
 }
 
-function pintarTendencias(t) {
-  const i = t?.datos?.informe;
-  return `<section class="bloque-inicio">
-    <div class="seccion-cab"><h2><em>Tendencias</em> de tu nicho</h2>
-      <p class="meta">${t?.datos ? `Informe del ${esc(t.datos.fecha.slice(0, 10))}${t.caducado ? " · ya es viejo" : ""}` : "Aún no hay informe."}</p></div>
-    ${i ? `<div class="tendencias">
-      <p class="resumen">${esc(i.resumen)}</p>
-      <div class="tend-col"><span class="etiqueta">Nichos que crecen</span>
-        ${(i.nichos || []).slice(0, 4).map((n) => `<div class="tend-item"><b>${esc(n.nombre)}</b><small>${esc((n.por_que || "").slice(0, 160))}</small></div>`).join("")}</div>
-      <div class="tend-col"><span class="etiqueta">Consejos de hoy</span>
-        ${(i.consejos || []).slice(0, 4).map((c) => `<div class="tend-item"><small>${esc(c)}</small></div>`).join("")}
-        <span class="etiqueta">Evita</span>${(i.evitar || []).slice(0, 2).map((c) => `<div class="tend-item"><small>${esc(c)}</small></div>`).join("")}</div>
-    </div>` : ""}
-    <div class="fila"><button class="boton" type="button" id="act-tendencias" ${t?.ocupado ? "disabled" : ""}>${t?.ocupado ? esc(t.fase || "Analizando…") : "Actualizar tendencias"}</button>
-      <button class="boton" type="button" id="ver-vivo">Lo que más crece esta semana</button></div>
-    <div id="vivo"></div></section>`;
-}
-
-function enlazarInicio(ideasDia, bib) {
-  $("abrir-nuevo").onclick = () => { $("nuevo-form").hidden = false; $("n-titulo").focus(); };
+// ============================================================ Vídeos
+async function vistaVideos() {
+  const m = await api("/api/m");
+  $("vista").innerHTML = `
+    ${cabecera("Tus <em>vídeos</em>", "En 16:9 con material real, cinco pasos. De ahí salen el Short, los textos y la miniatura.")}
+    <form class="nuevo-form" id="nuevo-form" hidden>
+      <h2>Vídeo <em>nuevo</em></h2>
+      <input class="campo" id="n-titulo" placeholder="Título de trabajo" required>
+      <textarea class="campo" id="n-guion" placeholder="Pega aquí el guion: solo lo que dirá la voz. Deja una línea en blanco entre bloques: ahí irá la transición."></textarea>
+      <div class="fila"><button class="primario" type="submit">Crear vídeo</button><button class="boton" type="button" id="n-cancelar">Cancelar</button></div>
+    </form>
+    <div class="videos">
+      <article class="tarjeta nuevo" data-nuevo><span>+</span><b>Nuevo vídeo</b><small>Pega tu guion y empieza</small></article>
+      ${m.videos.map(tarjetaVideo).join("")}
+    </div>`;
   $("n-cancelar").onclick = () => { $("nuevo-form").hidden = true; };
   $("nuevo-form").onsubmit = async (ev) => {
     ev.preventDefault();
     try { location.hash = `v=${(await api("/api/m/nuevo", { titulo: $("n-titulo").value, guion: $("n-guion").value })).id}`; } catch (e) { aviso(e); }
   };
-  document.querySelectorAll("[data-abrir]").forEach((t) => { t.onclick = () => { location.hash = `v=${t.dataset.abrir}`; }; });
-  document.querySelectorAll("[data-bib]").forEach((b) => { b.onclick = async () => {
-    b.disabled = true;
+  if (sessionStorage.getItem("s4-nuevo")) { sessionStorage.removeItem("s4-nuevo"); abrirNuevo(); }
+}
+function abrirNuevo() {
+  if (!$("nuevo-form")) { sessionStorage.setItem("s4-nuevo", "1"); location.hash = "videos"; return; }
+  $("nuevo-form").hidden = false; $("n-titulo").focus();
+}
+
+// ============================================================ Biblioteca
+async function vistaBiblioteca() {
+  const [m, d] = await Promise.all([api("/api/m"), seguro("/api/biblioteca")]);
+  const mios = new Set(m.videos.map((v) => v.id));
+  const guiones = d?.guiones || [];
+  const temas = new Map();
+  guiones.forEach((g) => { if (!temas.has(g.codigo)) temas.set(g.codigo, []); temas.get(g.codigo).push(g); });
+  $("vista").innerHTML = `
+    ${cabecera("Biblioteca de <em>guiones</em>", `${temas.size} temas · ${guiones.length} guiones. El largo se monta en 16:9 y de él salen los Shorts.`)}
+    ${!temas.size ? `<p class="meta">Aún no hay guiones: pégalos en el panel clásico › Crear › Biblioteca.</p>` : ""}
+    <div class="temas">${[...temas].map(([codigo, gs]) => {
+      const largo = gs.find((g) => g.tipo === "largo") || gs[0];
+      const cortos = gs.filter((g) => g !== largo);
+      const repe = gs.some((g) => g.parecido_a?.length);
+      return `<details class="tema-caja ${mios.has(largo.producido) ? "hecho" : ""}">
+        <summary class="tema">
+          <span class="tema-cod">${esc(codigo)}</span>
+          <div><b>${esc(largo.titulo || largo.guion.slice(0, 70))}</b>
+            <small>${largo.palabras} palabras · ${cortos.length} cortos${largo.producido && !mios.has(largo.producido) ? " · empezado en el panel clásico" : ""}${repe ? ` · <span class="repe">algún corto se parece a otro tema</span>` : ""}</small></div>
+          ${mios.has(largo.producido) ? `<button class="boton" type="button" data-abrir="${esc(largo.producido)}">Abrir</button>`
+            : `<button class="primario" type="button" data-bib="${esc(largo.id)}">Crear en 16:9</button>`}
+        </summary>
+        <div class="tema-cuerpo">
+          <p class="guion-previo">${esc(largo.guion.slice(0, 420))}${largo.guion.length > 420 ? "…" : ""}</p>
+          ${cortos.length ? `<span class="etiqueta">Cortos de este tema</span>
+            ${cortos.map((g) => `<div class="corto-item"><b>${esc(g.etiqueta)}</b><span>${esc(g.titulo || g.guion.slice(0, 80))}</span>
+              ${g.parecido_a?.length ? `<small class="repe">se parece a ${esc(g.parecido_a.join(", "))}</small>` : ""}</div>`).join("")}` : ""}
+        </div>
+      </details>`; }).join("")}</div>`;
+  document.querySelectorAll("[data-bib]").forEach((b) => { b.onclick = async (ev) => {
+    ev.preventDefault(); b.disabled = true;
     try { location.hash = `v=${(await api("/api/m/desde-biblioteca", { item: b.dataset.bib })).id}`; } catch (e) { aviso(e); b.disabled = false; }
   }; });
-  document.querySelectorAll("[data-idea]").forEach((b) => { b.onclick = async () => {
-    b.disabled = true; b.textContent = "Investigando…";
-    try { location.hash = `v=${(await api("/api/m/desde-idea", { n: Number(b.dataset.idea) })).id}`; } catch (e) { aviso(e); b.disabled = false; }
-  }; });
-  if ($("cambiar-canal")) $("cambiar-canal").onchange = async (ev) => {
-    if (!ev.target.value) return;
-    try { await api("/api/canales/activar", { id: ev.target.value }); pintarInicio(); } catch (e) { aviso(e); }
-  };
+}
+
+// ============================================================ Tendencias
+async function vistaTendencias() {
+  const t = await seguro("/api/tendencias");
+  const i = t?.datos?.informe;
+  $("vista").innerHTML = `
+    ${cabecera("<em>Tendencias</em> de tu nicho", t?.datos ? `Informe del ${esc(t.datos.fecha.slice(0, 10))}${t.caducado ? " · ya es viejo" : ""}` : "Aún no hay informe.")}
+    <div class="fila"><button class="primario" type="button" id="act-tendencias" ${t?.ocupado ? "disabled" : ""}>${t?.ocupado ? esc(t.fase || "Analizando…") : "Actualizar tendencias"}</button>
+      <button class="boton" type="button" id="ver-vivo">Lo que más crece esta semana</button></div>
+    <div id="vivo"></div>
+    ${i ? `<div class="tendencias">
+      <p class="resumen">${esc(i.resumen)}</p>
+      <div class="tend-col"><span class="etiqueta">Nichos que crecen</span>
+        ${(i.nichos || []).map((n) => `<div class="tend-item"><b>${esc(n.nombre)}</b><small>${esc(n.por_que || "")}</small></div>`).join("")}</div>
+      <div class="tend-col"><span class="etiqueta">Consejos de hoy</span>
+        ${(i.consejos || []).map((c) => `<div class="tend-item"><small>${esc(c)}</small></div>`).join("")}
+        <span class="etiqueta">Títulos que funcionan</span><div class="tend-item"><small>${esc(i.titulos || "")}</small></div>
+        <span class="etiqueta">Evita</span>${(i.evitar || []).map((c) => `<div class="tend-item"><small>${esc(c)}</small></div>`).join("")}</div>
+    </div>` : ""}`;
   $("act-tendencias").onclick = async (ev) => {
     ev.target.disabled = true; ev.target.textContent = "Analizando tu nicho…";
-    try { await api("/api/tendencias", {}); setTimeout(pintarInicio, 4000); } catch (e) { aviso(e); }
+    try { await api("/api/tendencias", {}); setTimeout(ir, 5000); } catch (e) { aviso(e); }
   };
   $("ver-vivo").onclick = async (ev) => {
     ev.target.disabled = true; ev.target.textContent = "Buscando…";
@@ -180,24 +204,61 @@ function enlazarInicio(ideasDia, bib) {
       const d = await api("/api/ideas/vivo");
       $("vivo").innerHTML = `<div class="vivo">${d.videos.map((v) => `<a class="vivo-item" href="${esc(v.url)}" target="_blank" rel="noopener">
         <b>${esc(v.titulo)}</b><small>${esc(v.canal)} · ${corto(v.vistas_hora)} vistas/hora · ${corto(v.vistas)} vistas</small></a>`).join("")}</div>`;
-      ev.target.textContent = "Lo que más crece esta semana";
-    } catch (e) { aviso(e); ev.target.disabled = false; ev.target.textContent = "Lo que más crece esta semana"; }
+    } catch (e) { aviso(e); }
+    ev.target.disabled = false; ev.target.textContent = "Lo que más crece esta semana";
   };
 }
 
-// Mantenimiento: espacio en disco y descargador al día (sin sorpresas a mitad de un vídeo)
-const mb = (b) => b > 1e9 ? `${(b / 1e9).toFixed(1).replace(".", ",")} GB` : `${Math.round(b / 1e6)} MB`;
-async function pintarMantenimiento() {
+// ============================================================ Canal
+async function vistaCanal() {
+  const panel = await seguro("/api/panel");
+  const canales = panel?.canales || [];
+  $("vista").innerHTML = `
+    ${cabecera("Tus <em>canales</em>", "Estadísticas públicas de YouTube y lo hecho en Studio. Los ajustes (redes, fuentes, voz) siguen en el panel clásico.")}
+    ${canales.map((c) => {
+      const yt = c.youtube || {};
+      const lista = (t, vs) => vs?.length ? `<div class="tend-col"><span class="etiqueta">${t}</span>${vs.slice(0, 5).map((v) =>
+        `<div class="tend-item"><b>${esc(v.titulo)}</b><small>${corto(v.vistas)} vistas</small></div>`).join("")}</div>` : "";
+      return `<section class="canal-caja ${c.canal.id === panel.activo ? "activo" : ""}">
+        <div class="canal-fila">
+          <img class="canal-logo chico" src="/canal/${esc(c.canal.id)}/logo.png" alt="" onerror="this.style.visibility='hidden'">
+          <div><h2>${esc(c.canal.nombre)}</h2><p class="meta">${esc(c.canal.nicho || "")}</p>
+            <div class="redes">${Object.entries(c.canal.redes || {}).map(([r, u]) => `<span class="chip">${esc(r)}: ${esc(u)}</span>`).join("")}</div></div>
+          ${c.canal.id === panel.activo ? `<span class="voz">Activo</span>` : `<button class="boton" type="button" data-activar="${esc(c.canal.id)}">Trabajar con este</button>`}
+        </div>
+        <div class="cifras">
+          <div><b>${corto(yt.suscriptores)}</b><small>suscriptores</small></div>
+          <div><b>${corto(yt.vistas)}</b><small>vistas</small></div>
+          <div><b>${num(yt.videos)}</b><small>vídeos publicados</small></div>
+          <div><b>${num(c.producciones?.total)}</b><small>producciones en Studio</small></div>
+        </div>
+        ${c.error ? `<p class="meta">YouTube: ${esc(c.error)}</p>` : ""}
+        <div class="tendencias">${lista("Lo más visto", yt.mas_vistos)}${lista("Lo más reciente", yt.recientes)}</div>
+      </section>`; }).join("")}
+    <a class="boton" href="/clasico#canales">Ajustes de canales (panel clásico)</a>`;
+  document.querySelectorAll("[data-activar]").forEach((b) => { b.onclick = async () => {
+    try { await api("/api/canales/activar", { id: b.dataset.activar }); ir(); } catch (e) { aviso(e); }
+  }; });
+}
+
+// ============================================================ Herramientas
+async function vistaHerramientas() {
+  $("vista").innerHTML = `
+    ${cabecera("<em>Herramientas</em>", "Lo que todavía vive en el panel clásico y el mantenimiento del estudio.")}
+    <div class="herramientas">
+      <a class="herramienta" href="/clasico#url"><svg><use href="#i-enlace"/></svg><b>Desde URL</b><small>Un vídeo tuyo por enlace → editado en los 3 formatos</small></a>
+      <a class="herramienta" href="/youtube" target="_blank"><svg><use href="#i-yt"/></svg><b>Vista YouTube</b><small>Tus vídeos y miniaturas como se verán publicados</small></a>
+      <a class="herramienta" href="/clasico#crear"><svg><use href="#i-crear"/></svg><b>Pegar guiones de Agron</b><small>Biblioteca y plan del mes (panel clásico)</small></a>
+      <a class="herramienta" href="/clasico"><svg><use href="#i-render"/></svg><b>Panel clásico</b><small>Todo lo de antes, tal cual</small></a>
+    </div>
+    <div id="mantenimiento"></div>`;
   try {
     const m = await api("/api/m/mantenimiento");
-    const caja = document.createElement("section");
-    caja.className = "mantenimiento";
-    caja.innerHTML = `<span class="etiqueta">Mantenimiento</span>
+    $("mantenimiento").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Mantenimiento</span>
       <div class="fila"><span class="meta">Vídeos ${mb(m.espacio.montajes)} · banco de clips ${mb(m.espacio.banco)}${m.espacio.papelera ? ` · papelera del panel clásico ${mb(m.espacio.papelera)}` : ""}</span>
         ${m.espacio.liberable > 50e6 ? `<button class="boton" id="liberar">Liberar ${mb(m.espacio.liberable)} de temporales</button>` : ""}</div>
       <div class="fila"><span class="meta">Descargador ${esc(m.descargador.version)}${m.descargador.viejo ? ` · tiene ${m.descargador.dias} días: conviene actualizarlo` : " · al día"}</span>
-        ${m.descargador.viejo ? `<button class="boton" id="actualizar-dl">Actualizar descargador</button>` : ""}</div>`;
-    $("vista").appendChild(caja);
+        ${m.descargador.viejo ? `<button class="boton" id="actualizar-dl">Actualizar descargador</button>` : ""}</div></section>`;
     if ($("liberar")) $("liberar").onclick = async (ev) => {
       if (!confirm("Se borran solo los trozos temporales de los montajes. Los vídeos, previas, Shorts y voces se quedan. ¿Seguir?")) return;
       ev.target.disabled = true;
@@ -211,11 +272,11 @@ async function pintarMantenimiento() {
   } catch (_) { /* es un extra */ }
 }
 
-// ============================================================ un vídeo
+// ============================================================ Un vídeo, paso a paso
 async function cargarVideo(id) {
   datos = await api(`/api/m/ver?id=${encodeURIComponent(id)}`);
   const { trabajo, ...resto } = datos.video;
-  const nueva = JSON.stringify([resto, Object.keys(datos.fuentes)]);
+  const nueva = JSON.stringify([resto, Object.keys(datos.fuentes), pasoVisto]);
   pintarTrabajo(trabajo);
   const escribiendo = document.activeElement && $("vista").contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
   if (nueva !== firma && !(escribiendo && firma)) { firma = nueva; pintarVideo(); }
@@ -229,15 +290,61 @@ function miniaturaDe(f) {
   return `<img src="/fv/${esc(f.clip.fuente)}/${pad3(f.clip.plano)}.jpg" alt="" loading="lazy"><em>${esc(fu?.nombre || "")} · ${pl ? (pl.fin - pl.ini).toFixed(1) : "?"} s</em>`;
 }
 
+const NOMBRES = ["Guion", "Material", "Montaje", "Previa", "Final"];
 function pintarVideo() {
   const v = datos.video, paso = datos.paso;
-  const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "ahora" : "");
-  const nombres = ["Guion", "Material", "Montaje", "Previa", "Final"];
+  const p = pasoVisto || paso;
+  const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
+  const conClip = v.frases.filter((f) => f.clip || f.panel).length;
+  $("vista").innerHTML = `
+    <a class="volver" href="#videos">← Tus vídeos</a>
+    <div class="cabeza"><h1>${esc(v.titulo)}</h1>
+      <button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button></div>
+    <nav class="pasos">${NOMBRES.map((n, k) => `<a href="#v=${esc(v.id)}/${k + 1}" class="${estado(k + 1)} ${p === k + 1 ? "visto" : ""}">
+      <b>${estado(k + 1) === "hecho" ? "✓" : k + 1}</b><span>${n}</span></a>`).join("")}</nav>
+    ${[pasoGuion, pasoMaterial, pasoMontaje, pasoPrevia, pasoFinal][p - 1](v, conClip)}
+    <div class="navegar">
+      ${p > 1 ? `<a class="boton" href="#v=${esc(v.id)}/${p - 1}">← ${NOMBRES[p - 2]}</a>` : "<span></span>"}
+      ${p < 5 ? `<a class="primario" href="#v=${esc(v.id)}/${p + 1}">${NOMBRES[p]} →</a>` : ""}
+    </div>`;
+  enlazarVideo(p);
+}
+
+const pasoCab = (n, titulo, texto) => `<div class="paso-cab"><span class="num">${n}</span><div><h2>${titulo}</h2><p>${texto}</p></div></div>`;
+
+function pasoGuion(v) {
+  return `<section class="paso">
+    ${pasoCab(1, "Guion", `${v.frases.length} frases en ${new Set(v.frases.map((f) => f.bloque)).size} bloques. Una línea en blanco separa los bloques: ahí entra la rejilla.`)}
+    ${v.avisos?.length ? `<div class="avisos">${v.avisos.map((a) => `<p>${esc(a)}</p>`).join("")}</div>` : ""}
+    ${!v.frases.length && v.trabajo?.ocupado ? `<p class="meta">Studio está investigando y escribiendo el guion: aparecerá aquí al terminar.</p>` : ""}
+    <textarea class="campo guion" id="guion">${esc(v.guion)}</textarea>
+    <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button></div>
+  </section>`;
+}
+
+function pasoMaterial(v) {
+  return `<section class="paso">
+    ${pasoCab(2, "Material", "Tráilers oficiales y gameplay sin comentario. Se baja en baja calidad solo para ver los planos; en alta, solo lo que uses.")}
+    <form class="material-form" id="material-form">
+      <input class="campo" id="m-url" placeholder="Enlace del vídeo (YouTube…)" required>
+      <input class="campo" id="m-desde" placeholder="Desde (2:33:55)">
+      <input class="campo" id="m-hasta" placeholder="Hasta (2:50:33)">
+      <button class="primario" type="submit">Añadir</button>
+    </form>
+    <p class="meta">En un gameplay de horas, pon desde y hasta (el capítulo de la misión): así solo se baja ese tramo.</p>
+    <div class="fuentes">${v.fuentes.map((fid) => { const f = datos.fuentes[fid]; return `
+      <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt=""><div><b>${esc(f.nombre)}</b>
+        <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
+    <div id="banco"></div>
+  </section>`;
+}
+
+function pasoMontaje(v, conClip) {
   let bloque = -1;
   const frases = v.frases.map((f) => {
     const sep = f.bloque !== bloque ? `<div class="bloque-sep">Bloque ${f.bloque + 1}${f.bloque > 0 ? " · entra con la rejilla" : ""}</div>` : "";
     bloque = f.bloque;
-    return `${sep}<div class="frase">
+    return `${sep}<div class="frase" id="frase-${f.n}">
       <button class="miniatura" type="button" data-elegir="${f.n}" title="Elegir el plano de esta frase">${miniaturaDe(f)}</button>
       <div class="cuerpo"><small>FRASE ${f.n}</small><p>${esc(f.texto)}</p>
         <div class="fila">
@@ -253,93 +360,84 @@ function pintarVideo() {
         </div>
       </div></div>`;
   }).join("");
-  const conClip = v.frases.filter((f) => f.clip || f.panel).length;
+  return `<section class="paso">
+    ${pasoCab(3, "Montaje", `${conClip} de ${v.frases.length} frases con imagen. Toca un clip de la línea de tiempo o una imagen para cambiar el plano.`)}
+    <div class="fila"><button class="primario" type="button" id="proponer" ${v.fuentes.length ? "" : "disabled"}>Proponer planos para las frases vacías</button></div>
+    <div class="linea" id="linea"><p class="meta">Cargando la línea de tiempo…</p></div>
+    ${frases}
+  </section>`;
+}
+
+function pasoPrevia(v, conClip) {
+  return `<section class="paso">
+    ${pasoCab(4, "Previa", "En silencio, con los efectos y las transiciones. Gratis: revísala antes de la voz.")}
+    ${v.previa ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/previa.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : `<div class="pantalla vacia">Aún no hay previa</div>`}
+    <div class="fila"><button class="primario" type="button" id="hacer-previa" ${conClip === v.frases.length && v.frases.length ? "" : "disabled"}>${v.previa ? "Rehacer previa" : "Hacer previa"}</button>
+      ${conClip < v.frases.length ? `<span class="meta">Faltan ${v.frases.length - conClip} frases por elegir (paso 3).</span>` : ""}</div>
+  </section>`;
+}
+
+function pasoFinal(v) {
   const t = v.textos;
   const fotosMini = v.frases.filter((f) => f.clip);
-  $("vista").innerHTML = `
-    <a class="volver" data-ir="inicio">← Tus vídeos</a>
-    <div class="cabeza"><h1>${esc(v.titulo)}</h1>
-      <button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button></div>
-    <nav class="pasos">${nombres.map((n, k) => `<a data-ir-paso="${k + 1}" class="${estado(k + 1)}"><b>${estado(k + 1) === "hecho" ? "✓" : k + 1}</b><span>${n}</span></a>`).join("")}</nav>
-
-    <section class="paso ${estado(1)}" id="p1">
-      <div class="paso-cab"><span class="num">1</span><div><h2>Guion</h2>
-        <p>${v.frases.length} frases en ${new Set(v.frases.map((f) => f.bloque)).size} bloques. Una línea en blanco separa los bloques.</p></div></div>
-      ${v.avisos?.length ? `<div class="avisos">${v.avisos.map((a) => `<p>${esc(a)}</p>`).join("")}</div>` : ""}
-      ${!v.frases.length && v.trabajo?.ocupado ? `<p class="meta">Studio está investigando y escribiendo el guion: aparecerá aquí al terminar.</p>` : ""}
-      <textarea class="campo" id="guion">${esc(v.guion)}</textarea>
-      <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button></div>
-    </section>
-
-    <section class="paso ${estado(2)}" id="p2">
-      <div class="paso-cab"><span class="num">2</span><div><h2>Material</h2>
-        <p>Tráilers oficiales y gameplay sin comentario. Se baja en baja calidad solo para ver los planos; en alta, solo lo que uses.</p></div></div>
-      <form class="material-form" id="material-form">
-        <input class="campo" id="m-url" placeholder="Enlace del vídeo (YouTube…)" required>
-        <input class="campo" id="m-desde" placeholder="Desde (2:33:55)">
-        <input class="campo" id="m-hasta" placeholder="Hasta (2:50:33)">
-        <button class="primario" type="submit">Añadir</button>
-      </form>
-      <p class="meta">En un gameplay de horas, pon desde y hasta (el capítulo de la misión): así solo se baja ese tramo.</p>
-      <div class="fuentes">${v.fuentes.map((fid) => { const f = datos.fuentes[fid]; return `
-        <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt=""><div><b>${esc(f.nombre)}</b>
-          <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
-      <div id="banco"></div>
-    </section>
-
-    <section class="paso ${estado(3)}" id="p3">
-      <div class="paso-cab"><span class="num">3</span><div><h2>Montaje</h2>
-        <p>${conClip} de ${v.frases.length} frases con imagen. Toca una imagen para cambiar el plano.</p></div></div>
-      <div class="fila"><button class="primario" type="button" id="proponer" ${v.fuentes.length ? "" : "disabled"}>Proponer planos para las frases vacías</button></div>
-      ${frases}
-    </section>
-
-    <section class="paso ${estado(4)}" id="p4">
-      <div class="paso-cab"><span class="num">4</span><div><h2>Previa</h2>
-        <p>En silencio, con los efectos y las transiciones. Gratis: revisa antes de la voz.</p></div></div>
-      ${v.previa ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/previa.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : ""}
-      <div class="fila"><button class="primario" type="button" id="hacer-previa" ${conClip === v.frases.length ? "" : "disabled"}>${v.previa ? "Rehacer previa" : "Hacer previa"}</button>
-        ${conClip < v.frases.length ? `<span class="meta">Faltan ${v.frases.length - conClip} frases por elegir.</span>` : ""}</div>
-    </section>
-
-    <section class="paso ${estado(5)}" id="p5">
-      <div class="paso-cab"><span class="num">5</span><div><h2>Final</h2>
-        <p>Voz, planos en alta calidad, subtítulos, logo y música. Luego el Short, los textos y la miniatura.</p></div></div>
-      <div class="fila"><span class="voz">Voz: ${esc(v.voz_nombre)} · gratis</span>
-        <button class="primario" type="button" id="montar-final" ${v.previa ? "" : "disabled"}>${v.final ? "Volver a montar" : "Montar vídeo final"}</button></div>
-      ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
-      <div class="dos">
-        <div class="textos"><span class="etiqueta">Short vertical</span>
-          <div class="fila"><input class="campo" style="max-width:120px" id="s-desde" value="${reloj(v.short?.desde ?? 0)}">
-            <input class="campo" style="max-width:120px" id="s-hasta" value="${reloj(v.short?.hasta ?? Math.min(45, v.voz?.duracion || 45))}">
-            <button class="boton" type="button" id="hacer-short">${v.short ? "Rehacer Short" : "Sacar Short"}</button></div>
-          ${v.short ? `<video class="vertical" controls preload="metadata" src="/m/${esc(v.id)}/short_9x16.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : `<p class="meta">Elige de qué segundo a qué segundo (máx. 60).</p>`}
-        </div>
-        <div class="textos"><span class="etiqueta">Miniatura</span>
-          <input class="campo" id="mini-texto" value="${esc(t?.texto_miniatura || "")}" placeholder="Texto grande: ¿LO COPIÓ?">
-          <div class="fila"><select class="campo" id="mini-a" style="flex:1">${fotosMini.map((f) => `<option value="${f.n}">Frase ${f.n}</option>`).join("")}</select>
-            <select class="campo" id="mini-b" style="flex:1"><option value="">Una sola imagen</option>${fotosMini.map((f, k) => `<option value="${f.n}" ${k === fotosMini.length - 1 ? "selected" : ""}>Frase ${f.n}</option>`).join("")}</select></div>
-          <button class="boton" type="button" id="hacer-mini">${v.miniatura ? "Rehacer miniatura" : "Hacer miniatura"}</button>
-          ${v.miniatura ? `<img class="miniatura-hecha" src="/m/${esc(v.id)}/miniatura.jpg?v=${encodeURIComponent(v.actualizado)}" alt="Miniatura">` : ""}
-        </div>
+  const descripcion = t ? [t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", (t.hashtags || []).join(" ")].join("\n") : "";
+  return `<section class="paso">
+    ${pasoCab(5, "Final", "Voz, planos en alta calidad, subtítulos, logo y música. Luego el Short, los textos y la miniatura.")}
+    <div class="fila"><span class="voz">Voz: ${esc(v.voz_nombre)} · gratis</span>
+      <button class="primario" type="button" id="montar-final" ${v.previa ? "" : "disabled"}>${v.final ? "Volver a montar" : "Montar vídeo final"}</button>
+      ${!v.previa ? `<span class="meta">Primero haz la previa (paso 4).</span>` : ""}</div>
+    ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
+    <div class="dos">
+      <div class="textos"><span class="etiqueta">Short vertical</span>
+        <div class="fila"><input class="campo corto-t" id="s-desde" value="${reloj(v.short?.desde ?? 0)}">
+          <input class="campo corto-t" id="s-hasta" value="${reloj(v.short?.hasta ?? Math.min(45, v.voz?.duracion || 45))}">
+          <button class="boton" type="button" id="hacer-short">${v.short ? "Rehacer Short" : "Sacar Short"}</button></div>
+        ${v.short ? `<video class="vertical" controls preload="metadata" src="/m/${esc(v.id)}/short_9x16.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : `<p class="meta">Elige de qué segundo a qué segundo (máx. 60).</p>`}
       </div>
-      <div class="textos"><span class="etiqueta">Textos para publicar</span>
-        ${t ? `${t.titulos.map((x) => `<div class="copiable"><p>${esc(x)}</p><button class="boton" data-copiar="${esc(x)}">Copiar</button></div>`).join("")}
-          <div class="copiable"><p>${esc([t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", t.hashtags.join(" ")].join("\n"))}</p>
-            <button class="boton" data-copiar="${esc([t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", t.hashtags.join(" ")].join("\n"))}">Copiar</button></div>`
-          : `<p class="meta">Se escriben solos al montar el vídeo final.</p>`}
-        <div class="fila"><button class="boton" type="button" id="rehacer-textos">${t ? "Rehacer textos" : "Escribir textos"}</button></div>
-      </div>` : ""}
-    </section>`;
-  pintarBanco();
-  enlazarVideo();
-  if (!pintarVideo.hecho) {   // al abrir un vídeo, directo a su paso
-    pintarVideo.hecho = true;
-    document.getElementById(`p${paso}`)?.scrollIntoView({ block: "start" });
-  }
+      <div class="textos"><span class="etiqueta">Miniatura</span>
+        <input class="campo" id="mini-texto" value="${esc(t?.texto_miniatura || "")}" placeholder="Texto grande: ¿LO COPIÓ?">
+        <div class="fila"><select class="campo" id="mini-a" style="flex:1">${fotosMini.map((f) => `<option value="${f.n}">Frase ${f.n}</option>`).join("")}</select>
+          <select class="campo" id="mini-b" style="flex:1"><option value="">Una sola imagen</option>${fotosMini.map((f, k) => `<option value="${f.n}" ${k === fotosMini.length - 1 ? "selected" : ""}>Frase ${f.n}</option>`).join("")}</select></div>
+        <button class="boton" type="button" id="hacer-mini">${v.miniatura ? "Rehacer miniatura" : "Hacer miniatura"}</button>
+        ${v.miniatura ? `<img class="miniatura-hecha" src="/m/${esc(v.id)}/miniatura.jpg?v=${encodeURIComponent(v.actualizado)}" alt="Miniatura">` : ""}
+      </div>
+    </div>
+    <div class="textos"><span class="etiqueta">Textos para publicar</span>
+      ${t ? `${t.titulos.map((x) => `<div class="copiable"><p>${esc(x)}</p><button class="boton" data-copiar="${esc(x)}">Copiar</button></div>`).join("")}
+        <div class="copiable"><p>${esc(descripcion)}</p><button class="boton" data-copiar="${esc(descripcion)}">Copiar</button></div>`
+        : `<p class="meta">Se escriben solos al montar el vídeo final.</p>`}
+      <div class="fila"><button class="boton" type="button" id="rehacer-textos">${t ? "Rehacer textos" : "Escribir textos"}</button></div>
+    </div>` : ""}
+  </section>`;
+}
+
+// La línea de tiempo por pistas (la misma que se guarda junto al vídeo final)
+async function pintarLinea() {
+  if (!$("linea")) return;
+  try {
+    const { linea, errores } = await api(`/api/m/linea?id=${encodeURIComponent(datos.video.id)}`);
+    const total = linea.duration || 1;
+    const nombres = { "video-1": "Vídeo", "graficos-1": "Gráficos", "rotulos-1": "Rótulos", voz: "Voz", musica: "Música" };
+    const marcas = Array.from({ length: Math.floor(total / 5) + 1 }, (_, k) => `<i style="left:${(k * 5 / total) * 100}%">${reloj(k * 5)}</i>`).join("");
+    $("linea").innerHTML = `
+      <div class="linea-cab"><span class="etiqueta">Línea de tiempo · ${reloj(total)}${datos.video.voz ? "" : " (estimada: aún sin voz)"}</span>
+        ${errores.length ? `<span class="repe">${errores.length} aviso(s): ${esc(errores[0])}</span>` : ""}</div>
+      <div class="regla">${marcas}</div>
+      ${linea.tracks.map((t) => `<div class="pista"><span class="pista-nombre">${esc(nombres[t.id] || t.id)}</span><div class="carril">
+        ${t.clips.map((c) => {
+          const izq = (c.start / total) * 100, ancho = Math.max(0.6, ((c.end - c.start) / total) * 100);
+          if (t.type === "video") {
+            const [fid, pl] = c.source.split("#");
+            return `<button class="clip clip-video ${c.transitionIn ? "con-entrada" : ""}" style="left:${izq}%;width:${ancho}%;background-image:url('/fv/${esc(fid)}/${pad3(pl)}.jpg')"
+              data-elegir="${c.id.split("-")[1]}" title="${esc(c.label)} · ${c.in}–${c.out} s"></button>`;
+          }
+          return `<span class="clip clip-${t.type}" style="left:${izq}%;width:${ancho}%" title="${esc(c.content || c.source || "")}">${esc(c.content || "")}</span>`;
+        }).join("")}</div></div>`).join("")}`;
+  } catch (e) { $("linea").innerHTML = `<p class="meta">${esc(e.message)}</p>`; }
 }
 
 async function pintarBanco() {
+  if (!$("banco")) return;
   try {
     const d = await api("/api/m");
     const libres = d.banco.filter((f) => !datos.video.fuentes.includes(f.id));
@@ -352,32 +450,37 @@ const enviar = async (ruta, extra = {}) => {
   try { await api(ruta, { id: datos.video.id, ...extra }); await cargarVideo(datos.video.id); } catch (e) { aviso(e); }
 };
 
-function enlazarVideo() {
+function enlazarVideo(p) {
   const v = datos.video;
-  $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });
   $("abrir-carpeta").onclick = () => enviar("/api/m/carpeta");
-  $("material-form").onsubmit = (ev) => {
-    ev.preventDefault();
-    enviar("/api/m/fuente", { url: $("m-url").value, desde: segundos($("m-desde").value), hasta: segundos($("m-hasta").value) });
-  };
-  $("proponer").onclick = () => enviar("/api/m/proponer");
-  $("hacer-previa").onclick = () => enviar("/api/m/previa");
-  $("montar-final").onclick = () => enviar("/api/m/final");
-  if ($("hacer-short")) $("hacer-short").onclick = () => enviar("/api/m/short", { desde: segundos($("s-desde").value), hasta: segundos($("s-hasta").value) });
-  if ($("rehacer-textos")) $("rehacer-textos").onclick = () => enviar("/api/m/textos");
-  if ($("hacer-mini")) $("hacer-mini").onclick = () => {
-    const clip = (n) => v.frases.find((f) => f.n === Number(n))?.clip;
-    const fotos = [clip($("mini-a").value), $("mini-b").value ? clip($("mini-b").value) : null].filter(Boolean);
-    enviar("/api/m/miniatura", { texto: $("mini-texto").value, fotos });
-  };
+  if (p === 1) $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });
+  if (p === 2) {
+    $("material-form").onsubmit = (ev) => {
+      ev.preventDefault();
+      enviar("/api/m/fuente", { url: $("m-url").value, desde: segundos($("m-desde").value), hasta: segundos($("m-hasta").value) });
+    };
+    pintarBanco();
+  }
+  if (p === 3) { $("proponer").onclick = () => enviar("/api/m/proponer"); pintarLinea(); }
+  if (p === 4) $("hacer-previa").onclick = () => enviar("/api/m/previa");
+  if (p === 5) {
+    $("montar-final").onclick = () => enviar("/api/m/final");
+    if ($("hacer-short")) $("hacer-short").onclick = () => enviar("/api/m/short", { desde: segundos($("s-desde").value), hasta: segundos($("s-hasta").value) });
+    if ($("rehacer-textos")) $("rehacer-textos").onclick = () => enviar("/api/m/textos");
+    if ($("hacer-mini")) $("hacer-mini").onclick = () => {
+      const clip = (n) => v.frases.find((f) => f.n === Number(n))?.clip;
+      const fotos = [clip($("mini-a").value), $("mini-b").value ? clip($("mini-b").value) : null].filter(Boolean);
+      enviar("/api/m/miniatura", { texto: $("mini-texto").value, fotos });
+    };
+  }
 }
 
-// delegación: lo que se repite por frase y el banco
+// delegación: lo que se repite por frase, el banco, abrir y nuevo
 $("vista").addEventListener("click", (ev) => {
-  const el = ev.target.closest("[data-elegir],[data-panel],[data-guardar-panel],[data-quitar-panel],[data-usar],[data-copiar],[data-ir],[data-ir-paso]");
+  const el = ev.target.closest("[data-elegir],[data-panel],[data-guardar-panel],[data-quitar-panel],[data-usar],[data-copiar],[data-abrir],[data-nuevo]");
   if (!el) return;
-  if (el.dataset.irPaso) { $(`p${el.dataset.irPaso}`).scrollIntoView({ behavior: "smooth", block: "start" }); return; }
-  if (el.dataset.ir) { location.hash = ""; return; }
+  if (el.dataset.nuevo !== undefined) return abrirNuevo();
+  if (el.dataset.abrir) { ev.preventDefault(); location.hash = `v=${el.dataset.abrir}`; return; }
   if (el.dataset.elegir) return abrirSelector(Number(el.dataset.elegir));
   if (el.dataset.usar) return enviar("/api/m/usar-fuente", { fuente: el.dataset.usar });
   if (el.dataset.copiar !== undefined) {
@@ -397,10 +500,10 @@ $("vista").addEventListener("change", (ev) => {
   const r = ev.target.closest("[data-rotulo]");
   if (r) enviar("/api/m/asignar", { n: Number(r.dataset.rotulo), rotulo: r.value });
 });
-document.querySelector(".marca").addEventListener("click", (ev) => { ev.preventDefault(); location.hash = ""; });
 
-// ============================================================ elegir plano
+// ============================================================ Elegir plano
 function abrirSelector(n) {
+  if (!datos) return;
   fraseEligiendo = n;
   const f = datos.video.frases.find((x) => x.n === n);
   if (!datos.video.fuentes.length) return aviso(new Error("Primero añade material en el paso 2."));
@@ -433,7 +536,7 @@ $("selector").addEventListener("click", async (ev) => {
 });
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") $("selector").hidden = true; });
 
-// ============================================================ trabajo en marcha
+// ============================================================ Trabajo en marcha
 function pintarTrabajo(t) {
   const caja = $("trabajo");
   if (!t || (!t.ocupado && !t.error)) { caja.hidden = true; return; }
@@ -444,14 +547,29 @@ function pintarTrabajo(t) {
   $("trabajo-barra").style.width = `${t.ocupado ? t.progreso || 0 : 100}%`;
 }
 
-// ============================================================ ciclo
+// ============================================================ Rutas
+const VISTAS = { inicio: vistaInicio, videos: vistaVideos, biblioteca: vistaBiblioteca, tendencias: vistaTendencias,
+  canal: vistaCanal, herramientas: vistaHerramientas };
 async function ir() {
   $("trabajo").hidden = true;
-  const m = location.hash.match(/^#v=([\w-]+)/);
+  $("selector").hidden = true;
+  const m = location.hash.match(/^#v=([\w-]+)(?:\/(\d))?/);
+  const vista = m ? "videos" : (location.hash.slice(1) || "inicio");
+  document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("activo", a.dataset.vista === vista));
+  seguro("/api/m").then((d) => { $("canal").textContent = d?.canal?.nombre || ""; });
   try {
-    if (m) { pintarVideo.hecho = false; firma = ""; await cargarVideo(m[1]); }
-    else await pintarInicio();
-  } catch (e) { aviso(e); if (m) location.hash = ""; }
+    if (m) {
+      const nuevoVideo = !datos || datos.video.id !== m[1];
+      pasoVisto = m[2] ? Number(m[2]) : 0;
+      firma = "";
+      await cargarVideo(m[1]);
+      if (nuevoVideo && !m[2]) { pasoVisto = datos.paso; firma = ""; pintarVideo(); }
+    } else {
+      datos = null; firma = "";
+      await (VISTAS[vista] || vistaInicio)();
+    }
+    window.scrollTo({ top: 0 });
+  } catch (e) { aviso(e); if (m) location.hash = "videos"; }
   const carga = $("carga");
   if (carga) { carga.style.opacity = 0; setTimeout(() => carga.remove(), 300); }
 }

@@ -664,6 +664,10 @@ def montar_final(mid: str) -> None:
     def fase():
         destino = _render(mid, True, lambda f, n: _avisar(mid, f, n))
         modificar(mid, lambda p: p.update(final={"archivo": destino.name, "hecho": time.strftime("%Y-%m-%d %H:%M")}))
+        from . import linea   # la línea de tiempo por pistas, junto al vídeo (para abrirla en otro editor o revisarla)
+        q = cargar(mid)
+        (carpeta(mid) / "linea_de_tiempo.json").write_text(
+            json.dumps(linea.desde_montaje(q, {fid: fuente(fid) for fid in q["fuentes"]}), ensure_ascii=False, indent=1), encoding="utf-8")
         _avisar(mid, "Textos para publicar", 97)
         try:
             hacer_textos(mid)

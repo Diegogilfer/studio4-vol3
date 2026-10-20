@@ -130,7 +130,8 @@ textarea.campo { min-height: 220px; resize: vertical; line-height: 1.6; }
   color: var(--tenue); font-weight: 600; font-size: 14px; }
 .pasos a b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--caja-2); font-size: 12px; }
 .pasos a.hecho { color: var(--suave); } .pasos a.hecho b { background: color-mix(in srgb, var(--ok) 30%, transparent); color: var(--ok); }
-.pasos a.ahora { color: #fff; background: var(--grad); } .pasos a.ahora b { background: rgba(0, 0, 0, .25); color: #fff; }
+.pasos a.toca b { box-shadow: 0 0 0 2px var(--rosa); }
+.pasos a.visto { color: #fff; background: var(--grad); } .pasos a.visto b { background: rgba(0, 0, 0, .25); color: #fff; box-shadow: none; }
 .paso { scroll-margin-top: 140px; padding: 30px; border-radius: var(--r); background: var(--caja); border: 1px solid var(--borde); margin-bottom: 20px; display: grid; gap: 18px; }
 .paso.ahora { border-color: color-mix(in srgb, var(--rosa) 40%, var(--borde)); box-shadow: 0 0 0 1px rgba(255, 62, 165, .12), 0 30px 80px -40px rgba(255, 62, 165, .45); }
 .paso-cab { display: flex; align-items: baseline; gap: 14px; }
@@ -207,3 +208,69 @@ textarea.campo { min-height: 220px; resize: vertical; line-height: 1.6; }
   .frase { grid-template-columns: minmax(0, 1fr); } .material-form, .dos { grid-template-columns: minmax(0, 1fr); }
   .paso { padding: 20px; }
 }
+
+
+/* --- navegación por pantallas --- */
+.nav { display: flex; gap: 4px; margin-left: 18px; min-width: 0; }
+.nav a { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; color: var(--suave); text-decoration: none;
+  font-weight: 600; font-size: 14px; transition: background .2s, color .2s; }
+.nav a:hover { background: var(--caja-2); color: var(--texto); }
+.nav a.activo { background: var(--caja-2); color: var(--texto); box-shadow: inset 0 0 0 1px var(--borde); }
+.nav a.activo svg { color: var(--rosa); }
+.nav svg, .herramienta svg { width: 18px; height: 18px; flex: none; }
+.barra .canal { margin-left: auto; }
+.seccion-cab { margin-bottom: 26px; } .seccion-cab h1 { font-size: clamp(40px, 5.5vw, 62px); }
+.fila-entre { display: flex; justify-content: space-between; align-items: end; gap: 14px; margin-bottom: 0; }
+
+/* --- editor por pasos --- */
+.navegar { display: flex; justify-content: space-between; align-items: center; margin: 6px 0 20px; }
+.navegar a { text-decoration: none; }
+textarea.guion { min-height: 420px; font-size: 16px; }
+.pantalla.vacia { display: grid; place-items: center; color: var(--tenue); border: 1px dashed var(--borde); background: var(--fondo-2); }
+.corto-t { max-width: 120px; }
+
+/* línea de tiempo */
+.linea { display: grid; gap: 6px; padding: 16px; border-radius: 18px; background: var(--fondo-2); border: 1px solid var(--borde); }
+.linea-cab { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.regla, .carril { position: relative; margin-left: 92px; }
+.regla { height: 18px; border-bottom: 1px solid var(--borde); }
+.regla i { position: absolute; top: 0; transform: translateX(-50%); font-style: normal; font-size: 11px; color: var(--tenue); }
+.pista { position: relative; display: block; }
+.pista-nombre { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 84px; font-size: 12px; font-weight: 700; color: var(--suave); }
+.carril { height: 46px; border-radius: 10px; background: var(--caja); }
+.clip { position: absolute; top: 4px; bottom: 4px; border-radius: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: 11px; font-weight: 700; padding: 0 6px; display: flex; align-items: center; border: 0; }
+.clip-video { background-size: cover; background-position: center; cursor: pointer; box-shadow: inset 0 0 0 2px rgba(255,255,255,.18); }
+.clip-video:hover { box-shadow: inset 0 0 0 2px var(--cian); }
+.clip-video.con-entrada::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 10px;
+  background: repeating-linear-gradient(90deg, var(--violeta) 0 2px, transparent 2px 4px); }
+.clip-text { background: color-mix(in srgb, var(--rosa) 35%, transparent); color: #fff; }
+.clip-audio { background: linear-gradient(90deg, color-mix(in srgb, var(--cian) 35%, transparent), color-mix(in srgb, var(--cian) 18%, transparent)); color: #fff; }
+
+/* biblioteca desplegable */
+.tema-caja { border-radius: 18px; background: var(--caja); border: 1px solid var(--borde); }
+.tema-caja > summary { list-style: none; cursor: pointer; background: transparent; border: 0; }
+.tema-caja > summary::-webkit-details-marker { display: none; }
+.tema-caja[open] > summary { border-bottom: 1px solid var(--borde); border-radius: 18px 18px 0 0; }
+.tema-caja.hecho { opacity: .75; }
+.tema-cuerpo { display: grid; gap: 10px; padding: 16px 20px 20px; }
+.guion-previo { margin: 0; color: var(--suave); line-height: 1.6; }
+.corto-item { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 4px 10px; padding: 10px 12px; border-radius: 12px; background: var(--fondo-2); }
+.corto-item b { color: var(--rosa); } .corto-item small { grid-column: 2; }
+
+/* canales */
+.canal-caja { display: grid; gap: 16px; padding: 26px; margin-bottom: 20px; border-radius: 24px; background: var(--caja); border: 1px solid var(--borde); }
+.canal-caja.activo { border-color: color-mix(in srgb, var(--rosa) 45%, var(--borde)); }
+.canal-fila { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 18px; align-items: center; }
+.canal-logo.chico { width: 72px; height: 72px; }
+.redes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .redes .chip { cursor: default; }
+.herramienta { align-content: start; }
+@media (max-width: 1100px) { .nav span { display: none; } .nav a { padding: 10px; } }
+@media (max-width: 760px) {
+  .barra { flex-wrap: wrap; } .nav { order: 3; width: 100%; margin-left: 0; justify-content: space-between; }
+  .barra .canal { margin-left: auto; } .canal-fila { grid-template-columns: auto minmax(0, 1fr); }
+  .canal-fila > :last-child { grid-column: 1 / -1; justify-self: start; }
+  .regla, .carril { margin-left: 64px; } .pista-nombre { width: 60px; font-size: 11px; }
+}
+
+.canal-hero.cargando .canal-logo { background: var(--caja-2); animation: latir 1.6s ease-in-out infinite; }

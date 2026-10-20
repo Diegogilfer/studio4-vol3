@@ -2190,3 +2190,43 @@ def test_imagen_de_wikipedia_de_una_palabra_solo_si_es_un_videojuego(aislado, mo
     juego = {"index": 1, "title": "Leviathan", "description": "2019 video game", "thumbnail": {"source": "https://x/j.jpg"}}
     monkeypatch.setattr(ideas.requests, "get", lambda *a, **k: R(juego))
     assert ideas._de_wikipedia("El Ghost Leviathan de Subnautica")["url"] == "https://x/j.jpg"
+
+
+def test_linea_de_tiempo_corregida_valida_y_detecta_errores(aislado, tmp_path, monkeypatch):
+    from studio4 import linea, montaje
+    # el modelo del autor, corregido: datos generales, ids, in/out de la fuente, transform con unidades, estilo
+    tl = {"version": 1, "fps": 30, "width": 1920, "height": 1080, "duration": 5.0, "tracks": [
+        {"id": "video-track-1", "type": "video", "clips": [{"id": "c1", "start": 0, "end": 5, "source": "clip1.mp4", "in": 12.0, "out": 17.0,
+         "speed": 1.0, "transform": {"x": 0.5, "y": 0.5, "scale": 1, "rotation": 0, "opacity": 1, "anchor": "center"}}]},
+        {"id": "text-track-1", "type": "text", "clips": [{"id": "t1", "start": 1, "end": 4, "content": "Hola",
+         "style": {"font": "Arial Bold", "size": 46, "color": "#ff3ea5", "position": "bottom-left"},
+         "animation": {"in": "fade", "out": "fade", "duration": 0.3}}]}]}
+    assert linea.validar(tl) == []
+    tl["tracks"][0]["clips"].append({"id": "c2", "start": 4, "end": 6, "source": "x.mp4", "in": 0, "out": 2})
+    errores = linea.validar(tl)
+    assert any("se pisa" in e for e in errores) and any("después del final" in e for e in errores)
+    # la de un vídeo del panel
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("P", "Una frase con seis palabras justas aquí.\n\nOtra frase con seis palabras justas aquí.")
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.proponer(mid)
+    montaje.asignar(mid, 1, rotulo="GTA 6")
+    p = montaje.cargar(mid)
+    t2 = linea.desde_montaje(p, {"fuenteA": montaje.fuente("fuenteA")})
+    assert linea.validar(t2) == []
+    v = t2["tracks"][0]["clips"]
+    assert [c["id"] for c in v] == ["frase-1", "frase-2"] and "transitionIn" in v[1] and v[0]["in"] == 2.0
+    assert t2["tracks"][2]["clips"][0]["content"] == "GTA 6"
+
+
+def test_panel_nuevo_no_carga_el_estudio_antiguo():
+    """Muro entre los dos paneles: el panel nuevo (montaje, línea de tiempo y sus rutas) no arrastra el código del
+    estudio antiguo. Si alguien lo mezcla, esta prueba falla."""
+    import subprocess as _sp
+    import sys as _sys
+    codigo = ("import sys; import studio4.rutas_montaje; "
+              "print(' '.join(sorted(m.split('.')[1] for m in sys.modules if m.startswith('studio4.'))))")
+    cargados = set(_sp.run([_sys.executable, "-c", codigo], capture_output=True, text=True,
+                           cwd=str(pathlib.Path(__file__).resolve().parent.parent)).stdout.split())
+    antiguos = {"produccion", "flow", "director", "render", "entregas", "miniaturas", "referencias", "visuales_api", "tarjetas", "importar"}
+    assert cargados and not (cargados & antiguos), cargados & antiguos

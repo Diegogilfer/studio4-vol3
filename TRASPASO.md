@@ -116,3 +116,8 @@
   y reserva automática prioritaria) + creación de la skill `ingenieria-inversa` (`.agents/skills/ingenieria-inversa/` y
   `.claude/skills/ingenieria-inversa/`, con sonda `sondar_api.py`; 119 pruebas en verde).
 
+- 2026-10-20 · Claude: **panel nuevo** en `/` (el clásico sigue en `/clasico`). Seis pantallas (Inicio, Vídeos,
+  Biblioteca, Tendencias, Canal, Herramientas) y cada vídeo en 5 pasos separados (guion, material, montaje, previa,
+  final) con **línea de tiempo por pistas** (`studio4/linea.py`, formato corregido del autor). Motor:
+  `studio4/montaje.py`, `extractor.py`, `animacion.py`. Rutas aparte en `studio4/rutas_montaje.py`: el panel nuevo
+  no carga el estudio antiguo (prueba `test_panel_nuevo_no_carga_el_estudio_antiguo`).

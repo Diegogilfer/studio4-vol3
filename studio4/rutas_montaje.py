@@ -1,0 +1,95 @@
+"""Rutas del panel nuevo (montaje 16:9 en 5 pasos), separadas del panel clásico.
+
+servidor.py solo les pasa las peticiones y responde lo que devuelven. El panel nuevo NO carga el código del estudio
+antiguo (produccion, flow, director, render…): una prueba lo vigila. Con el clásico comparte solo datos de lectura
+(ideas del día, biblioteca, tendencias y canales), por las rutas que ya existían.
+
+Cada función devuelve:  None (la ruta no es del panel nuevo) · ("json", datos) · ("archivo", ruta_en_disco).
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+from . import canales, extractor, linea, montaje
+
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav)$")
+
+
+class NoExiste(Exception):
+    """Se responde 404."""
+
+
+def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
+    q = lambda k: (query.get(k) or [""])[0]  # noqa: E731
+    if ruta == "/api/m":
+        return "json", {"videos": montaje.listar(), "canal": canales.activo(),
+                        "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
+                                  for f in montaje.banco()]}
+    if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
+        return "json", {"espacio": montaje.espacio(), "descargador": extractor.descargador()}
+    if ruta == "/api/m/linea":   # la línea de tiempo por pistas del vídeo (validada)
+        p = montaje.cargar(q("id"))
+        tl = linea.desde_montaje(p, {fid: montaje.fuente(fid) for fid in p["fuentes"]})
+        return "json", {"linea": tl, "errores": linea.validar(tl)}
+    if ruta == "/api/m/ver":
+        p = montaje.cargar(q("id"))
+        return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]}}
+    m = re.fullmatch(r"/m/([\w-]+)/([\w.]+)", ruta)   # los vídeos, la previa, el Short, la miniatura y la voz
+    if m:
+        if not MEDIOS.match(m.group(2)):
+            raise NoExiste(ruta)
+        return "archivo", montaje.carpeta(m.group(1)) / m.group(2)
+    m = re.fullmatch(r"/canal/([\w-]+)/logo\.png", ruta)   # el logo del canal (en círculo)
+    if m:
+        logo = montaje.logo_de(m.group(1))
+        if not logo:
+            raise NoExiste(ruta)
+        return "archivo", logo
+    m = re.fullmatch(r"/fv/([\w.-]+)/(\d{3})\.jpg", ruta)   # miniaturas de los planos del banco de clips
+    if m:
+        return "archivo", extractor.CACHE / f"{m.group(1)}_planos" / f"{m.group(2)}.jpg"
+    return None
+
+
+def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
+    mid = str(d.get("id", ""))
+    num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
+    if ruta == "/api/m/desde-biblioteca":   # un guion de la Biblioteca → vídeo nuevo
+        return "json", {"ok": True, "id": montaje.desde_biblioteca(str(d.get("item", "")))}
+    if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion
+        return "json", {"ok": True, "id": montaje.desde_idea(int(d.get("n", -1)))}
+    if ruta == "/api/m/liberar":
+        return "json", {"ok": True, "liberado": montaje.liberar()}
+    if ruta == "/api/m/actualizar-descargador":
+        return "json", {"ok": True, "version": extractor.actualizar_descargador()}
+    if ruta == "/api/m/nuevo":
+        return "json", {"ok": True, "id": montaje.crear(str(d.get("titulo", "")), str(d.get("guion", "")))}
+    if ruta == "/api/m/proponer":
+        return "json", {"ok": True, "propuestas": montaje.proponer(mid)}
+    if ruta == "/api/m/textos":
+        return "json", {"ok": True, "textos": montaje.hacer_textos(mid)}
+    acciones = {
+        "/api/m/guion": lambda: montaje.cambiar_guion(mid, str(d.get("guion", ""))),
+        "/api/m/fuente": lambda: montaje.anadir_fuente(mid, str(d.get("url", "")).strip(), num("desde"), num("hasta"),
+                                                       str(d.get("nombre", ""))),
+        "/api/m/usar-fuente": lambda: montaje.usar_fuente(mid, str(d.get("fuente", ""))),
+        "/api/m/asignar": lambda: montaje.asignar(mid, int(d.get("n", 0)), str(d.get("fuente", "")), int(d.get("plano", 0) or 0),
+                                                  d.get("rotulo"), d.get("panel")),
+        "/api/m/previa": lambda: montaje.previa(mid),
+        "/api/m/final": lambda: montaje.montar_final(mid),
+        "/api/m/short": lambda: montaje.montar_short(mid, float(d.get("desde", 0)), float(d.get("hasta", 0))),
+        "/api/m/miniatura": lambda: montaje.miniatura(mid, str(d.get("texto", ""))[:40], list(d.get("fotos") or [])),
+        "/api/m/carpeta": lambda: os.startfile(str(montaje.carpeta(mid))),  # noqa: S606 - el Explorador en tu PC
+    }
+    if ruta not in acciones:
+        raise NoExiste(ruta)
+    acciones[ruta]()
+    return "json", {"ok": True}
+
+
+def es_archivo(x: Any) -> bool:
+    return isinstance(x, Path)
