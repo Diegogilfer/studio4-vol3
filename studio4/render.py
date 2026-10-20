@@ -17,7 +17,11 @@ ENTRADA = 2.0     # carátula de entrada (título y marca) antes de que empiece 
 # Edición: se aplica a cada trozo por separado, así la duración no cambia y la voz sigue sincronizada.
 TRANSICIONES = {"corte": "Corte", "fundido": "Fundido a negro", "destello": "Destello"}
 EFECTOS = {"ninguno": "Ninguno", "cine": "Color cine", "grano": "Grano de película", "byn": "Blanco y negro", "zoom": "Zoom suave"}
-EDICION_POR_DEFECTO = {"transicion": "corte", "efecto": "ninguno", "caratula": True, "inicio": 0.0, "final": 0.0}
+EDICION_POR_DEFECTO = {"transicion": "corte", "efecto": "ninguno", "caratula": True, "inicio": 0.0, "final": 0.0,
+                       "musica": True}
+# Movimiento de cámara sobre las imágenes fijas, distinto en cada escena (parallax 2.5D con FFmpeg, gratis):
+# acercar, alejar, desplazar a la derecha y a la izquierda. Antes todas hacían el mismo zoom.
+MOVIMIENTOS = ("acercar", "derecha", "alejar", "izquierda")
 FUNDIDO = 0.22
 
 
@@ -73,6 +77,35 @@ def _encuadre(ancho: int, alto: int) -> str:
     return f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},setsar=1"
 
 
+def musica_de(p: dict[str, Any]) -> Path | None:
+    """La música de fondo: la que eligió el autor (`musica_pista`) o la de su carpeta que más encaja con el vídeo.
+    Ninguna si el autor la quitó en la edición o si su carpeta de música está vacía."""
+    from . import carpetas
+    if not edicion_de(p).get("musica", True):
+        return None
+    propia = p.get("musica_pista")
+    if propia and Path(propia).exists():
+        return Path(propia)
+    return carpetas.elegir_musica(" ".join(str(p.get(k) or "") for k in ("tema", "titulo", "estilo", "tono")))
+
+
+def _mezcla(voz: str, ambiente: float, total: float, musica: Path | None, desde: float = 0.0) -> tuple[list[str], str]:
+    """Entradas extra y filtro de audio: voz + ambiente (+ música que baja sola cuando habla la voz).
+    `voz` es la cadena de filtros de la entrada 1 (voz) y `desde` el segundo de la pista en que empieza la música."""
+    if not musica:
+        return [], (f"[1:a]{voz}[voz];[0:a]volume={ambiente}[amb];"
+                    f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
+    extra = ["-stream_loop", "-1", "-ss", f"{desde:.3f}", "-i", str(musica)]
+    fin = max(0.0, total - 2.0)
+    filtro = (f"[1:a]{voz},asplit=2[voz][llave];"
+              f"[0:a]volume={ambiente}[amb];"
+              f"[2:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={config.VOLUMEN_MUSICA},"
+              f"afade=t=in:st=0:d=1,afade=t=out:st={fin:.3f}:d=2[mus0];"
+              f"[mus0][llave]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[mus];"
+              f"[voz][amb][mus]amix=inputs=3:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
+    return extra, filtro
+
+
 def _segmento_video(origen: Path, destino: Path, d: float, ancho: int, alto: int, acabado: list[str] | tuple = ()) -> None:
     inf = medios.info(origen)
     c = max(0.1, inf["duracion"])
@@ -96,11 +129,28 @@ def _segmento_video(origen: Path, destino: Path, d: float, ancho: int, alto: int
     )
 
 
-def _segmento_imagen(origen: Path, destino: Path, d: float, ancho: int, alto: int, acabado: list[str] | tuple = ()) -> None:
-    """Imagen fija → acercamiento lento (Ken Burns), sin saltos: se escala a 2x antes del zoompan."""
+def _zoompan(movimiento: str, frames: int, ancho: int, alto: int) -> str:
+    """El filtro de cámara de una imagen fija (sin saltos: la imagen va escalada a 2x antes)."""
+    centro_y = "ih/2-(ih/zoom/2)"
+    if movimiento in ("derecha", "izquierda"):   # paneo lateral con algo de zoom: sensación de profundidad
+        signo = "+" if movimiento == "derecha" else "-"
+        z = "1.10"
+        x = f"(iw-iw/zoom)/2{signo}(iw-iw/zoom)/2*(on/{frames}-0.5)*1.6"
+    elif movimiento == "alejar":
+        z = f"max(1.12-0.12*on/{frames},1)"
+        x = "iw/2-(iw/zoom/2)"
+    else:
+        z = f"min(1+0.12*on/{frames},1.12)"
+        x = "iw/2-(iw/zoom/2)"
+    return f"zoompan=z='{z}':x='{x}':y='{centro_y}':d={frames}:s={ancho}x{alto}:fps={config.FPS}"
+
+
+def _segmento_imagen(origen: Path, destino: Path, d: float, ancho: int, alto: int, acabado: list[str] | tuple = (),
+                     movimiento: str = "acercar") -> None:
+    """Imagen fija → movimiento lento de cámara (acercar, alejar o paneo lateral)."""
     frames = int(d * config.FPS) + 1
     vf = (f"scale={ancho * 2}:{alto * 2}:force_original_aspect_ratio=increase,crop={ancho * 2}:{alto * 2},"
-          f"zoompan=z='min(1+0.12*on/{frames},1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={ancho}x{alto}:fps={config.FPS},setsar=1")
+          f"{_zoompan(movimiento, frames, ancho, alto)},setsar=1")
     vf = ",".join([vf, *acabado])
     medios.ffmpeg(
         "-loop", "1", "-i", str(origen), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
@@ -187,11 +237,13 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
         origen = carpeta / toma["archivo"]
         if not origen.exists():
             raise RuntimeError(f"Escena {esc['orden']}: falta el archivo de la toma elegida; elige otra o súbela de nuevo.")
-        hacer = _segmento_video if toma["tipo"] == "video" else _segmento_imagen
         acabado = _acabado(ed, d, primero=i == 0 and not entrada, ultimo=i == n - 1, video=toma["tipo"] == "video",
                            ancho=ancho, alto=alto)
         try:
-            hacer(origen, seg, d, ancho, alto, acabado)
+            if toma["tipo"] == "video":
+                _segmento_video(origen, seg, d, ancho, alto, acabado)
+            else:
+                _segmento_imagen(origen, seg, d, ancho, alto, acabado, movimiento=MOVIMIENTOS[i % len(MOVIMIENTOS)])
         except (RuntimeError, ValueError) as e:
             raise RuntimeError(f"Escena {esc['orden']}: el clip no se pudo procesar ({str(e)[-300:]}). Elige otra toma.") from e
         lista.append(seg)
@@ -216,13 +268,12 @@ def renderizar(p: dict[str, Any], carpeta: Path, avisar: Callable[[str, int], No
                                gancho="" if _es_tarjeta(p["escenas"][0]) else p["escenas"][0].get("texto_pantalla", ""), sonidos=ruidos,
                                inicio_gancho=entrada)
     retraso = int(entrada * 1000)
-    mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,adelay={retraso}:all=1[voz];"
-              f"[0:a]volume={ambiente}[amb];"
-              f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
+    extra, mezcla = _mezcla(f"aresample=48000,aformat=channel_layouts=stereo,adelay={retraso}:all=1", ambiente, total,
+                            musica_de(p))
     final = carpeta / "final.mp4"
     # El filtro ass lee la ruta relativa a la carpeta de trabajo: evita escapar «C:\» en Windows.
     medios.ffmpeg(
-        "-i", str(cuerpo), "-i", str(carpeta / voz["archivo"]),
+        "-i", str(cuerpo), "-i", str(carpeta / voz["archivo"]), *extra,
         "-filter_complex", f"[0:v]ass={ass.name}[v];{mezcla}", "-map", "[v]", "-map", "[a]",
         "-t", f"{total:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(final),
@@ -271,12 +322,10 @@ def recorte(p: dict[str, Any], carpeta: Path, desde: int, hasta: int, destino: P
               for s in sonidos.leer(carpeta / "render" / "sonidos.json") if ini <= s["ini"] < fin - 0.5]
     ass = subtitulos.construir(palabras, trabajo / "subtitulos.ass", ancho, alto, p.get("subtitulos"),
                                gancho="" if _es_tarjeta(p["escenas"][desde - 1]) else gancho, sonidos=ruidos)
-    mezcla = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo[voz];"
-              f"[0:a]volume={ambiente}[amb];"
-              f"[voz][amb]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
+    extra, mezcla = _mezcla("aresample=48000,aformat=channel_layouts=stereo", ambiente, largo, musica_de(p), desde=ini)
     destino.parent.mkdir(parents=True, exist_ok=True)
     medios.ffmpeg(
-        "-i", str(cuerpo), "-ss", f"{ini:.3f}", "-t", f"{largo:.3f}", "-i", str(carpeta / voz["archivo"]),
+        "-i", str(cuerpo), "-ss", f"{ini:.3f}", "-t", f"{largo:.3f}", "-i", str(carpeta / voz["archivo"]), *extra,
         "-filter_complex", f"[0:v]ass={ass.name}[v];{mezcla}", "-map", "[v]", "-map", "[a]",
         "-t", f"{largo:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", str(destino.resolve()),

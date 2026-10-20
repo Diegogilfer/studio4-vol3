@@ -351,3 +351,30 @@ def listar_material(cid: str) -> list[dict[str, Any]]:
         it["videos_usado"] = len(videos_por_huella[h])
     return items
 
+
+
+
+# --- Música de fondo (gratis): tus pistas en «Vídeos\STUDIO 4\Música» ------------------------------------------
+EXT_AUDIO = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"}
+
+
+def carpeta_musica() -> Path:
+    """Pon aquí pistas de la Biblioteca de audio de YouTube (libres para monetizar); el nombre del archivo dice el
+    ánimo («tension_epica.mp3», «misterio_suave.mp3») y Studio 4 elige la que más se parece al vídeo."""
+    return RAIZ_USUARIO / "Música"
+
+
+def elegir_musica(texto: str) -> Path | None:
+    """La pista cuyo nombre comparte más palabras con el texto (tema, estilo, tono); None si no hay música."""
+    import unicodedata
+    base = carpeta_musica()
+    pistas = sorted(f for f in base.rglob("*") if f.is_file() and f.suffix.lower() in EXT_AUDIO) if base.exists() else []
+    if not pistas:
+        return None
+
+    def palabras(t: str) -> set[str]:
+        t = unicodedata.normalize("NFKD", t.lower()).encode("ascii", "ignore").decode()
+        # raíz de 6 letras: «misterio» y «misterios», «épica» y «épico» cuentan igual
+        return {w[:6] for w in re.findall(r"[a-z]{3,}", t.replace("_", " ").replace("-", " "))}
+    buscadas = palabras(texto)
+    return max(pistas, key=lambda f: (len(buscadas & palabras(f.stem)), -pistas.index(f)))

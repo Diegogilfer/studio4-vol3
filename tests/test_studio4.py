@@ -1978,3 +1978,37 @@ def test_imagenes_reales_en_grande_y_nunca_miniaturas(aislado, monkeypatch):
         galeria.toma("https://x/a_320x180.jpg", "https://x/", aislado, 1, 1080, 1920)
     monkeypatch.setattr(galeria.fuentes, "_get", lambda u: imagen(832, 468))
     assert galeria.toma("https://x/a.jpg", "https://x/", aislado, 1, 1080, 1920)["origen"] == "real"
+
+
+def test_estilos_del_panel_son_los_de_config():
+    import re as _re
+    js = (pathlib.Path(__file__).resolve().parent.parent / "web" / "panel.js").read_text(encoding="utf-8")
+    bloque = js[js.index("const ESTILOS = {"): js.index("};", js.index("const ESTILOS = {"))]
+    assert _re.findall(r"^\s+(\w+): \[", bloque, _re.MULTILINE) == list(config.ESTILOS)
+    assert config.estilo_valido("viejo") == config.ESTILO_POR_DEFECTO and config.estilo_valido("comic") == "comic"
+
+
+def test_musica_de_fondo_se_elige_por_nombre_y_baja_con_la_voz(aislado, monkeypatch, tmp_path):
+    from studio4 import carpetas
+    monkeypatch.setattr(carpetas, "RAIZ_USUARIO", tmp_path)
+    assert carpetas.elegir_musica("misterio en GTA") is None   # sin carpeta de música, sin música
+    (tmp_path / "Música").mkdir()
+    for n in ("alegre_pop.mp3", "tension_misterio.mp3"):
+        (tmp_path / "Música" / n).write_bytes(b"x")
+    assert carpetas.elegir_musica("Los misterios de Vice City").name == "tension_misterio.mp3"
+    extra, filtro = render._mezcla("aresample=48000", 0.15, 30.0, tmp_path / "Música" / "alegre_pop.mp3")
+    assert "-stream_loop" in extra and "sidechaincompress" in filtro and "[mus]" in filtro
+    assert render._mezcla("aresample=48000", 0.15, 30.0, None)[0] == []
+    assert render.musica_de({"edicion": {"musica": False}, "tema": "misterio"}) is None
+
+
+def test_imagenes_fijas_con_movimiento_distinto(tmp_path):
+    """Cada imagen fija se mueve distinto (acercar, derecha, alejar, izquierda) y el vídeo sale con su duración."""
+    from PIL import Image
+    img = tmp_path / "a.png"
+    Image.new("RGB", (640, 360), "blue").save(img)
+    filtros = {m: render._zoompan(m, 30, 320, 180) for m in render.MOVIMIENTOS}
+    assert len(set(filtros.values())) == 4
+    destino = tmp_path / "s.mp4"
+    render._segmento_imagen(img, destino, 1.0, 320, 180, movimiento="izquierda")
+    assert abs(medios.duracion(destino) - 1.0) < 0.15

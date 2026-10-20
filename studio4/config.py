@@ -90,6 +90,7 @@ FORMATOS = {
 }
 FPS = 30
 VOLUMEN_AMBIENTE = float(os.getenv("STUDIO4_VOLUMEN_AMBIENTE", "0.15"))  # sonido de Veo bajo la voz; 0 = sin él
+VOLUMEN_MUSICA = float(os.getenv("STUDIO4_VOLUMEN_MUSICA", "0.18"))      # música de fondo; baja sola cuando habla la voz
 SEGUNDOS_CLIP = 8       # lo más largo que genera Flow (Veo) por clip
 VELOCIDADES = (0.9, 1.0, 1.1, 1.2)   # velocidad de la voz: FFmpeg acelera sin cambiar el tono
 CAMARA_LENTA_MAX = 1.5  # si la voz dura más que el clip, se ralentiza hasta aquí y luego se congela el final
@@ -97,12 +98,25 @@ CAMARA_LENTA_MAX = 1.5  # si la voz dura más que el clip, se ralentiza hasta aq
 # Estilos visuales que el director inyecta en cada prompt de Flow (siempre en inglés para Veo).
 ESTILOS = {
     "cinematografico": "cinematic live-action, anamorphic 35mm lens, shallow depth of field, film grain, natural color grading",
+    "hiperrealista": "hyperrealistic, photorealistic 8K detail, true-to-life skin and materials, natural lighting, no stylization",
     "documental": "documentary realism, handheld camera feel, natural light, authentic textures",
-    "anime": "high-quality anime, cel shading, vibrant colors, detailed backgrounds, Studio-style lighting",
+    "videojuego": "modern AAA video game graphics, Unreal Engine 5 render, real-time ray tracing, in-game camera, open-world look",
     "animacion3d": "high-end 3D animated film, soft global illumination, expressive characters, rich materials",
+    "anime": "high-quality anime, cel shading, vibrant colors, detailed backgrounds, Studio-style lighting",
+    "cartoon": "2D cartoon animation, bold clean outlines, flat vibrant colors, exaggerated expressive characters",
+    "stickman": "minimalist stick figure animation, simple black line characters on a plain white background, clean doodle style",
+    "comic": "comic book style, bold ink lines, halftone dots, dramatic panels, saturated colors",
+    "pixelart": "retro pixel art, 16-bit video game style, limited color palette, crisp pixels",
+    "stopmotion": "claymation stop-motion, handmade plasticine characters, miniature sets, tactile textures",
     "noir": "neo-noir, high-contrast low-key lighting, deep shadows, wet streets, teal and amber palette",
     "scifi": "epic science fiction, volumetric light, atmospheric haze, futuristic production design",
 }
+ESTILO_POR_DEFECTO = "cinematografico"
+
+
+def estilo_valido(estilo: str) -> str:
+    """El estilo si existe; si no (vacío o uno viejo), el de por defecto."""
+    return estilo if estilo in ESTILOS else ESTILO_POR_DEFECTO
 
 MAX_BYTES_MEDIO = 400 * 1024 * 1024
 

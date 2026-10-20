@@ -50,11 +50,18 @@ function porQue(id, motivo) {
 const ESTADOS = { investigando: "investigando", escribiendo: "escribiendo guion", guion_listo: "guion por revisar",
   escenas: "creando escenas", rodando: "en Flow", renderizando: "renderizando", terminado: "terminado", error: "error" };
 const VERSION = { corto: "Corto", largo: "Largo", propio: "Tu guion" };
-const ESTILOS = {
+const ESTILOS = {   // las mismas claves que config.ESTILOS (una prueba lo vigila)
   cinematografico: ["Cinematográfico", "Película realista, óptica anamórfica"],
+  hiperrealista: ["Hiperrealista", "Fotorrealista, como la vida real"],
   documental: ["Documental", "Real, cámara en mano, luz natural"],
-  anime: ["Anime", "Anime de calidad, colores vivos"],
+  videojuego: ["Render de videojuego", "Gráficos de juego moderno, cámara de juego"],
   animacion3d: ["Animación 3D", "Como una película de animación"],
+  anime: ["Anime", "Anime de calidad, colores vivos"],
+  cartoon: ["Cartoon 2D", "Dibujo animado, contornos limpios"],
+  stickman: ["Stickman", "Monigotes de palitos, muy simple"],
+  comic: ["Cómic", "Viñetas, tinta y tramas"],
+  pixelart: ["Pixel art", "Videojuego retro de 16 bits"],
+  stopmotion: ["Stop motion", "Plastilina y maquetas"],
   noir: ["Noir", "Contraste alto, sombras y neón"],
   scifi: ["Ciencia ficción", "Épico, luz volumétrica, futuro"],
 };

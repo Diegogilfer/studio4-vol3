@@ -336,7 +336,7 @@ def planificar(guion: str, estilo: str, formato: str, produccion: str = "",
                reparto: list[dict[str, str]] | None = None, bloques: list[str] | None = None,
                publico: str = "") -> dict[str, Any]:
     """Con `bloques` (guion por clips de Flow), una escena exacta por bloque: Gemini decide lo que se ve."""
-    estilo_en = config.ESTILOS.get(estilo, estilo)
+    estilo_en = config.ESTILOS.get(estilo) or config.ESTILOS[config.estilo_valido(estilo)]
     aspecto = config.FORMATOS[formato]["aspecto"]
     texto = _etiquetar(bloques) if bloques else guion
     prompt = (
