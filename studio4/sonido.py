@@ -8,6 +8,8 @@ Las nuestras antes de esto: −13,9 LUFS · graves −32,4 dB · agudos −32,7 
 
 from __future__ import annotations
 
+import array
+import wave
 from pathlib import Path
 
 from . import medios
@@ -61,18 +63,36 @@ def cama(total: float, destino: Path) -> Path:
     return destino
 
 
+MUESTRAS = 48000   # por segundo y canal; todos los efectos están en estéreo de 16 bits a 48 kHz
+
+
+def _muestras(wav: Path) -> array.array:
+    with wave.open(str(wav), "rb") as w:
+        if (w.getframerate(), w.getnchannels(), w.getsampwidth()) != (MUESTRAS, 2, 2):
+            raise ValueError(f"Efecto con formato inesperado: {wav.name}")
+        datos = array.array("h")
+        datos.frombytes(w.readframes(w.getnframes()))
+    return datos
+
+
 def pista(eventos: list[tuple[float, str, float]], total: float, destino: Path) -> Path:
-    """Todos los efectos en su sitio [(segundo, efecto, volumen)], con reverberación de sala."""
+    """Todos los efectos en su sitio [(segundo, efecto, volumen)], con reverberación de sala.
+    Los efectos se colocan aquí, en Python, y FFmpeg solo recibe un archivo: con un FFmpeg de decenas de entradas
+    (el mismo efecto abierto muchas veces) la mezcla se quedaba colgada de vez en cuando."""
     fx = biblioteca(destino.parent / "_fx")
-    eventos = [e for e in eventos if 0 <= e[0] < total]
-    if not eventos:
-        medios.ffmpeg("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{total:.3f}", str(destino))
-        return destino
-    entradas, filtros = [], []
-    for k, (t, tipo, vol) in enumerate(eventos):
-        entradas += ["-i", str(fx[tipo])]
-        filtros.append(f"[{k}:a]volume={vol:.2f},adelay={int(t * 1000)}:all=1[f{k}]")
-    filtros.append("".join(f"[f{k}]" for k in range(len(eventos))) +
-                   f"amix=inputs={len(eventos)}:normalize=0,{REVERB},apad,atrim=0:{total:.3f}[a]")
-    medios.ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-map", "[a]", "-ar", "48000", str(destino))
+    mezcla = array.array("f", bytes(4 * 2 * int(total * MUESTRAS)))
+    cache: dict[str, array.array] = {}
+    for t, tipo, vol in eventos:
+        if not 0 <= t < total:
+            continue
+        datos = cache.setdefault(tipo, _muestras(fx[tipo]))
+        ini = 2 * int(t * MUESTRAS)
+        fin = min(len(mezcla), ini + len(datos))
+        mezcla[ini:fin] = array.array("f", (a + b * vol for a, b in zip(mezcla[ini:fin], datos)))
+    crudo = destino.with_name(destino.stem + "_seco.raw")   # muestras en coma flotante, tal cual (sin recorrerlas)
+    crudo.write_bytes(mezcla.tobytes())
+    medios.ffmpeg("-f", "f32le", "-ar", str(MUESTRAS), "-ac", "2", "-i", str(crudo),
+                  "-af", f"volume={1 / 32768:.8f},{REVERB},apad,atrim=0:{total:.3f}", "-ar", str(MUESTRAS),
+                  "-c:a", "pcm_s16le", str(destino))
+    crudo.unlink(missing_ok=True)
     return destino
