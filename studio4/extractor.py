@@ -49,6 +49,24 @@ def descargar(url: str) -> dict[str, Any]:
     return datos
 
 
+def descargar_tramo(url: str, ini: float, fin: float, alto: int = MAX_ALTO, nombre: str = "") -> Path:
+    """Solo el tramo [ini, fin] de un vídeo largo (p. ej. una misión de un gameplay de 4 h), a la altura pedida:
+    en baja para buscar escenas sin descargar horas, en alta solo los segundos elegidos."""
+    import yt_dlp
+    from yt_dlp.utils import download_range_func
+    CACHE.mkdir(parents=True, exist_ok=True)
+    vid = re.search(r"(?:v=|youtu\.be/)([\w-]{6,})", url)
+    base = nombre or f"{vid.group(1) if vid else 'video'}_{int(ini)}-{int(fin)}_{alto}p"
+    destino = CACHE / f"{base}.mp4"
+    if not destino.exists():
+        with yt_dlp.YoutubeDL(opciones_ytdlp(
+                format=f"bv*[height<={alto}]+ba/b[height<={alto}]/b", merge_output_format="mp4",
+                download_ranges=download_range_func(None, [(ini, fin)]), force_keyframes_at_cuts=alto >= 720,
+                outtmpl=str(CACHE / f"{base}.%(ext)s"))) as y:
+            y.download([url])
+    return destino
+
+
 def planos(video: Path, umbral: float = 0.32, minimo: float = 0.8) -> list[tuple[float, float]]:
     """Los planos del vídeo [(ini, fin)] según los cambios de imagen (los de menos de `minimo` s se juntan)."""
     r = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video), "-an", "-vf",

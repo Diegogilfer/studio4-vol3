@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio 4</title>
+<link rel="icon" href="/web/studio4.ico">
+<link rel="stylesheet" href="/web/montaje.css">
+</head>
+<body>
+<!-- Pantalla de carga: se va cuando el panel ya tiene sus datos -->
+<div id="carga" class="carga"><div class="carga-logo">S4</div><p>Cargando tu estudio…</p></div>
+
+<header class="barra">
+  <a class="marca" href="/" data-ir="inicio"><span class="marca-logo">S4</span><span>Studio 4</span></a>
+  <span class="canal" id="canal"></span>
+  <nav class="barra-der">
+    <a class="enlace" href="/clasico" title="Ideas del día, Desde URL, Biblioteca de guiones y canales">Panel clásico</a>
+  </nav>
+</header>
+
+<main id="vista"></main>
+
+<!-- Elegir plano: los planos de las fuentes del vídeo -->
+<div class="velo" id="selector" hidden>
+  <div class="selector">
+    <div class="selector-cab">
+      <div><small id="sel-frase-n"></small><p id="sel-frase"></p></div>
+      <button class="redondo" type="button" data-cerrar aria-label="Cerrar">✕</button>
+    </div>
+    <div class="pestanas" id="sel-fuentes"></div>
+    <div class="planos" id="sel-planos"></div>
+  </div>
+</div>
+
+<!-- El trabajo en marcha (descargas, previa, final): siempre a la vista -->
+<div class="trabajo" id="trabajo" hidden>
+  <div class="trabajo-txt"><b id="trabajo-fase"></b><span id="trabajo-pct"></span></div>
+  <div class="trabajo-barra"><i id="trabajo-barra"></i></div>
+</div>
+<div class="aviso" id="aviso" role="alert" hidden></div>
+
+<script src="/web/montaje.js"></script>
+</body>
+</html>

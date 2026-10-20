@@ -148,7 +148,7 @@ window.__s4 = (t) => {
     if (e.pn) {
       const u = t - e.ini, p = salida(fueraDe(0, 0.45, u)), sal = fueraDe(e.fin - e.ini - 0.05, e.fin - e.ini + 0.3, u);
       e.pn.style.opacity = visible ? Math.min(p, 1 - sal) : 0;
-      e.pn.style.top = (H * 0.38) + "px";
+      e.pn.style.top = (H > W ? H * 0.38 : H * 0.5) + "px";
       e.pn.style.transform = `translate(-50%, -50%) perspective(1400px) rotateX(${(1 - p) * 25}deg) scale(${0.9 + 0.1 * p})`;
       e.items.forEach((it, k) => {
         const q = fueraDe(0.45 + k * 0.45, 0.75 + k * 0.45, u);

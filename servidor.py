@@ -45,8 +45,10 @@ logger = logging.getLogger("studio4.servidor")
 
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
-PAGINAS = {"/legal": "legal.html", "/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html",
-           "/youtube": "youtube.html"}   # vista previa: tus vídeos y miniaturas como se verían en YouTube
+# «/» es el panel nuevo (un vídeo, 5 pasos); el de antes sigue entero en «/clasico» (ideas, Desde URL, biblioteca…).
+PAGINAS = {"/legal": "legal.html", "/": "montaje.html", "/clasico": "index.html", "/flow/emparejar": "emparejar.html",
+           "/lateral": "lateral.html", "/youtube": "youtube.html"}
+MEDIOS_MONTAJE = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav)$")
 MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|entregas/[\w.-]+\.(mp4|jpg)|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
@@ -213,6 +215,28 @@ class Panel(BaseHTTPRequestHandler):
             if config.WEB.resolve() not in destino.parents:
                 raise Error(404, "No existe")
             return self._archivo(destino)
+        # --- panel nuevo (montaje 16:9) ---
+        if ruta == "/api/m":
+            from studio4 import montaje
+            return self._json({"videos": montaje.listar(), "canal": canales.activo(),
+                               "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
+                                         for f in montaje.banco()]})
+        if ruta == "/api/m/ver":
+            from studio4 import montaje
+            mid = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("id") or [""])[0]
+            p = montaje.cargar(mid)
+            return self._json({"video": p, "paso": montaje.paso_actual(p),
+                               "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]}})
+        m = re.fullmatch(r"/m/([\w-]+)/([\w.]+)", ruta)
+        if m:
+            from studio4 import montaje
+            if not MEDIOS_MONTAJE.match(m.group(2)):
+                raise Error(404, "No existe")
+            return self._archivo(montaje.carpeta(m.group(1)) / m.group(2))
+        m = re.fullmatch(r"/fv/([\w.-]+)/(\d{3})\.jpg", ruta)   # miniaturas de los planos del banco de clips
+        if m:
+            from studio4 import extractor
+            return self._archivo(extractor.CACHE / f"{m.group(1)}_planos" / f"{m.group(2)}.jpg")
         m = re.fullmatch(r"/media/([\w-]+)/(.+)", ruta)
         if m:
             if not MEDIOS_PERMITIDOS.match(m.group(2)):
@@ -325,6 +349,39 @@ class Panel(BaseHTTPRequestHandler):
             },
         }
 
+    def _post_montaje(self, ruta: str, d: dict[str, Any]) -> None:
+        from studio4 import montaje
+        mid = str(d.get("id", ""))
+        num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
+        if ruta == "/api/m/nuevo":
+            return self._json({"ok": True, "id": montaje.crear(str(d.get("titulo", "")), str(d.get("guion", "")))})
+        if ruta == "/api/m/guion":
+            montaje.cambiar_guion(mid, str(d.get("guion", "")))
+        elif ruta == "/api/m/fuente":
+            montaje.anadir_fuente(mid, str(d.get("url", "")).strip(), num("desde"), num("hasta"), str(d.get("nombre", "")))
+        elif ruta == "/api/m/usar-fuente":
+            montaje.usar_fuente(mid, str(d.get("fuente", "")))
+        elif ruta == "/api/m/asignar":
+            montaje.asignar(mid, int(d.get("n", 0)), str(d.get("fuente", "")), int(d.get("plano", 0) or 0),
+                            d.get("rotulo"), d.get("panel"))
+        elif ruta == "/api/m/proponer":
+            return self._json({"ok": True, "propuestas": montaje.proponer(mid)})
+        elif ruta == "/api/m/previa":
+            montaje.previa(mid)
+        elif ruta == "/api/m/final":
+            montaje.montar_final(mid)
+        elif ruta == "/api/m/short":
+            montaje.montar_short(mid, float(d.get("desde", 0)), float(d.get("hasta", 0)))
+        elif ruta == "/api/m/textos":
+            return self._json({"ok": True, "textos": montaje.hacer_textos(mid)})
+        elif ruta == "/api/m/miniatura":
+            montaje.miniatura(mid, str(d.get("texto", ""))[:40], list(d.get("fotos") or []))
+        elif ruta == "/api/m/carpeta":   # abrir la carpeta del vídeo en el Explorador
+            os.startfile(str(montaje.carpeta(mid)))  # noqa: S606
+        else:
+            raise Error(404, "No existe")
+        return self._json({"ok": True})
+
     def _post(self, ruta: str, query: dict[str, list[str]]) -> None:
         # --- extensión de Flow (con código de emparejamiento) ---
         if ruta.startswith("/api/flow/") and ruta != "/api/flow/renovar":
@@ -357,6 +414,8 @@ class Panel(BaseHTTPRequestHandler):
 
         # --- panel ---
         self._solo_panel()
+        if ruta.startswith("/api/m/"):   # panel nuevo: un vídeo en 5 pasos
+            return self._post_montaje(ruta, self._cuerpo_json())
         if ruta == "/api/flow/renovar":
             return self._json({"ok": True, "codigo": config.renovar_token_flow()})
         if ruta == "/api/extension/abrir":   # la carpeta de la extensión buena, para cargarla en Chrome
@@ -622,6 +681,8 @@ def main() -> None:
     config.token_flow()  # crea el código de emparejamiento la primera vez
     for falta in config.salud():
         print(f"  ⚠ {falta}")
+    from studio4 import montaje
+    montaje.recuperar_colgados()   # un montaje cortado al cerrar se libera para poder repetirlo
     for pid in produccion.recuperar_trabajos_colgados():   # lo que se cortó al cerrar, sigue donde se quedó
         logger.info("Retomando %s (se cortó al cerrar Studio 4)", pid)
         try:

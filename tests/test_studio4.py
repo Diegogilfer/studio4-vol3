@@ -2073,3 +2073,69 @@ def test_clave_gemini_acepta_el_formato_nuevo(aislado, monkeypatch, tmp_path):
     monkeypatch.setattr(config, "ENV_FILE", tmp_path / ".env")
     gemini.cambiar_clave("AQ." + "Ab8_x" * 8)
     assert config.GEMINI_API_KEY.startswith("AQ.")
+
+
+# --- Montaje 16:9 (panel nuevo) ----------------------------------------------------------------------------------
+def _banco_falso(tmp_path, monkeypatch, fid="fuenteA", n=4):
+    """Una fuente en el banco: un vídeo de colores con `n` planos de 2 s, sin descargar nada."""
+    from studio4 import extractor
+    monkeypatch.setattr(extractor, "CACHE", tmp_path / "_fv")
+    extractor.CACHE.mkdir(exist_ok=True)
+    colores = ["red", "blue", "green", "yellow", "white", "purple"][:n]
+    entradas = sum((["-f", "lavfi", "-i", f"color={c}:s=640x360:d=2:r=30"] for c in colores), [])
+    v = extractor.CACHE / f"{fid}_360p.mp4"
+    medios.ffmpeg(*entradas, "-filter_complex", "".join(f"[{k}:v]" for k in range(n)) + f"concat=n={n}:v=1[v]",
+                  "-map", "[v]", "-pix_fmt", "yuv420p", str(v))
+    meta = {"id": fid, "url": "https://example.com/v", "titulo": "Fuente", "nombre": "Fuente", "canal": "",
+            "desde": 0.0, "hasta": 2.0 * n, "baja": v.name, "planos": [{"n": k + 1, "ini": 2.0 * k, "fin": 2.0 * k + 2} for k in range(n)]}
+    (extractor.CACHE / f"{fid}.banco.json").write_text(json.dumps(meta), encoding="utf-8")
+    return v
+
+
+def test_montaje_parte_el_guion_en_bloques_y_frases():
+    from studio4 import montaje
+    f = montaje.partir("En The Warriors robar era un trabajo. Sí.\n\nVeinte años después GTA 6 hace algo parecido con el auto entero. Según los avances.")
+    assert [(x["n"], x["bloque"]) for x in f] == [(1, 0), (2, 1)]
+    assert f[0]["texto"].endswith("Sí.") and "Según los avances." in f[1]["texto"]   # las cortas se juntan
+    assert montaje.revisar("GTA 6 tiene autos nuevos.") and not montaje.revisar("Según el tráiler, GTA 6 tiene autos.")
+
+
+def test_montaje_propone_planos_y_previa_sin_colarse(aislado, tmp_path, monkeypatch):
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("Prueba", "Primera frase del vídeo con seis palabras. Segunda frase también con seis palabras.")
+    montaje.usar_fuente(mid, "fuenteA")
+    assert montaje.proponer(mid) == 2
+    p = montaje.cargar(mid)
+    # el primero y el último de un vídeo corto (clasificación y logo de un tráiler) se saltan
+    assert [f["clip"]["plano"] for f in p["frases"]] == [2, 3] and montaje.paso_actual(p) == 4
+    montaje.asignar(mid, 2, "fuenteA", 4, rotulo="GTA 6")
+    # un plano de 2 s para 3 s de frase: va más lento y no entra el plano siguiente (amarillo → blanco no existe)
+    seg = tmp_path / "s.mp4"
+    montaje._segmento(tmp_path / "_fv" / "fuenteA_360p.mp4", 0.0, 2.0, 3.0, 320, 180, seg)
+    assert abs(medios.duracion(seg) - 3.0) < 0.15
+    from PIL import Image
+    medios.ffmpeg("-ss", "2.8", "-i", str(seg), "-frames:v", "1", str(tmp_path / "ult.png"))
+    r, g, b = Image.open(tmp_path / "ult.png").convert("RGB").getpixel((160, 90))
+    assert r > 200 and g < 60 and b < 60   # sigue siendo el plano rojo
+    assert montaje._rotulo_png("GTA 6", "#2ee6ff", tmp_path / "r.png", 0.5).exists()
+
+
+def test_montaje_se_salta_planos_malos_al_proponer(aislado, tmp_path, monkeypatch):
+    """Negros, lisos, muy cortos y, en tráilers, la clasificación del principio y el logo del final."""
+    from studio4 import montaje, extractor
+    _banco_falso(tmp_path, monkeypatch, n=5)
+    carpeta_m = extractor.CACHE / "fuenteA_planos"
+    carpeta_m.mkdir()
+    from PIL import Image, ImageDraw
+    for k in range(1, 6):
+        im = Image.new("RGB", (320, 180), "black" if k == 3 else "gray")
+        if k != 3:
+            ImageDraw.Draw(im).rectangle([40, 40, 200, 140], fill="white")
+        im.save(carpeta_m / f"{k:03d}.jpg")
+    meta = montaje.fuente("fuenteA")
+    assert [pl["n"] for pl in meta["planos"] if pl["pobre"]] == [1, 3, 5]
+    mid = montaje.crear("P", "Una frase con seis palabras justas aquí. Otra frase con seis palabras justas aquí.")
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.proponer(mid)
+    assert [f["clip"]["plano"] for f in montaje.cargar(mid)["frases"]] == [2, 4]
