@@ -27,11 +27,30 @@ logger = logging.getLogger("studio4.galeria")
 _IMAGEN = re.compile(r'(?:href|src|data-src|content)="([^"]+?\.(?:jpe?g|png|webp))(?:\?[^"]*)?"', re.IGNORECASE)
 DESCARTE = ("logo", "icon", "avatar", "menu", "banner", "sprite", "favicon", "emoji", "badge", "jch-optimize", "flag", "button")
 PAGINAS = 4   # páginas por fuente y búsqueda (un vídeo largo pide más: ver «paginas» en buscar)
+# Lado largo mínimo para pantalla completa: por debajo se ve borrosa (las miniaturas de 192×108 y 320×180 de los
+# listados de gtabase estiradas a 1080×1920 «casi no se podían ver»). Las capturas grandes de gtabase miden 832×468.
+LADO_MINIMO = 800
+_MINIATURA = re.compile(r"_(\d{2,4})x(\d{2,4})$")
+
+
+def grande(url: str) -> str:
+    """La versión grande de una miniatura: «…/resized/foto_320x180.jpg» → «…/foto.jpg» (gtabase y webs parecidas)."""
+    partes = urllib.parse.urlparse(url)
+    ruta = Path(partes.path)
+    if "/resized/" not in partes.path and not _MINIATURA.search(ruta.stem):
+        return url
+    nueva = partes.path.replace("/resized/", "/")
+    nueva = nueva[: -len(ruta.name)] + _MINIATURA.sub("", ruta.stem) + ruta.suffix
+    return urllib.parse.urlunparse(partes._replace(path=nueva))
 
 
 def _clave(url: str) -> tuple[str, int]:
-    """«lucia-caminos-01-1080.jpg» → («lucia-caminos-01», 1080): la misma imagen en varios tamaños se agrupa."""
+    """«lucia-caminos-01-1080.jpg» → («lucia-caminos-01», 1080) y «foto_320x180.jpg» → («foto», 320): la misma
+    imagen en varios tamaños se agrupa y gana la más grande."""
     nombre = Path(urllib.parse.urlparse(url).path).stem
+    m = _MINIATURA.search(nombre)
+    if m:
+        return nombre[:m.start()].lower(), int(m.group(1))
     m = re.search(r"[-_](\d{3,4})$", nombre)
     return (nombre[:m.start()] if m else nombre).lower(), int(m.group(1)) if m else 0
 
@@ -49,6 +68,8 @@ def imagenes_de(pagina: str) -> list[dict[str, Any]]:
         if any(d in url.lower() for d in DESCARTE):
             continue
         clave, tam = _clave(url)
+        if _MINIATURA.search(Path(urllib.parse.urlparse(url).path).stem) or "/resized/" in url:
+            url, tam = grande(url), 10_000   # su original sin recortar: por delante de cualquier miniatura
         if clave not in mejores or tam > mejores[clave][0]:
             mejores[clave] = (tam, url)
     return [{"url": u, "descripcion": descripcion(u), "pagina": pagina} for _, u in mejores.values()]
@@ -111,9 +132,12 @@ def encajar(foto: Image.Image, ancho: int, alto: int) -> Image.Image:
 
 
 def toma(url: str, pagina: str, carpeta: Path, orden: int, ancho: int, alto: int) -> dict[str, Any]:
-    """Descarga la imagen real y la deja como toma de la escena (compuesta al formato del vídeo)."""
-    datos = fuentes._get(url).content
+    """Descarga la imagen real y la deja como toma de la escena (compuesta al formato del vídeo).
+    Una imagen demasiado pequeña para pantalla completa se rechaza (ValueError) para que se pruebe otra."""
+    datos = fuentes._get(grande(url)).content
     foto = Image.open(io.BytesIO(datos))
+    if max(foto.size) < LADO_MINIMO:
+        raise ValueError(f"Imagen demasiado pequeña ({foto.width}×{foto.height}): se vería borrosa a pantalla completa.")
     destino = carpeta / "tomas" / f"escena_{orden:02d}_real_{hashlib.sha1(url.encode()).hexdigest()[:6]}.png"
     destino.parent.mkdir(exist_ok=True)
     encajar(foto, ancho, alto).save(destino)

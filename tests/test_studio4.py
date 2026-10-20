@@ -93,11 +93,17 @@ def test_alineacion_elevenlabs_da_cortes_exactos():
     assert [p["palabra"] for p in palabras] == ["Hola", "mundo.", "Adiós."]
 
 
-def test_reserva_de_voz(monkeypatch):
-    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "")
-    assert voz.reserva("gemini") is None
-    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "k")
-    assert voz.reserva("gemini") == "elevenlabs"
+def test_la_voz_nunca_cambia_sola_de_proveedor(monkeypatch):
+    """Con cualquier clave puesta, si la voz elegida falla no se sustituye por otra (el autor elige)."""
+    for k in ("ELEVENLABS_API_KEY", "XIAOMIMIMO_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.setattr(config, k, "k")
+    assert all(voz.reserva(p) is None for p in voz.PROVEEDORES)
+
+
+def test_sin_servicios_de_voz_no_oficiales():
+    """Ni la voz de TikTok por un servidor ajeno ni el TTS escondido del Traductor de Google."""
+    codigo = (pathlib.Path(voz.__file__)).read_text(encoding="utf-8")
+    assert "weilnet" not in codigo and "translate_tts" not in codigo and "es_mx_002" not in codigo
 
 
 # --- Subtítulos ---------------------------------------------------------------------------------
@@ -1925,7 +1931,7 @@ def test_xiaomi_mimo_tts_y_reserva(aislado, monkeypatch):
     import base64
     monkeypatch.setattr(config, "XIAOMIMIMO_API_KEY", "sk-mimo-prueba")
     monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "")
-    assert voz.reserva("gemini") == "mimo"
+    assert voz.reserva("gemini") is None   # nunca cambia sola de voz
     enviados = []
 
     class RespMimo:
@@ -1946,3 +1952,29 @@ def test_xiaomi_mimo_tts_y_reserva(aislado, monkeypatch):
     assert enviados[0][1]["audio"] == {"voice": "Milo", "format": "wav"}
 
 
+
+
+
+def test_imagenes_reales_en_grande_y_nunca_miniaturas(aislado, monkeypatch):
+    """Las miniaturas de los listados (192×108, 320×180) se cambian por su original y una imagen pequeña se rechaza."""
+    import io as _io
+    from PIL import Image
+    from studio4 import galeria
+    assert galeria.grande("https://www.gtabase.com/igallery/gta-6-screens/resized/ocean-drive-468_192x108.jpg") == \
+        "https://www.gtabase.com/igallery/gta-6-screens/ocean-drive-468.jpg"
+    assert galeria.grande("https://www.gtabase.com/igallery/x/lucia-01-1080.jpg") == "https://www.gtabase.com/igallery/x/lucia-01-1080.jpg"
+    html = ('<img src="/igallery/g/resized/vice_192x108.jpg"><img src="/igallery/g/resized/vice_320x180.jpg">'
+            '<img src="/images/a/otra-1080.jpg">')
+    monkeypatch.setattr(galeria.fuentes, "_get", lambda u: type("R", (), {"text": html})())
+    urls = sorted(i["url"] for i in galeria.imagenes_de("https://www.gtabase.com/gta-6/"))
+    assert urls == ["https://www.gtabase.com/igallery/g/vice.jpg", "https://www.gtabase.com/images/a/otra-1080.jpg"]
+
+    def imagen(ancho, alto):
+        b = _io.BytesIO()
+        Image.new("RGB", (ancho, alto), "red").save(b, "JPEG")
+        return type("R", (), {"content": b.getvalue()})()
+    monkeypatch.setattr(galeria.fuentes, "_get", lambda u: imagen(320, 180))
+    with pytest.raises(ValueError, match="pequeña"):
+        galeria.toma("https://x/a_320x180.jpg", "https://x/", aislado, 1, 1080, 1920)
+    monkeypatch.setattr(galeria.fuentes, "_get", lambda u: imagen(832, 468))
+    assert galeria.toma("https://x/a.jpg", "https://x/", aislado, 1, 1080, 1920)["origen"] == "real"

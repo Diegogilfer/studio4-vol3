@@ -107,6 +107,10 @@ def listar(canal: str | None = None) -> list[dict[str, Any]]:
                            "creado": p["creado"], "formato": p["formato"], "version": p.get("version", ""),
                            "familia": p.get("familia", ""), "canal": p.get("canal") or primero,
                            "portada": _portada(p), "escenas": len(p.get("escenas", [])),
+                           # para la vista tipo YouTube: el vídeo montado y sus textos de publicación
+                           "final": _video_publicable(p), "descripcion": p.get("descripcion", "")[:600],
+                           "hashtags": (p.get("hashtags") or [])[:10],
+                           "duracion": round(float((p.get("voz") or {}).get("duracion") or 0)),
                            "con_clip": sum(e.get("elegida") is not None for e in p.get("escenas", []))})
         except (OSError, ValueError, KeyError):
             continue
@@ -114,15 +118,33 @@ def listar(canal: str | None = None) -> list[dict[str, Any]]:
 
 
 def _portada(p: dict[str, Any]) -> str:
-    """Una imagen para la tarjeta de la producción: su miniatura elegida o la primera toma en imagen."""
+    """Una imagen para la tarjeta de la producción: la portada de publicación, su miniatura elegida o la primera
+    toma en imagen. Solo archivos que existen (una toma borrada dejaba la tarjeta rota)."""
+    base = config.PRODUCCIONES / p["id"]
+    sufijo = "_portada_short_1.jpg" if p.get("formato") == "vertical" else "_portada_completo.jpg"
+    candidatas = sorted((base / "entregas").glob(f"*{sufijo}")) + sorted((base / "entregas").glob("*_portada_*.jpg"))
+    if candidatas:
+        return f"entregas/{candidatas[0].name}"
     m = p.get("miniaturas") or {}
     if m.get("candidatos"):
-        return m["candidatos"][m.get("elegido", 0)]["archivo"]
+        archivo = m["candidatos"][min(m.get("elegido", 0), len(m["candidatos"]) - 1)]["archivo"]
+        if (base / archivo).exists():
+            return archivo
     for e in p.get("escenas", []):
         for t in e.get("tomas", []):
-            if t.get("tipo") == "imagen":
+            if t.get("tipo") == "imagen" and (base / t["archivo"]).exists():
                 return t["archivo"]
     return ""
+
+
+def _video_publicable(p: dict[str, Any]) -> str:
+    """El vídeo para la vista tipo YouTube: el montaje final o, si no está, la primera pieza de las entregas."""
+    base = config.PRODUCCIONES / p["id"]
+    final = (p.get("final") or {}).get("archivo", "")
+    if final and (base / final).exists():
+        return final
+    piezas = sorted((base / "entregas").glob("*_short_1.mp4")) + sorted((base / "entregas").glob("*.mp4"))
+    return f"entregas/{piezas[0].name}" if piezas else ""
 
 
 RETOMABLES = ("Desde URL", "Importar vídeo")
@@ -667,19 +689,10 @@ def _generar_voz(pid: str) -> None:
                                        f"Interpreta a este narrador: {arquetipo}" if arquetipo else "", modelo) if x)
     vid = (p.get("voice_id") or "").strip()
     extra = {"voice_id": vid} if vid else {}
-    try:
-        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
-                              direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz,
-                              velocidad=float(p.get("velocidad_voz") or 1.0), **extra)
-    except RuntimeError as e:
-        # Cupo diario de Gemini TTS agotado (o ElevenLabs sin créditos): se prueba con la otra voz si existe.
-        otra = voz.reserva(p["proveedor_voz"])
-        if not otra:
-            raise
-        logger.warning("Voz %s falló (%s); probando %s", p["proveedor_voz"], e, otra)
-        _avisar(pid, f"{voz.PROVEEDORES[p['proveedor_voz']]} falló; uso {voz.PROVEEDORES[otra]}", 75)
-        tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", otra, produccion=pid, direcciones=direcciones,
-                              voz_nombre=p.get("voz_nombre"), velocidad=float(p.get("velocidad_voz") or 1.0), **extra)
+    # Si la voz elegida falla, NO se cambia por otra: el error llega al panel con las opciones y eliges tú.
+    tiempos = voz.locutar(segmentos, carpeta(pid) / "voz.wav", p["proveedor_voz"], produccion=pid,
+                          direcciones=direcciones, voz_nombre=p.get("voz_nombre"), estilo_voz=estilo_voz,
+                          velocidad=float(p.get("velocidad_voz") or 1.0), **extra)
     def con_voz(q):
         q.update(voz={**tiempos, "archivo": "voz.wav", "generada": time.strftime("%H:%M:%S")})
         director.poner_duraciones(q["escenas"], tiempos["escenas"], q.get("biblia") or {}, q.get("estilo_en", ""),
@@ -933,12 +946,22 @@ def rellenar_reales(pid: str) -> None:
         if not pool:
             raise ValueError("Tus fuentes no tienen imágenes sobre este tema.")
         reparto = galeria.repartir(q["escenas"], pool)
+        usadas = {i["url"] for i in reparto.values()}
+        reservas = [i for i in pool if i["url"] not in usadas]   # si una falla o es pequeña, entra otra
+        malas: set[str] = set()
         for k, (orden, img) in enumerate(reparto.items()):
             _avisar(pid, f"Escena {orden}: {img['descripcion'][:40]}", 20 + int(75 * k / max(1, len(reparto))))
-            try:
-                poner_imagen_real(pid, orden, img["url"], img["pagina"])
-            except Exception as e:  # noqa: BLE001 - una imagen que no baja no frena las demás
-                logger.warning("Imagen real para la escena %d: %s", orden, e)
+            for intento in [img, *reservas][:6]:
+                if intento["url"] in malas:
+                    continue
+                try:
+                    poner_imagen_real(pid, orden, intento["url"], intento["pagina"])
+                    if intento is not img:
+                        reservas.remove(intento)
+                    break
+                except Exception as e:  # noqa: BLE001 - una imagen que no baja o es pequeña deja paso a otra
+                    malas.add(intento["url"])
+                    logger.warning("Imagen real para la escena %d: %s", orden, e)
     _en_fondo(pid, "Imágenes reales", fase)
 
 

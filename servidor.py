@@ -45,7 +45,8 @@ logger = logging.getLogger("studio4.servidor")
 
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
-PAGINAS = {"/legal": "legal.html", "/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html"}
+PAGINAS = {"/legal": "legal.html", "/": "index.html", "/flow/emparejar": "emparejar.html", "/lateral": "lateral.html",
+           "/youtube": "youtube.html"}   # vista previa: tus vídeos y miniaturas como se verían en YouTube
 MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|entregas/[\w.-]+\.(mp4|jpg)|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
