@@ -33,18 +33,51 @@ def _limpia(palabra: str) -> str:
     return re.sub(r"[{}\\]", "", palabra).strip()
 
 
+# Palabras que no pueden cerrar una línea: «VUELVE A VICE CITY CON» deja la idea colgada
+DEBILES = {"a", "al", "con", "de", "del", "el", "en", "la", "las", "lo", "los", "un", "una", "y", "e", "o", "que",
+           "no", "ha", "han", "se", "su", "sus", "por", "para", "sin", "mi", "tu", "le", "les", "me", "te", "es", "más"}
+
+
+def _cierra(p: dict) -> bool:
+    return p["palabra"].endswith((".", "?", "!", "…", ":", ";"))
+
+
+def _mismo_nombre(a: dict, b: dict) -> bool:
+    """«Vice City», «The Warriors»: dos palabras seguidas con mayúscula no se separan de línea."""
+    x, y = _limpia(a["palabra"]), _limpia(b["palabra"])
+    return bool(x[:1].isupper() and y[:1].isupper() and not x.endswith((",", ".")))
+
+
 def _lineas(palabras: list[dict], max_palabras: int) -> list[list[dict]]:
-    """Agrupa palabras en líneas; corta antes si hay pausa larga o fin de frase."""
+    """Agrupa palabras en líneas; corta en el fin de frase, en una coma, en una pausa o al llenarse.
+    Una línea llena nunca acaba en «con», «no ha»…: esas palabras pasan a la siguiente. Y si a la frase le quedan
+    una o dos palabras, se quedan en esta línea en vez de salir solas."""
     lineas: list[list[dict]] = []
-    actual: list[dict] = []
-    for i, p in enumerate(palabras):
-        actual.append(p)
-        siguiente = palabras[i + 1] if i + 1 < len(palabras) else None
-        fin_frase = p["palabra"].endswith((".", "?", "!", "…", ":", ";"))
-        pausa = siguiente is not None and siguiente["ini"] - p["fin"] > 0.35
-        if len(actual) >= max_palabras or fin_frase or pausa or siguiente is None:
-            lineas.append(actual)
-            actual = []
+    i = 0
+    while i < len(palabras):
+        actual: list[dict] = []
+        while i < len(palabras):
+            p = palabras[i]
+            actual.append(p)
+            i += 1
+            siguiente = palabras[i] if i < len(palabras) else None
+            if siguiente is None or _cierra(p) or siguiente["ini"] - p["fin"] > 0.35:
+                break
+            if p["palabra"].endswith(",") and len(actual) >= 3:
+                break
+            if len(actual) >= max_palabras:
+                resto = palabras[i:i + 3]
+                cierre = next((k for k, w in enumerate(resto) if _cierra(w) or w["palabra"].endswith(",")), None)
+                if cierre == 0:   # «… CONTADO | TODO.» → todo en una línea
+                    actual += resto[:1]
+                    i += 1
+                    break
+                while len(actual) > 2 and (_limpia(actual[-1]["palabra"]).lower().strip(",") in DEBILES
+                                           or _mismo_nombre(actual[-1], palabras[i])):
+                    actual.pop()
+                    i -= 1
+                break
+        lineas.append(actual)
     return lineas
 
 

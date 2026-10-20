@@ -34,10 +34,12 @@ def _limite(args: tuple[str, ...], cwd: str | Path | None) -> int:
 
 def ffmpeg(*args: str, cwd: str | Path | None = None, timeout: int | None = None) -> str:
     """Ejecuta ffmpeg y devuelve stderr (ahí escribe ffmpeg sus análisis). Lanza error con el final del log."""
-    cmd = ["ffmpeg", "-hide_banner", "-y", *args]
+    # -nostdin y stdin cerrado: dentro del servidor, ffmpeg a veces se quedaba esperando una tecla y no terminaba nunca
+    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-y", *args]
     timeout = timeout or _limite(args, cwd)
     try:
-        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+        r = subprocess.run(cmd, cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=timeout)
     except subprocess.TimeoutExpired as e:
         raise RuntimeError(f"FFmpeg tardó más de {timeout // 60} min y se detuvo para no bloquear la producción.") from e
     if r.returncode != 0:

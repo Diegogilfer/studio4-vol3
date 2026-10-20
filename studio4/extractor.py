@@ -79,7 +79,8 @@ def descargar_tramo(url: str, ini: float, fin: float, alto: int = MAX_ALTO, nomb
     from yt_dlp.utils import download_range_func
     CACHE.mkdir(parents=True, exist_ok=True)
     vid = re.search(r"(?:v=|youtu\.be/)([\w-]{6,})", url)
-    base = nombre or f"{vid.group(1) if vid else 'video'}_{int(ini)}-{int(fin)}_{alto}p"
+    # en centésimas: dos planos dentro del mismo segundo no comparten archivo
+    base = nombre or f"{vid.group(1) if vid else 'video'}_{int(ini * 100)}-{int(fin * 100)}_{alto}p"
     destino = CACHE / f"{base}.mp4"
     if not destino.exists():
         with yt_dlp.YoutubeDL(opciones_ytdlp(
@@ -92,9 +93,9 @@ def descargar_tramo(url: str, ini: float, fin: float, alto: int = MAX_ALTO, nomb
 
 def planos(video: Path, umbral: float = 0.32, minimo: float = 0.8) -> list[tuple[float, float]]:
     """Los planos del vídeo [(ini, fin)] según los cambios de imagen (los de menos de `minimo` s se juntan)."""
-    r = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(video), "-an", "-vf",
+    r = subprocess.run(["ffmpeg", "-hide_banner", "-nostdin", "-i", str(video), "-an", "-vf",
                         f"scale=320:-2,select='gt(scene,{umbral})',showinfo", "-f", "null", "-"],
-                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
+                       stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
     cortes = [float(m) for m in re.findall(r"pts_time:([\d.]+)", r.stderr)]
     total = medios.duracion(video)
     bordes = [0.0]

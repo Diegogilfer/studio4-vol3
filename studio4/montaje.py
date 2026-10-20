@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import animacion, canales, config, extractor, medios, subtitulos, voz
+from . import animacion, canales, config, extractor, medios, sonido, subtitulos, voz
 
 logger = logging.getLogger("studio4.montaje")
 
@@ -33,6 +33,9 @@ ANCHO, ALTO = 1920, 1080
 ANCHO_PREVIA, ALTO_PREVIA = 960, 540
 TRANSICION = 1.2        # segundos de rejilla con la tarjeta del bloque siguiente
 ENTRADA = 0.25          # respiro antes de la primera palabra
+PAUSA_FRASE = 0.35      # silencio que se añade a la voz al acabar una oración (la voz de Google casi no respira)
+PAUSA_BLOQUE = 0.9      # y al cambiar de bloque, donde entra la transición
+PALABRAS_MAX = 14       # una oración más larga se parte en una coma: cada parte lleva su plano
 PALABRAS_POR_SEGUNDO = 2.5
 ESTILO_VOZ = ("Narra en español latino neutro, con acento latinoamericano (nunca de España), como un youtuber de "
               "videojuegos: cercano, con energía y ritmo ágil, dando datos con seguridad")
@@ -111,7 +114,7 @@ def partir(guion: str) -> list[dict[str, Any]]:
     frases = []
     bloques = [b.strip() for b in re.split(r"\n\s*\n", (guion or "").replace("\r\n", "\n")) if b.strip()]
     for nb, bloque in enumerate(bloques):
-        oraciones = [o.strip() for o in re.split(r"(?<=[.!?…])\s+", " ".join(bloque.split())) if o.strip()]
+        oraciones = [t for o in re.split(r"(?<=[.!?…])\s+", " ".join(bloque.split())) if o.strip() for t in _trocear(o.strip())]
         pendiente = ""
         for o in oraciones:
             pendiente = f"{pendiente} {o}".strip()
@@ -129,6 +132,25 @@ def partir(guion: str) -> list[dict[str, Any]]:
     for k, f in enumerate(frases):
         f["n"] = k + 1
     return frases
+
+
+def _trocear(oracion: str) -> list[str]:
+    """Una oración larga se parte en la coma (o dos puntos) más cercana a la mitad, si deja dos partes de 5+ palabras."""
+    palabras = oracion.split()
+    if len(palabras) <= PALABRAS_MAX:
+        return [oracion]
+    sitios = [k + 1 for k, w in enumerate(palabras) if w.endswith((",", ":", ";")) and 5 <= k + 1 <= len(palabras) - 5]
+    if not sitios:
+        return [oracion]
+    k = min(sitios, key=lambda x: abs(x - len(palabras) / 2))
+    return _trocear(" ".join(palabras[:k])) + _trocear(" ".join(palabras[k:]))
+
+
+def _pausa(frases: list[dict[str, Any]], k: int) -> float:
+    """El silencio que va después de la frase k: ninguno si se partió en una coma (la voz ya respira ahí)."""
+    if k + 1 >= len(frases) or not frases[k]["texto"].rstrip().endswith((".", "!", "?", "…")):
+        return 0.0
+    return PAUSA_BLOQUE if frases[k + 1]["bloque"] != frases[k]["bloque"] else PAUSA_FRASE
 
 
 def revisar(guion: str) -> list[str]:
@@ -363,11 +385,13 @@ def usar_fuente(mid: str, fid: str) -> None:
 
 # --- 3 · Montaje --------------------------------------------------------------------------------------------------
 def asignar(mid: str, n: int, fid: str = "", plano: int = 0, rotulo: str | None = None,
-            panel: dict[str, Any] | None = None) -> None:
-    """El plano de una frase (o un panel de texto en su lugar) y su rótulo."""
+            panel: dict[str, Any] | None = None, mas: list[int] | None = None) -> None:
+    """El plano de una frase (o un panel de texto en su lugar) y su rótulo. `mas`: otros planos de la misma fuente
+    elegidos a propósito para la misma frase (se corta a ellos en una pausa de la voz)."""
+    mas = [int(x) for x in (mas or [])][:3]
     if fid:
         meta = fuente(fid)
-        if not 1 <= plano <= len(meta["planos"]):
+        if not all(1 <= x <= len(meta["planos"]) for x in [plano, *mas]):
             raise ValueError("Ese plano no existe.")
 
     def cambio(p):
@@ -375,7 +399,7 @@ def asignar(mid: str, n: int, fid: str = "", plano: int = 0, rotulo: str | None 
         if not f:
             raise ValueError("Esa frase no existe.")
         if fid:
-            f["clip"] = {"fuente": fid, "plano": plano}
+            f["clip"] = {"fuente": fid, "plano": plano, **({"mas": mas} if mas else {})}
             f.pop("panel", None)
         if panel is not None:
             items = [str(i).strip()[:80] for i in panel.get("items", []) if str(i).strip()][:5]
@@ -490,22 +514,65 @@ def recuperar_colgados() -> None:
 # --- 4 y 5 · Render -------------------------------------------------------------------------------------------------
 def _tiempos_estimados(p: dict[str, Any]) -> list[tuple[float, float]]:
     t, salida = ENTRADA, []
-    for f in p["frases"]:
+    for k, f in enumerate(p["frases"]):
         d = max(1.6, len(f["texto"].split()) / PALABRAS_POR_SEGUNDO)
         salida.append((t, t + d))
-        t += d
+        t += d + _pausa(p["frases"], k)
     return salida
 
 
+def _respirar(wav: Path, tiempos: list[tuple[float, float]], palabras: list[dict[str, Any]],
+              frases: list[dict[str, Any]], destino: Path) -> tuple[list[tuple[float, float]], list[dict[str, Any]]]:
+    """La voz con silencios entre oraciones y entre bloques: se corta en el hueco entre dos frases y se mete la pausa.
+    Devuelve los tiempos y las palabras movidos a su sitio nuevo."""
+    cortes = [(tiempos[k][1] + tiempos[k + 1][0]) / 2 for k in range(len(tiempos) - 1)]   # en la línea (con ENTRADA)
+    pausas = [_pausa(frases, k) for k in range(len(tiempos))]
+    bordes = [0.0, *[c - ENTRADA for c in cortes], medios.duracion(wav) + 1]
+    filtros = [f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,apad=pad_dur={pausas[k]:.3f}[p{k}]"
+               for k, (a, b) in enumerate(zip(bordes, bordes[1:]))]
+    filtros.append("".join(f"[p{k}]" for k in range(len(tiempos))) + f"concat=n={len(tiempos)}:v=0:a=1[a]")
+    medios.ffmpeg("-i", str(wav), "-filter_complex", ";".join(filtros), "-map", "[a]", str(destino))
+    desplaza = [sum(pausas[:k]) for k in range(len(tiempos))]
+
+    def tramo(t: float) -> int:
+        return sum(1 for c in cortes if t >= c)
+    return ([(a + desplaza[k], b + desplaza[k]) for k, (a, b) in enumerate(tiempos)],
+            [{**w, "ini": w["ini"] + desplaza[tramo(w["ini"])], "fin": w["fin"] + desplaza[tramo(w["ini"])]} for w in palabras])
+
+
 def _segmento(fuente_video: Path, ini: float, fin: float, d: float, ancho: int, alto: int, destino: Path) -> None:
-    """Un plano a pantalla completa durante `d` s: si el plano es más corto, va más lento (hasta la mitad) y después
-    se queda en su último fotograma. Nunca se cuela el plano siguiente del vídeo de origen."""
+    """Un plano a pantalla completa durante `d` s: si el plano es más corto, va algo más lento (hasta ×1,35; más se
+    nota a tirones) y después se queda en su último fotograma. Nunca se cuela el plano siguiente del vídeo de origen."""
     largo = max(0.3, fin - ini)
-    lento = min(2.0, max(1.0, d / largo))
+    lento = min(LENTO_MAX, max(1.0, d / largo))
     vf = (f"setpts={lento:.4f}*PTS,scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},"
           f"fps={config.FPS},tpad=stop_mode=clone:stop_duration={d + 1:.3f},setsar=1")
     medios.ffmpeg("-ss", f"{ini:.3f}", "-t", f"{largo:.3f}", "-i", str(fuente_video), "-an", "-vf", vf,
                   "-t", f"{d:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
+
+
+LENTO_MAX = 1.35   # un plano corto se estira como mucho esto
+
+
+def _cadena(meta: dict[str, Any], clip: dict[str, Any], d: float, pausas: list[float] | None = None
+            ) -> list[tuple[dict[str, Any], float]]:
+    """Los planos de una frase: el elegido y los de `clip["mas"]`, nunca uno que nadie eligió (el plano siguiente de
+    un tráiler suele ser otra escena y el salto se nota). Cada corte cae en la pausa entre palabras más cercana
+    (`pausas`, segundos desde el inicio de la frase), así nunca se corta a mitad de palabra."""
+    planos = [meta["planos"][x - 1] for x in [clip["plano"], *clip.get("mas", [])] if 1 <= x <= len(meta["planos"])]
+    if len(planos) == 1:
+        return [(planos[0], d)]
+    largos = [pl["fin"] - pl["ini"] for pl in planos]
+    bordes, acum = [0.0], 0.0
+    for largo in largos[:-1]:   # reparto según lo que dura cada plano
+        acum += largo
+        ideal = d * acum / sum(largos)
+        cerca = [c for c in (pausas or []) if abs(c - ideal) <= 0.8 and bordes[-1] + 0.8 <= c <= d - 0.8]
+        marca = min(cerca, key=lambda c: abs(c - ideal)) if cerca else ideal
+        if bordes[-1] + 0.8 <= marca <= d - 0.8:
+            bordes.append(marca)
+    bordes.append(d)
+    return [(pl, b - a) for pl, (a, b) in zip(planos, zip(bordes, bordes[1:]))]
 
 
 def _rotulo_png(texto: str, color: str, destino: Path, escala: float) -> Path:
@@ -550,12 +617,16 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in t["palabras"]]
             modificar(mid, lambda q: q.update(voz={"archivo": "voz.wav", "duracion": t["duracion"], "palabras": palabras,
                                                    "tiempos": tiempos, "firma": firma_voz}))
+        avisar("Pausas de la voz", 12)
+        voz_montaje = trabajo / "voz_pausas.wav"
+        tiempos, palabras = _respirar(wav, tiempos, palabras, p["frases"], voz_montaje)
+        modificar(mid, lambda q: q["voz"].update(pausas={"tiempos": tiempos, "palabras": palabras}))
     else:
         tiempos = _tiempos_estimados(p)
     # cada frase dura desde su inicio hasta el inicio de la siguiente (sin huecos); la primera empieza en 0
     tramos = [(0.0 if k == 0 else a, tiempos[k + 1][0] if k + 1 < len(tiempos) else b + 1.2) for k, (a, b) in enumerate(tiempos)]
     piezas: list[Path] = []
-    fx_escenas: list[dict[str, Any]] = []
+    eventos: list[tuple[float, str, float]] = [(0.1, "impacto", 0.9)]   # (segundo, efecto, volumen)
     usados: list[dict[str, Any]] = []
     fuentes_ok = {fid: fuente(fid) for fid in p["fuentes"]}
     colores = {fid: list(animacion.COLORES.values())[k % len(animacion.COLORES)] for k, fid in enumerate(p["fuentes"])}
@@ -568,20 +639,30 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         if f.get("panel"):   # un panel de texto (lista, recreación) sobre la rejilla, dibujado en el navegador
             esc = [{"ini": 0, "fin": d, "panel": f["panel"]}]
             animacion.renderizar(esc, d, seg, ancho, alto)
-            fx_escenas.append({"ini": cursor, "fin": cursor + d, "panel": f["panel"]})
+            eventos.append((cursor + 0.05, "impacto", 0.7))
+            eventos += [(cursor + 0.45 + j * 0.45, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
         else:
             clip = f["clip"]
             meta = fuentes_ok[clip["fuente"]]
-            pl = meta["planos"][clip["plano"] - 1]
-            usados.append({"frase": f["n"], "fuente": meta["titulo"], "canal": meta.get("canal", ""), "url": meta["url"],
-                           "desde": round(meta["desde"] + pl["ini"], 2), "hasta": round(meta["desde"] + pl["fin"], 2)})
-            if final:   # en alta solo los segundos de este plano
-                origen = extractor.descargar_tramo(meta["url"], meta["desde"] + pl["ini"], meta["desde"] + pl["fin"], alto=1080)
-                ini_local, fin_local = 0.0, pl["fin"] - pl["ini"]
-            else:
-                origen = extractor.CACHE / meta["baja"]
-                ini_local, fin_local = pl["ini"], pl["fin"]
-            if nuevo_bloque and d > TRANSICION + 0.8:
+            con_transicion = nuevo_bloque and d > TRANSICION + 0.8
+            inicio_plano = a + (TRANSICION if con_transicion else 0)
+            pausas = [(x["fin"] + y["ini"]) / 2 - inicio_plano for x, y in zip(palabras, palabras[1:])
+                      if inicio_plano < x["fin"] < b] if final else []
+            cadena = _cadena(meta, clip, d - (TRANSICION if con_transicion else 0), pausas)
+            pl = cadena[0][0]
+            for c, _dur in cadena:
+                usados.append({"frase": f["n"], "fuente": meta["titulo"], "canal": meta.get("canal", ""), "url": meta["url"],
+                               "desde": round(meta["desde"] + c["ini"], 2), "hasta": round(meta["desde"] + c["fin"], 2)})
+
+            def de(c: dict[str, Any]) -> tuple[Path, float]:
+                """El vídeo de donde sale el plano y su segundo 0. En el final, solo los segundos de ese plano en alta
+                (cada plano por separado: los elegidos pueden estar en cualquier orden del vídeo de origen)."""
+                if final:
+                    return extractor.descargar_tramo(meta["url"], meta["desde"] + c["ini"], meta["desde"] + c["fin"], alto=1080), c["ini"]
+                return extractor.CACHE / meta["baja"], 0.0
+            origen, base_t = de(pl)
+            ini_local = pl["ini"] - base_t
+            if con_transicion:
                 # la transición: rejilla y la primera imagen del bloque nuevo entrando como tarjeta
                 foto = trabajo / f"t{k:03d}.jpg"
                 medios.ffmpeg("-ss", f"{ini_local + 0.2:.3f}", "-i", str(origen), "-frames:v", "1", str(foto))
@@ -590,10 +671,26 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                                                                         "color": colores[clip["fuente"]]}]}
                 animacion.renderizar([escena_tr], TRANSICION, tr, ancho, alto)
                 piezas.append(_sin_audio(tr, trabajo / f"t{k:03d}b.mp4"))
-                fx_escenas.append({**escena_tr, "ini": cursor, "fin": cursor + TRANSICION})
+                # bloque nuevo: subida antes, cruce de lado a lado al entrar la tarjeta e impacto al llegar
+                eventos += [(cursor - 1.5, "subida", 0.6), (cursor, "cruce", 0.8), (cursor + 0.3, "impacto", 1.0)]
                 cursor += TRANSICION
                 d -= TRANSICION
-            _segmento(origen, ini_local, fin_local, d, ancho, alto, seg)
+            trozos = []
+            t_frase = 0.0
+            for j, (c, dur) in enumerate(cadena):   # un trozo por plano elegido
+                trozo = trabajo / f"s{k:03d}_{j}.mp4"
+                origen, base_t = de(c)
+                _segmento(origen, c["ini"] - base_t, c["fin"] - base_t, dur, ancho, alto, trozo)
+                trozos.append(trozo)
+                if j:
+                    eventos.append((cursor + t_frase, "whoosh", 0.18))   # un roce suave en cada corte
+                t_frase += dur
+            if len(trozos) == 1:
+                trozos[0].replace(seg)
+            else:
+                lista_f = trabajo / f"s{k:03d}.txt"
+                lista_f.write_text("".join(f"file '{x.as_posix()}'\n" for x in trozos), encoding="utf-8")
+                medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista_f), "-c", "copy", str(seg))
             if f.get("rotulo"):   # rótulo neón abajo a la izquierda los primeros segundos
                 png = _rotulo_png(f["rotulo"], colores[clip["fuente"]], trabajo / f"r{k:03d}.png", escala)
                 con = trabajo / f"s{k:03d}r.mp4"
@@ -602,7 +699,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                               f"[0:v][r]overlay=x={int(70 * escala)}:y=H-h-{int(150 * escala)}:shortest=1",
                               "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(con))
                 seg = con
-                fx_escenas.append({"ini": cursor, "fin": cursor + d, "imagenes": [{"etiqueta": f["rotulo"]}]})
+                eventos += [(cursor + 0.15, "impacto", 0.55), (cursor + 0.45, "pop", 0.9)]
         piezas.append(seg)
         cursor += d
     if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
@@ -613,10 +710,31 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     cuerpo = trabajo / "cuerpo.mp4"
     medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista), "-c", "copy", str(cuerpo))
     total = medios.duracion(cuerpo)
-    fx = animacion.pista_de_efectos(fx_escenas, total, trabajo / "fx.wav")
+    avisar("Diseño de sonido", 82)
+    fx = sonido.pista(eventos, total, trabajo / "fx.wav")
+    musica = _musica(p)
+    lecho = musica or sonido.cama(total, trabajo / "cama.wav")   # nunca silencio: música o fondo grave propio
     logo = logo_de(p["canal"])
     destino = base / ("final_16x9.mp4" if final else "previa.mp4")
-    entradas = ["-i", str(cuerpo), "-i", str(fx)]
+    # En dos pasos: primero el sonido a un archivo y luego la imagen con ese sonido. Todo en una sola orden, FFmpeg se
+    # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
+    avisar("Subtítulos, voz y efectos" if final else "Efectos y fondo", 88)
+    vol_lecho = config.VOLUMEN_MUSICA if musica else 0.9
+    entradas_a = ["-i", str(fx), *(["-stream_loop", "-1"] if musica else []), "-i", str(lecho)]
+    lecho_f = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={vol_lecho},"
+               f"afade=t=out:st={max(0, total - 2):.3f}:d=2")
+    if final:   # el lecho baja solo cuando habla la voz (sidechain) y vuelve en las pausas: nunca hay silencio
+        entradas_a += ["-i", str(voz_montaje)]
+        audio = (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,asplit=2[voz][llave];"
+                 f"[0:a]volume=0.6[fx];{lecho_f}[l0];"
+                 "[l0][llave]sidechaincompress=threshold=0.03:ratio=6:attack=20:release=400[lecho];"
+                 f"[voz][fx][lecho]amix=inputs=3:duration=longest:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f}[a]")
+    else:   # la previa ya suena: efectos y lecho (sin voz), con el mismo master
+        audio = f"[0:a]volume=0.6[fx];{lecho_f}[l];[fx][l]amix=inputs=2:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f}[a]"
+    mezcla = trabajo / "mezcla.wav"
+    medios.ffmpeg(*entradas_a, "-filter_complex", audio, "-map", "[a]", "-ar", "48000", str(mezcla))
+
+    entradas = ["-i", str(cuerpo), "-i", str(mezcla)]
     filtros, mezcla_v = [], "[0:v]"
     if logo:   # el logo del canal, discreto arriba a la derecha en todo el vídeo
         entradas += ["-loop", "1", "-i", str(logo)]
@@ -625,33 +743,13 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                        f"{mezcla_v}[logo]overlay=W-w-{int(40 * escala)}:{int(36 * escala)}:shortest=1[v1]")
         mezcla_v = "[v1]"
     if final:
-        avisar("Subtítulos, voz y efectos", 88)
-        ass = subtitulos.construir(cargar(mid)["voz"]["palabras"], trabajo / "subs.ass", ancho, alto, {"posicion": "abajo"})
+        ass = subtitulos.construir(palabras, trabajo / "subs.ass", ancho, alto, {"posicion": "abajo"})
         filtros.append(f"{mezcla_v}ass={ass.name}[v]")
-        n_voz = len([e for e in entradas if e == "-i"])
-        entradas += ["-i", str(base / "voz.wav")]
-        musica = _musica(p)
-        n_mus = n_voz + 1
-        if musica:
-            entradas += ["-stream_loop", "-1", "-i", str(musica)]
-        retraso = int(ENTRADA * 1000)
-        audio = (f"[{n_voz}:a]aresample=48000,aformat=channel_layouts=stereo,adelay={retraso}:all=1,asplit=2[voz][llave];"
-                 f"[1:a]volume=0.35[fx];")
-        if musica:
-            audio += (f"[{n_mus}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={config.VOLUMEN_MUSICA},"
-                      f"afade=t=out:st={max(0, total - 2):.3f}:d=2[m0];[m0][llave]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[mus];"
-                      f"[voz][fx][mus]amix=inputs=3:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]")
-        else:
-            audio += "[llave]anullsink;[voz][fx]amix=inputs=2:duration=longest:normalize=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]"
-        filtros.append(audio)
-        crf = "17"
     else:
         filtros.append(f"{mezcla_v}null[v]")
-        filtros.append("[1:a]volume=0.5[a]")
-        crf = "23"
-    medios.ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-map", "[v]", "-map", "[a]", "-t", f"{total:.3f}",
-                  "-c:v", "libx264", "-preset", "medium", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
-                  "-ar", "48000", "-movflags", "+faststart", str(destino), cwd=trabajo)
+    medios.ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-map", "[v]", "-map", "1:a", "-t", f"{total:.3f}",
+                  "-c:v", "libx264", "-preset", "medium", "-crf", "17" if final else "23", "-pix_fmt", "yuv420p",
+                  "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(destino), cwd=trabajo)
     return destino
 
 
@@ -734,7 +832,8 @@ def montar_short(mid: str, desde: float, hasta: float) -> None:
         trabajo.mkdir()
         _avisar(mid, "Encuadrando en vertical", 20)
         # el vídeo final ya lleva subtítulos horizontales: se parte del cuerpo sin subtítulos + la misma mezcla
-        palabras = [{**w, "ini": w["ini"] - desde, "fin": w["fin"] - desde} for w in q["voz"]["palabras"]
+        palabras = [{**w, "ini": w["ini"] - desde, "fin": w["fin"] - desde}
+                    for w in (q["voz"].get("pausas") or q["voz"])["palabras"]
                     if desde <= w["ini"] < hasta]
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920, {"posicion": "abajo"})
         medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),

@@ -2245,3 +2245,59 @@ def test_montaje_voz_elegible_y_conexiones_sin_claves(aislado, monkeypatch):
     monkeypatch.setattr(config, "GEMINI_API_KEY", "AIza-secreta")
     texto = json.dumps(montaje.conexiones())
     assert "secreta" not in texto and "Google (Gemini)" in texto
+
+
+def test_montaje_solo_corta_a_planos_elegidos_y_en_una_pausa():
+    """Nunca se encadena un plano que nadie eligió (el siguiente del tráiler es otra escena): con un solo plano la frase
+    es un plano. Con planos extra elegidos, el corte cae en la pausa entre palabras más cercana."""
+    from studio4 import montaje
+    meta = {"planos": [{"n": 1, "ini": 0, "fin": 3}, {"n": 2, "ini": 3, "fin": 3.5}, {"n": 3, "ini": 5, "fin": 8}]}
+    assert [(c["n"], d) for c, d in montaje._cadena(meta, {"plano": 1}, 6.0)] == [(1, 6.0)]
+    cadena = montaje._cadena(meta, {"plano": 1, "mas": [3]}, 6.0, pausas=[1.1, 2.7, 4.4])
+    assert [c["n"] for c, _ in cadena] == [1, 3] and abs(cadena[0][1] - 2.7) < 1e-9
+    assert abs(sum(d for _, d in cadena) - 6.0) < 1e-9
+
+
+def test_montaje_parte_oraciones_largas_en_la_coma():
+    from studio4 import montaje
+    o = ("Durante veinte años, en GTA, robar un auto estacionado era casi magia: un botón, la puerta se abría "
+         "y el motor arrancaba.")
+    partes = montaje._trocear(o)
+    assert len(partes) == 2 and partes[0].endswith("magia:") and " ".join(partes) == o
+    assert montaje._trocear("Una frase corta y normal.") == ["Una frase corta y normal."]
+    frases = montaje.partir(o + " Y no es algo que pase seguido.\n\nOtro bloque aquí con varias palabras.")
+    assert [montaje._pausa(frases, k) for k in range(len(frases))] == [0.0, montaje.PAUSA_FRASE, montaje.PAUSA_BLOQUE, 0.0]
+
+
+def test_montaje_la_voz_respira_entre_frases(tmp_path):
+    """Se mete silencio entre oraciones y entre bloques; las palabras se mueven con su frase."""
+    from studio4 import medios, montaje
+    wav = tmp_path / "voz.wav"
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=f=300:d=4", "-ar", "24000", "-ac", "1", str(wav))
+    e = montaje.ENTRADA
+    frases = [{"bloque": 0, "texto": "Uno dos tres."}, {"bloque": 1, "texto": "Cuatro cinco seis."}]
+    palabras = [{"palabra": "uno", "ini": e + 0.1, "fin": e + 0.5}, {"palabra": "cuatro", "ini": e + 2.2, "fin": e + 2.6}]
+    tiempos, pal = montaje._respirar(wav, [(e, e + 1.9), (e + 2.1, e + 4)], palabras, frases, tmp_path / "p.wav")
+    assert abs(medios.duracion(tmp_path / "p.wav") - (4 + montaje.PAUSA_BLOQUE)) < 0.05
+    assert tiempos[0] == (e, e + 1.9) and abs(tiempos[1][0] - (e + 2.1 + montaje.PAUSA_BLOQUE)) < 1e-9
+    assert pal[0]["ini"] == e + 0.1 and abs(pal[1]["ini"] - (e + 2.2 + montaje.PAUSA_BLOQUE)) < 1e-9
+
+
+def test_subtitulos_no_dejan_palabras_colgadas():
+    """«VUELVE A VICE CITY CON» no: una línea no acaba en «con», «no ha»… ni parte «Vice | City»."""
+    from studio4 import subtitulos
+
+    def w(t):
+        return [{"palabra": x, "ini": k * 0.32, "fin": k * 0.32 + 0.3} for k, x in enumerate(t.split())]
+    lineas = lambda t: [" ".join(p["palabra"] for p in li) for li in subtitulos._lineas(w(t), 5)]  # noqa: E731
+    assert lineas("Y Rockstar todavía no ha contado todo.") == ["Y Rockstar todavía", "no ha contado todo."]
+    assert all(not li.endswith((" a", " con", " Vice")) for li in lineas("GTA 6 vuelve a Vice City con más vida que nunca."))
+
+
+def test_sonido_efectos_cama_y_master(tmp_path):
+    from studio4 import sonido
+    fx = sonido.biblioteca(tmp_path / "_fx")
+    assert set(fx) == {"impacto", "subida", "whoosh", "cruce", "pop"} and all(f.exists() for f in fx.values())
+    assert abs(medios.duracion(sonido.cama(6, tmp_path / "c.wav")) - 6) < 0.1
+    assert abs(medios.duracion(sonido.pista([(1, "impacto", 1), (-1, "subida", 1)], 5, tmp_path / "p.wav")) - 5) < 0.1
+    assert "loudnorm=I=-11" in sonido.MASTER

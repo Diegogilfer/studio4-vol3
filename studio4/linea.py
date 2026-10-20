@@ -33,7 +33,8 @@ def desde_montaje(p: dict[str, Any], fuentes: dict[str, dict[str, Any]], tiempos
     """La línea de tiempo de un vídeo del panel de montaje. Sin voz grabada, con tiempos estimados por palabras."""
     from . import montaje
     if tiempos is None:
-        tiempos = [tuple(x) for x in (p.get("voz") or {}).get("tiempos") or montaje._tiempos_estimados(p)]
+        voz_ = p.get("voz") or {}
+        tiempos = [tuple(x) for x in (voz_.get("pausas") or voz_).get("tiempos") or montaje._tiempos_estimados(p)]
     tramos = [(0.0 if k == 0 else a, tiempos[k + 1][0] if k + 1 < len(tiempos) else b + 1.2) for k, (a, b) in enumerate(tiempos)]
     video, texto, graficos = [], [], []
     for k, (f, (a, b)) in enumerate(zip(p["frases"], tramos)):
