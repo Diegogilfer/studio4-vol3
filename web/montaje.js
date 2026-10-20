@@ -135,7 +135,7 @@ function pintarVideo() {
       </form>
       <p class="meta">En un gameplay de horas, pon desde y hasta (el capítulo de la misión): así solo se baja ese tramo.</p>
       <div class="fuentes">${v.fuentes.map((fid) => { const f = datos.fuentes[fid]; return `
-        <div class="fuente"><img src="/fv/${esc(fid)}/001.jpg" alt=""><div><b>${esc(f.nombre)}</b>
+        <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt=""><div><b>${esc(f.nombre)}</b>
           <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
       <div id="banco"></div>
     </section>

@@ -2139,3 +2139,14 @@ def test_montaje_se_salta_planos_malos_al_proponer(aislado, tmp_path, monkeypatc
     montaje.usar_fuente(mid, "fuenteA")
     montaje.proponer(mid)
     assert [f["clip"]["plano"] for f in montaje.cargar(mid)["frases"]] == [2, 4]
+
+
+def test_logo_del_canal_en_circulo_transparente(aislado, monkeypatch, tmp_path):
+    from PIL import Image
+    from studio4 import montaje
+    monkeypatch.setattr(config, "PRODUCCIONES", tmp_path)
+    (tmp_path / "_canales" / "c").mkdir(parents=True)
+    Image.new("RGB", (200, 200), "black").save(tmp_path / "_canales" / "c" / "logo.png")
+    r = Image.open(montaje.logo_de("c"))
+    assert r.mode == "RGBA" and r.getpixel((2, 2))[3] == 0 and r.getpixel((100, 100))[3] == 255
+    assert montaje.logo_de("sin-logo") is None

@@ -472,11 +472,11 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista), "-c", "copy", str(cuerpo))
     total = medios.duracion(cuerpo)
     fx = animacion.pista_de_efectos(fx_escenas, total, trabajo / "fx.wav")
-    logo = config.PRODUCCIONES / "_canales" / p["canal"] / "logo.png"
+    logo = logo_de(p["canal"])
     destino = base / ("final_16x9.mp4" if final else "previa.mp4")
     entradas = ["-i", str(cuerpo), "-i", str(fx)]
     filtros, mezcla_v = [], "[0:v]"
-    if logo.exists():   # el logo del canal, discreto arriba a la derecha en todo el vídeo
+    if logo:   # el logo del canal, discreto arriba a la derecha en todo el vídeo
         entradas += ["-loop", "1", "-i", str(logo)]
         lado = int(130 * escala)
         filtros.append(f"[2:v]scale={lado}:{lado},format=rgba,colorchannelmixer=aa=0.55[logo];"
@@ -511,6 +511,25 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                   "-c:v", "libx264", "-preset", "medium", "-crf", crf, "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
                   "-ar", "48000", "-movflags", "+faststart", str(destino), cwd=trabajo)
     return destino
+
+
+def logo_de(canal: str) -> Path | None:
+    """El logo del canal recortado en círculo con fondo transparente (el PNG original trae un cuadrado negro).
+    Se prepara una vez y se reutiliza."""
+    from PIL import Image, ImageDraw
+    base = config.PRODUCCIONES / "_canales" / canal
+    original, redondo = base / "logo.png", base / "logo_redondo.png"
+    if not original.exists():
+        return None
+    if not redondo.exists() or redondo.stat().st_mtime < original.stat().st_mtime:
+        im = Image.open(original).convert("RGBA")
+        lado = min(im.size)
+        im = im.crop(((im.width - lado) // 2, (im.height - lado) // 2, (im.width + lado) // 2, (im.height + lado) // 2))
+        mascara = Image.new("L", (lado * 4, lado * 4), 0)
+        ImageDraw.Draw(mascara).ellipse([8, 8, lado * 4 - 8, lado * 4 - 8], fill=255)   # borde suave: se dibuja a 4x
+        im.putalpha(mascara.resize((lado, lado), Image.LANCZOS))
+        im.save(redondo)
+    return redondo
 
 
 def _sin_audio(origen: Path, destino: Path) -> Path:
@@ -621,8 +640,8 @@ def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]]) -> Path:
         origen = extractor.descargar_tramo(meta["url"], meta["desde"] + pl["ini"], meta["desde"] + pl["fin"], alto=1080)
         medios.ffmpeg("-ss", f"{(pl['fin'] - pl['ini']) / 2:.2f}", "-i", str(origen), "-frames:v", "1", str(trabajo / f"m{k}.jpg"))
         imgs.append(f"m{k}.jpg")
-    logo = config.PRODUCCIONES / "_canales" / p["canal"] / "logo.png"
-    if logo.exists():
+    logo = logo_de(p["canal"])
+    if logo:
         shutil.copy(logo, trabajo / "logo.png")
     shutil.copy(animacion.FUENTES / "geist-latin-wght-normal.woff2", trabajo / "geist.woff2")
     paneles = "".join(f'<div class="f" style="background-image:url({i})"></div>' for i in imgs)
@@ -636,7 +655,7 @@ h1 {{ position: absolute; left: 0; right: 0; bottom: 36px; margin: 0; text-align
   font-weight: 900; line-height: .95; letter-spacing: -.02em; text-shadow: 0 0 30px #ff3ea5, 0 8px 0 #000; padding: 0 40px; }}
 .logo {{ position: absolute; top: 22px; right: 22px; width: 120px; opacity: .9; }}
 </style><div class="fotos">{paneles}</div><div class="velo"></div><h1>{texto}</h1>
-{'<img class="logo" src="logo.png">' if logo.exists() else ''}"""
+{'<img class="logo" src="logo.png">' if logo else ''}"""
     (trabajo / "m.html").write_text(html, encoding="utf-8")
     destino = base / "miniatura.jpg"
     with sync_playwright() as pw:
