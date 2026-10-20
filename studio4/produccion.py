@@ -750,6 +750,8 @@ def seleccionar_voz(pid: str, proveedor: str, voice_id: str = "", voz_nombre: st
             p["voice_id"] = vid if vid in voz.VOCES_MIMO else (p.get("voice_id") if p.get("voice_id") in voz.VOCES_MIMO else voz.VOZ_MIMO_POR_DEFECTO)
         elif proveedor == "gemini" and vnom in config.VOCES_GEMINI:
             p["voz_nombre"] = vnom
+        elif proveedor == "fal":
+            p["voice_id"] = vid if vid in voz.VOCES_FAL else (p.get("voice_id") if p.get("voice_id") in voz.VOCES_FAL else voz.VOZ_FAL)
     p = modificar(pid, aplicar)
     segmentos = [e["texto_voz"] for e in p.get("escenas", [])]
     return {
@@ -775,6 +777,8 @@ def rehacer_voz(pid: str, proveedor: str, voice_id: str = "", voz_nombre: str = 
             p["voz_elevenlabs_nombre"] = vnom
         elif proveedor == "gemini" and vnom in config.VOCES_GEMINI:
             p["voz_nombre"] = vnom
+        elif proveedor == "fal":
+            p["voice_id"] = vid if vid in voz.VOCES_FAL else (p.get("voice_id") if p.get("voice_id") in voz.VOCES_FAL else voz.VOZ_FAL)
     modificar(pid, aplicar)
     _en_fondo(pid, "Voz", lambda: _generar_voz(pid))
 

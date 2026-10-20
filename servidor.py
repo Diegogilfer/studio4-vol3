@@ -261,6 +261,8 @@ class Panel(BaseHTTPRequestHandler):
             return self._json(voz.catalogo_elevenlabs(forzar=forzar))
         if ruta == "/api/voz/oir":   # frase de presentación de una voz (se graba una vez y se guarda)
             nombre = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("voz", [""])[0]
+            if nombre.startswith("fal:"):   # voz de pago: la muestra se graba una vez (≈0,01 $) y se guarda
+                return self._archivo(voz.muestra_fal(nombre[4:]))
             return self._archivo(voz.muestra_generica(nombre))
         if ruta == "/api/subtitulos/vista":   # fotograma de muestra con los subtítulos actuales
             pid = produccion.activa()
@@ -316,7 +318,7 @@ class Panel(BaseHTTPRequestHandler):
                 "elevenlabs_por_defecto": config.ELEVENLABS_VOICE_ID or voz.VOZ_ELEVENLABS_POR_DEFECTO,
                 "sin_pago": config.SIN_PAGO,
                 "voces_gemini": config.VOCES_GEMINI, "voz_por_defecto": config.VOZ_GEMINI,
-                "voces_mimo": voz.VOCES_MIMO, "voz_mimo_por_defecto": voz.VOZ_MIMO_POR_DEFECTO,
+                "voces_mimo": voz.VOCES_MIMO, "voces_fal": voz.VOCES_FAL, "voz_fal_por_defecto": voz.VOZ_FAL, "voz_mimo_por_defecto": voz.VOZ_MIMO_POR_DEFECTO,
                 "versiones": config.VERSIONES,
                 "salud": config.salud(),
                 "plataformas": {k: v["nombre"] for k, v in miniaturas.PLATAFORMAS.items()},

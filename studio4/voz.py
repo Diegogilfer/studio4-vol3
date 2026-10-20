@@ -41,6 +41,31 @@ VOZ_MIMO_POR_DEFECTO = "mimo_default"
 FAL_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
 FAL_TTS_POR_MIL = 0.10   # $ por cada 1.000 caracteres (ficha de fal, octubre de 2026)
 VOZ_FAL = "George"       # voz de narrador de ElevenLabs; el modelo multilingüe habla en español
+# Las voces de ElevenLabs que acepta fal (ficha del modelo, octubre de 2026). Todas hablan español con el modelo
+# multilingüe; algunas conservan algo del acento de origen. «Yo pago, yo escojo»: se elige y se escucha antes.
+VOCES_FAL = {
+    "Brian": "Hombre, grave y pausado · narrador",
+    "Daniel": "Hombre, firme · estilo noticiero (acento británico)",
+    "George": "Hombre, cálido · narración (acento británico)",
+    "Roger": "Hombre, seguro y directo",
+    "Eric": "Hombre, cercano y amable",
+    "Chris": "Hombre, casual y natural",
+    "Will": "Hombre joven, amistoso",
+    "Liam": "Hombre joven, claro y articulado",
+    "Callum": "Hombre, intenso · tensión y misterio",
+    "Charlie": "Hombre, conversacional (acento australiano)",
+    "Bill": "Hombre mayor, confiable · historias",
+    "Aria": "Mujer, expresiva",
+    "Sarah": "Mujer, suave y clara",
+    "Laura": "Mujer joven, enérgica",
+    "Jessica": "Mujer joven, expresiva",
+    "Matilda": "Mujer, amable y cálida",
+    "Alice": "Mujer, segura (acento británico)",
+    "Lily": "Mujer, cálida (acento británico)",
+    "Charlotte": "Mujer, sugerente",
+    "River": "Voz neutra, tranquila",
+}
+FRASE_MUESTRA_FAL = "Así sonaría la narración de tu vídeo, con datos claros y un ritmo que no aburre."
 LIMITE_TROZO = 3200      # caracteres por llamada (~3 min de voz): un vídeo largo se graba por partes y se une
 VOZ_ELEVENLABS_POR_DEFECTO = "JBFqnCBsd6RMkjVDRZzb"  # «George», voz prediseñada disponible en el plan gratis
 CACHE_CATALOGO_S = 3600  # 1 hora de caché del catálogo de ElevenLabs para no consultar de más
@@ -469,13 +494,13 @@ def _mimo_tts(texto: str, destino: Path, produccion: str, voice_id: str | None =
     return voz_mimo
 
 
-def _fal_tts(texto: str, destino: Path, produccion: str, antes: str = "", despues: str = "") -> None:
-    """ElevenLabs Multilingual v2 a través de fal (con el saldo de fal). `antes` y `despues` son el texto vecino:
-    así cada trozo de un vídeo largo se entona como parte de la misma narración."""
+def _fal_tts(texto: str, destino: Path, produccion: str, antes: str = "", despues: str = "", voz: str = "") -> None:
+    """ElevenLabs Multilingual v2 a través de fal (con el saldo de fal), con la voz que eligió el autor. `antes` y
+    `despues` son el texto vecino: así cada trozo de un vídeo largo se entona como parte de la misma narración."""
     from . import visuales_api
     if not config.FAL_KEY or config.SIN_PAGO:
         raise RuntimeError("La voz de ElevenLabs por fal necesita FAL_KEY en .env (y STUDIO4_SIN_PAGO apagado).")
-    cuerpo = {"text": texto, "voice": VOZ_FAL, "language_code": "es"}
+    cuerpo = {"text": texto, "voice": voz if voz in VOCES_FAL else VOZ_FAL, "language_code": "es"}
     if antes:
         cuerpo["previous_text"] = antes[-600:]
     if despues:
@@ -587,6 +612,17 @@ FRASE_MUESTRA = ("Así sonaría la narración de tu vídeo: tranquila cuando la 
                  "y con fuerza cuando llega el momento que nadie esperaba.")
 
 
+def muestra_fal(nombre: str) -> Path:
+    """La frase de presentación de una voz de fal: se graba UNA vez (≈0,01 $) y se guarda para oírla gratis."""
+    if nombre not in VOCES_FAL:
+        raise ValueError(f"Voz desconocida: {nombre}")
+    destino = config.PRODUCCIONES / "_voces" / f"fal_{nombre}.wav"
+    if not destino.exists():
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        _fal_tts(FRASE_MUESTRA_FAL, destino, "", voz=nombre)
+    return destino
+
+
 def muestra_generica(voz_nombre: str) -> Path:
     """La frase de presentación de una voz, grabada una sola vez y guardada para escucharla al instante."""
     if voz_nombre not in config.VOCES_GEMINI:
@@ -682,7 +718,8 @@ def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini",
         voz_mimo = cand_mimo if cand_mimo in VOCES_MIMO else VOZ_MIMO_POR_DEFECTO
         voz_el_id = _mimo_tts(texto, destino, produccion, voice_id=voz_mimo, estilo_voz=estilo_voz)
     elif proveedor == "fal":   # sus tiempos se miden por los silencios, como con Gemini
-        _fal_tts(texto, destino, produccion, *contexto)
+        _fal_tts(texto, destino, produccion, *contexto, voz=(voice_id or "").strip())
+        voz_el_id = (voice_id or "").strip() if (voice_id or "").strip() in VOCES_FAL else VOZ_FAL
     else:
         dirigido = _texto_dirigido(limpios, direcciones)
         _gemini(dirigido, destino, produccion, voz_nombre, estilo_voz)

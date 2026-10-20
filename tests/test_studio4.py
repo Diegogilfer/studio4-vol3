@@ -2012,3 +2012,22 @@ def test_imagenes_fijas_con_movimiento_distinto(tmp_path):
     destino = tmp_path / "s.mp4"
     render._segmento_imagen(img, destino, 1.0, 320, 180, movimiento="izquierda")
     assert abs(medios.duracion(destino) - 1.0) < 0.15
+
+
+
+def test_voz_de_fal_usa_la_que_eliges(aislado, monkeypatch):
+    """«Yo pago, yo escojo»: la voz de ElevenLabs por fal es la elegida, no siempre George; la muestra se graba una vez."""
+    pedidos = []
+    monkeypatch.setattr(config, "FAL_KEY", "k")
+    monkeypatch.setattr(config, "SIN_PAGO", False)
+    from studio4 import visuales_api
+    monkeypatch.setattr(visuales_api, "_fal", lambda modelo, cuerpo, limite_s=0: pedidos.append(cuerpo) or {"audio": {"url": "u"}})
+    monkeypatch.setattr(visuales_api, "_bajar", lambda url, destino: destino.write_bytes(b"mp3"))
+    monkeypatch.setattr(voz.medios, "ffmpeg", lambda *a: pathlib.Path(a[-1]).write_bytes(b"wav"))
+    voz._fal_tts("Hola", aislado / "a.wav", "", voz="Brian")
+    voz._fal_tts("Hola", aislado / "b.wav", "", voz="Inventada")
+    assert [c["voice"] for c in pedidos] == ["Brian", voz.VOZ_FAL]
+    voz.muestra_fal("Daniel"); voz.muestra_fal("Daniel")
+    assert [c["voice"] for c in pedidos][2:] == ["Daniel"]   # la segunda vez se oye la guardada, sin pagar
+    with pytest.raises(ValueError):
+        voz.muestra_fal("Nadie")
