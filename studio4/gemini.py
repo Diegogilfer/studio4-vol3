@@ -33,8 +33,9 @@ def cambiar_clave(clave: str) -> str:
     import re as _re
     from dotenv import set_key
     clave = (clave or "").strip()
-    if not _re.fullmatch(r"AIza[0-9A-Za-z_\-]{30,}", clave):
-        raise ValueError("Eso no parece una clave de Google: empiezan por «AIza» (cópiala de aistudio.google.com/apikey).")
+    # dos formatos: el clásico «AIza…» y el nuevo de AI Studio «AQ.…» (octubre de 2026)
+    if not _re.fullmatch(r"(AIza[0-9A-Za-z_\-]{30,}|AQ\.[0-9A-Za-z_\-]{30,})", clave):
+        raise ValueError("Eso no parece una clave de Google: empiezan por «AIza» o «AQ.» (cópiala de aistudio.google.com/apikey).")
     prueba = genai.Client(api_key=clave)
     cfg = types.GenerateContentConfig(response_modalities=["AUDIO"], speech_config=types.SpeechConfig(
         voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=config.VOZ_GEMINI))))

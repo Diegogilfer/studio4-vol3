@@ -2061,3 +2061,15 @@ def test_extractor_detecta_planos_y_corta_sin_audio(tmp_path):
                      capture_output=True, text=True).stdout.split()
     assert abs(medios.duracion(trozo) - 2.0) < 0.2 and pistas == ["video"]   # fuera su audio
     assert extractor.opciones_ytdlp()["js_runtimes"] == {"node": {}}
+
+
+def test_clave_gemini_acepta_el_formato_nuevo(aislado, monkeypatch, tmp_path):
+    from studio4 import gemini
+
+    class Cliente:
+        def __init__(self, api_key):
+            self.models = type("M", (), {"generate_content": lambda *a, **k: None})()
+    monkeypatch.setattr(gemini.genai, "Client", Cliente)
+    monkeypatch.setattr(config, "ENV_FILE", tmp_path / ".env")
+    gemini.cambiar_clave("AQ." + "Ab8_x" * 8)
+    assert config.GEMINI_API_KEY.startswith("AQ.")
