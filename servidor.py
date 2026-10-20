@@ -237,6 +237,13 @@ class Panel(BaseHTTPRequestHandler):
             if not MEDIOS_MONTAJE.match(m.group(2)):
                 raise Error(404, "No existe")
             return self._archivo(montaje.carpeta(m.group(1)) / m.group(2))
+        m = re.fullmatch(r"/canal/([\w-]+)/logo\.png", ruta)   # el logo del canal (en círculo)
+        if m:
+            from studio4 import montaje
+            logo = montaje.logo_de(m.group(1))
+            if not logo:
+                raise Error(404, "Sin logo")
+            return self._archivo(logo)
         m = re.fullmatch(r"/fv/([\w.-]+)/(\d{3})\.jpg", ruta)   # miniaturas de los planos del banco de clips
         if m:
             from studio4 import extractor
@@ -357,6 +364,10 @@ class Panel(BaseHTTPRequestHandler):
         from studio4 import montaje
         mid = str(d.get("id", ""))
         num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
+        if ruta == "/api/m/desde-biblioteca":   # un guion de la Biblioteca → vídeo nuevo
+            return self._json({"ok": True, "id": montaje.desde_biblioteca(str(d.get("item", "")))})
+        if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion
+            return self._json({"ok": True, "id": montaje.desde_idea(int(d.get("n", -1)))})
         if ruta == "/api/m/liberar":
             return self._json({"ok": True, "liberado": montaje.liberar()})
         if ruta == "/api/m/actualizar-descargador":

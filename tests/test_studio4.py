@@ -2172,3 +2172,21 @@ def test_descargador_dice_si_esta_viejo():
     from studio4 import extractor
     d = extractor.descargador()
     assert d["version"] and isinstance(d["viejo"], bool) and d["dias"] >= 0
+
+
+def test_imagen_de_wikipedia_de_una_palabra_solo_si_es_un_videojuego(aislado, monkeypatch):
+    from studio4 import ideas
+
+    class R:
+        def __init__(self, p):
+            self.p = p
+
+        def json(self):
+            return {"query": {"pages": {"0": self.p}}}
+    monkeypatch.setattr(ideas.fuentes, "claves", lambda idea, p: ["ghost leviathan"])
+    libro = {"index": 1, "title": "Leviathan (Hobbes book)", "description": "1651 book by Thomas Hobbes", "thumbnail": {"source": "https://x/l.jpg"}}
+    monkeypatch.setattr(ideas.requests, "get", lambda *a, **k: R(libro))
+    assert ideas._de_wikipedia("El Ghost Leviathan de Subnautica") == {}
+    juego = {"index": 1, "title": "Leviathan", "description": "2019 video game", "thumbnail": {"source": "https://x/j.jpg"}}
+    monkeypatch.setattr(ideas.requests, "get", lambda *a, **k: R(juego))
+    assert ideas._de_wikipedia("El Ghost Leviathan de Subnautica")["url"] == "https://x/j.jpg"

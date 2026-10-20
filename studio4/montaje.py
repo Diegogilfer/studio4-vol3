@@ -123,6 +123,9 @@ def partir(guion: str) -> list[dict[str, Any]]:
                 frases[-1]["texto"] += " " + pendiente
             else:
                 frases.append({"bloque": nb, "texto": pendiente})
+    if len(bloques) == 1 and len(frases) > 8:
+        for k, f in enumerate(frases):
+            f["bloque"] = k // 4
     for k, f in enumerate(frases):
         f["n"] = k + 1
     return frases
@@ -137,9 +140,10 @@ def revisar(guion: str) -> list[str]:
     return avisos
 
 
-def crear(titulo: str, guion: str, canal: str = "") -> str:
+def crear(titulo: str, guion: str, canal: str = "", sin_guion: bool = False) -> str:
+    """`sin_guion`: el vídeo nace vacío porque Studio está escribiendo su guion (desde una idea del día)."""
     frases = partir(guion)
-    if not frases:
+    if not frases and not sin_guion:
         raise ValueError("Pega el guion (lo que dirá la voz).")
     base = re.sub(r"[^a-z0-9]+", "-", titulo.lower())[:40].strip("-") or "video"
     mid = f"{time.strftime('%Y%m%d-%H%M%S')}-{base}"
@@ -152,6 +156,54 @@ def crear(titulo: str, guion: str, canal: str = "") -> str:
                  "avisos": revisar(guion), "fuentes": [], "voz_nombre": c.get("voz_nombre") or "Sadaltager",
                  "previa": "", "final": None, "short": None, "textos": None, "miniatura": "",
                  "trabajo": {"ocupado": False, "fase": "", "progreso": 0, "error": ""}})
+    return mid
+
+
+def desde_biblioteca(item_id: str) -> str:
+    """Un guion de la Biblioteca (los de Agron) → un vídeo nuevo con su título, descripción y hashtags."""
+    from . import biblioteca
+    cid = canales.activo()["id"]
+    item = next((x for x in biblioteca.leer(cid) if x["id"] == item_id), None)
+    if not item:
+        raise ValueError("Ese guion ya no está en la biblioteca.")
+    mid = crear(item.get("titulo") or item["guion"][:60], item["guion"], cid)
+    modificar(mid, lambda p: p.update(textos_autor={"titulo": item.get("titulo", ""), "descripcion": item.get("descripcion", ""),
+                                                    "hashtags": item.get("hashtags", [])}, biblioteca=item_id))
+    biblioteca.marcar(cid, item_id, mid)
+    return mid
+
+
+def desde_idea(n: int) -> str:
+    """Una idea del día → vídeo nuevo; Studio investiga (fuentes del canal + web) y escribe el guion de ~5 min con la
+    metodología del estudio. El vídeo se abre ya y el guion aparece en el paso 1 al terminar."""
+    from . import fuentes as fuentes_web
+    from . import guion as guionista
+    from . import ideas, investigacion
+    cid = canales.activo()["id"]
+    lista = ideas.diarias(cid).get("ideas") or []
+    if not 0 <= n < len(lista):
+        raise ValueError("Esa idea ya no está.")
+    idea = lista[n]
+    mid = crear(idea["idea"][:90], "", cid, sin_guion=True)
+
+    def fase():
+        _avisar(mid, "Investigando el tema", 10)
+        dossier = investigacion.investigar(idea["idea"], produccion=mid)
+        propias = canales.obtener(cid).get("fuentes") or []
+        if propias:
+            _avisar(mid, "Leyendo tus fuentes de confianza", 35)
+            try:
+                extra = fuentes_web.investigar(idea["idea"], propias, produccion=mid)
+                if extra["texto"]:
+                    dossier["dossier"] = f"DE TUS FUENTES DE CONFIANZA:\n{extra['texto']}\n\n" + dossier.get("dossier", "")
+            except Exception as e:  # noqa: BLE001 - sin sus fuentes el guion sale igual
+                logger.warning("Fuentes del canal: %s", e)
+        _avisar(mid, "Escribiendo el guion", 60)
+        escrito = guionista.escribir(idea["idea"], dossier.get("dossier", ""), {"largo": 300}, produccion=mid,
+                                     referencias=idea.get("texto", ""), identidad=guionista.identidad_del_canal(canales.obtener(cid)))
+        cambiar_guion(mid, escrito["largo"]["guion"])
+        modificar(mid, lambda p: p.update(titulo=escrito.get("titulo_provisional") or p["titulo"]))
+    _en_fondo(mid, "Guion", fase)
     return mid
 
 

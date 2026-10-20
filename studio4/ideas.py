@@ -119,13 +119,18 @@ def _de_wikipedia(idea: str) -> dict[str, str]:
             try:
                 r = requests.get(f"https://{lengua}.wikipedia.org/w/api.php", headers=archivo.CABECERAS, timeout=20, params=dict(
                     action="query", format="json", generator="search", gsrsearch=consulta, gsrlimit=5,
-                    prop="pageimages", piprop="thumbnail", pithumbsize=960)).json()
+                    prop="pageimages|description", piprop="thumbnail", pithumbsize=960)).json()
             except (requests.RequestException, ValueError) as e:
                 logger.info("Wikipedia (%s): %s", lengua, e)
                 continue
             for pag in sorted(((r.get("query") or {}).get("pages") or {}).values(), key=lambda x: x.get("index", 99)):
                 titulo = re.sub(r"\(.*?\)", "", pag.get("title", ""))
                 suyas = galeria._palabras(titulo) | numeros(titulo)
+                # un título de una sola palabra («Leviathan») solo vale si el artículo es de un videojuego
+                de_juego = re.search(r"video ?game|videojuego|game series|serie de videojuegos|consola|console",
+                                     f"{pag.get('title', '')} {pag.get('description', '')}", re.I)
+                if len(suyas - GENERICAS) < 2 and not de_juego:
+                    continue
                 if (pag.get("thumbnail") or {}).get("source") and suyas and suyas <= palabras and suyas - GENERICAS:
                     return {"url": pag["thumbnail"]["source"].split("?")[0], "fuente": f"Wikipedia · {pag['title']}"}
     return {}
