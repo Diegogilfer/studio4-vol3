@@ -2031,3 +2031,16 @@ def test_voz_de_fal_usa_la_que_eliges(aislado, monkeypatch):
     assert [c["voice"] for c in pedidos][2:] == ["Daniel"]   # la segunda vez se oye la guardada, sin pagar
     with pytest.raises(ValueError):
         voz.muestra_fal("Nadie")
+
+
+def test_animacion_de_pestanas_y_sus_sonidos(tmp_path):
+    """Las tarjetas llevan un whoosh al entrar y un pop en su rótulo; la página lleva las escenas y su tamaño."""
+    from studio4 import animacion
+    esc = [{"ini": 0.0, "fin": 3.0, "imagenes": [{"src": "a.jpg", "etiqueta": "VICE CITY · 2002", "color": "rosa"},
+                                                 {"src": "b.jpg", "etiqueta": "GTA 6", "color": "cian"}]},
+           {"ini": 3.0, "fin": 5.0, "titulo": "Leonida", "imagenes": []}]
+    assert [m[1] for m in animacion.sonidos_de(esc)] == ["whoosh", "pop", "whoosh", "pop", "whoosh"]
+    html = animacion._html(esc, 1080, 1920)
+    assert "VICE CITY · 2002" in html and "#ff3ea5" in html and "__W__" not in html and "1920" in html
+    fx = animacion.efectos(tmp_path)
+    assert all(medios.duracion(f) > 0.05 for f in fx.values())
