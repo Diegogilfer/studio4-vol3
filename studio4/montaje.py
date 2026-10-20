@@ -207,6 +207,44 @@ def desde_idea(n: int) -> str:
     return mid
 
 
+PROVEEDORES_VOZ = ("gemini", "fal")
+
+
+def opciones_voz() -> dict[str, Any]:
+    """Las voces que el panel ofrece: las de Google (gratis) y, si hay clave de fal, las de ElevenLabs (de pago)."""
+    return {"gemini": {"nombre": "Google · gratis", "voces": config.VOCES_GEMINI, "disponible": bool(config.GEMINI_API_KEY)},
+            "fal": {"nombre": "ElevenLabs por fal · de pago", "voces": voz.VOCES_FAL, "disponible": bool(config.FAL_KEY) and not config.SIN_PAGO,
+                    "por_mil": voz.FAL_TTS_POR_MIL}}
+
+
+def coste_voz(p: dict[str, Any]) -> float:
+    """Lo que costará la voz de este guion con la voz elegida (0 si es gratis)."""
+    return voz.coste_voz([f["texto"] for f in p["frases"]], p.get("voz_proveedor", "gemini"))
+
+
+def elegir_voz(mid: str, proveedor: str, nombre: str) -> None:
+    if proveedor not in PROVEEDORES_VOZ:
+        raise ValueError("Voz desconocida.")
+    voces = config.VOCES_GEMINI if proveedor == "gemini" else voz.VOCES_FAL
+    if nombre not in voces:
+        raise ValueError(f"La voz «{nombre}» no existe.")
+    modificar(mid, lambda p: p.update(voz_proveedor=proveedor, voz_nombre=nombre, final=None, short=None))
+
+
+def conexiones() -> list[dict[str, Any]]:
+    """Qué APIs están conectadas (sin enseñar nunca las claves), para qué sirven y si cuestan."""
+    from . import youtube
+    return [
+        {"api": "Google (Gemini)", "conectada": bool(config.GEMINI_API_KEY), "pago": False, "uso": "Voz gratis, investigación y textos de reserva"},
+        {"api": "DeepSeek", "conectada": bool(config.DEEPSEEK_API_KEY), "pago": True, "uso": "Guiones, textos para publicar (céntimos por vídeo)"},
+        {"api": "YouTube", "conectada": youtube.disponible(), "pago": False, "uso": "Estadísticas, tendencias e ideas del día (cupo diario gratis)"},
+        {"api": "fal (ElevenLabs)", "conectada": bool(config.FAL_KEY) and not config.SIN_PAGO, "pago": True, "uso": "Voz de pago, plan B (≈0,10 $ cada 1.000 letras)"},
+        {"api": "ElevenLabs directo", "conectada": bool(config.ELEVENLABS_API_KEY), "pago": True, "uso": "Voz con tu cuenta de ElevenLabs"},
+        {"api": "Xiaomi MiMo", "conectada": bool(config.XIAOMIMIMO_API_KEY), "pago": False, "uso": "Voz: no se usa, en español suena mal"},
+        {"api": "Descargador (yt-dlp)", "conectada": True, "pago": False, "uso": "Material: tráilers y gameplay"},
+    ]
+
+
 def cambiar_guion(mid: str, guion: str) -> None:
     """Un guion nuevo conserva los planos de las frases que no cambiaron."""
     nuevas = partir(guion)
@@ -498,14 +536,16 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     if final:
         segmentos = [f["texto"] for f in p["frases"]]
         wav = base / "voz.wav"
-        firma_voz = hashlib.sha1(json.dumps([segmentos, p["voz_nombre"], ESTILO_VOZ]).encode("utf-8")).hexdigest()
+        proveedor = p.get("voz_proveedor", "gemini")
+        firma_voz = hashlib.sha1(json.dumps([segmentos, proveedor, p["voz_nombre"], ESTILO_VOZ]).encode("utf-8")).hexdigest()
         previa_voz = p.get("voz") or {}
         if previa_voz.get("firma") == firma_voz and wav.exists():   # mismo texto y misma voz: no se regraba
             avisar("Voz ya grabada (mismo guion)", 10)
             tiempos, palabras = [tuple(x) for x in previa_voz["tiempos"]], previa_voz["palabras"]
         else:
             avisar("Grabando la voz", 5)
-            t = voz.locutar(segmentos, wav, "gemini", produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ)
+            t = voz.locutar(segmentos, wav, proveedor, produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ,
+                            voice_id=p["voz_nombre"] if proveedor == "fal" else None)
             tiempos = [(e["ini"] + ENTRADA, e["fin"] + ENTRADA) for e in t["escenas"]]
             palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in t["palabras"]]
             modificar(mid, lambda q: q.update(voz={"archivo": "voz.wav", "duracion": t["duracion"], "palabras": palabras,

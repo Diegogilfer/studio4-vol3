@@ -2230,3 +2230,18 @@ def test_panel_nuevo_no_carga_el_estudio_antiguo():
                            cwd=str(pathlib.Path(__file__).resolve().parent.parent)).stdout.split())
     antiguos = {"produccion", "flow", "director", "render", "entregas", "miniaturas", "referencias", "visuales_api", "tarjetas", "importar"}
     assert cargados and not (cargados & antiguos), cargados & antiguos
+
+
+
+def test_montaje_voz_elegible_y_conexiones_sin_claves(aislado, monkeypatch):
+    from studio4 import montaje
+    mid = montaje.crear("P", "Una frase con seis palabras justas aquí. Otra frase con seis palabras justas aquí.")
+    assert montaje.coste_voz(montaje.cargar(mid)) == 0   # Google, gratis
+    montaje.elegir_voz(mid, "fal", "Brian")
+    p = montaje.cargar(mid)
+    assert p["voz_proveedor"] == "fal" and montaje.coste_voz(p) > 0
+    with pytest.raises(ValueError):
+        montaje.elegir_voz(mid, "fal", "Inventada")
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "AIza-secreta")
+    texto = json.dumps(montaje.conexiones())
+    assert "secreta" not in texto and "Google (Gemini)" in texto

@@ -29,6 +29,8 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"videos": montaje.listar(), "canal": canales.activo(),
                         "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
                                   for f in montaje.banco()]}
+    if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
+        return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
         return "json", {"espacio": montaje.espacio(), "descargador": extractor.descargador()}
     if ruta == "/api/m/linea":   # la línea de tiempo por pistas del vídeo (validada)
@@ -37,7 +39,8 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"linea": tl, "errores": linea.validar(tl)}
     if ruta == "/api/m/ver":
         p = montaje.cargar(q("id"))
-        return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]}}
+        return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
+                        "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p)}
     m = re.fullmatch(r"/m/([\w-]+)/([\w.]+)", ruta)   # los vídeos, la previa, el Short, la miniatura y la voz
     if m:
         if not MEDIOS.match(m.group(2)):
@@ -80,6 +83,7 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         "/api/m/asignar": lambda: montaje.asignar(mid, int(d.get("n", 0)), str(d.get("fuente", "")), int(d.get("plano", 0) or 0),
                                                   d.get("rotulo"), d.get("panel")),
         "/api/m/previa": lambda: montaje.previa(mid),
+        "/api/m/voz": lambda: montaje.elegir_voz(mid, str(d.get("proveedor", "")), str(d.get("nombre", ""))),
         "/api/m/final": lambda: montaje.montar_final(mid),
         "/api/m/short": lambda: montaje.montar_short(mid, float(d.get("desde", 0)), float(d.get("hasta", 0))),
         "/api/m/miniatura": lambda: montaje.miniatura(mid, str(d.get("texto", ""))[:40], list(d.get("fotos") or [])),

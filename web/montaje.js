@@ -251,7 +251,14 @@ async function vistaHerramientas() {
       <a class="herramienta" href="/clasico#crear"><svg><use href="#i-crear"/></svg><b>Pegar guiones de Agron</b><small>Biblioteca y plan del mes (panel clásico)</small></a>
       <a class="herramienta" href="/clasico"><svg><use href="#i-render"/></svg><b>Panel clásico</b><small>Todo lo de antes, tal cual</small></a>
     </div>
+    <div id="conexiones"></div>
     <div id="mantenimiento"></div>`;
+  seguro("/api/m/conexiones").then((c) => {
+    if (!c || !$("conexiones")) return;
+    $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Conexiones (las mismas claves del proyecto anterior)</span>
+      <div class="conexiones">${c.conexiones.map((x) => `<div class="conexion ${x.conectada ? "si" : ""}">
+        <i></i><div><b>${esc(x.api)}</b><small>${esc(x.uso)}</small></div><span>${x.conectada ? (x.pago ? "Conectada · de pago" : "Conectada · gratis") : "Sin conectar"}</span></div>`).join("")}</div></section>`;
+  });
   try {
     const m = await api("/api/m/mantenimiento");
     $("mantenimiento").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Mantenimiento</span>
@@ -383,7 +390,17 @@ function pasoFinal(v) {
   const descripcion = t ? [t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", (t.hashtags || []).join(" ")].join("\n") : "";
   return `<section class="paso">
     ${pasoCab(5, "Final", "Voz, planos en alta calidad, subtítulos, logo y música. Luego el Short, los textos y la miniatura.")}
-    <div class="fila"><span class="voz">Voz: ${esc(v.voz_nombre)} · gratis</span>
+    <div class="voz-elegir">
+      <span class="etiqueta">Voz</span>
+      <div class="fila">
+        <select class="campo" id="voz-elegida">${Object.entries(datos.voces).filter(([, o]) => o.disponible).map(([prov, o]) => `
+          <optgroup label="${esc(o.nombre)}">${Object.entries(o.voces).map(([n, d]) => `
+            <option value="${esc(prov)}|${esc(n)}" ${prov === (v.voz_proveedor || "gemini") && n === v.voz_nombre ? "selected" : ""}>${esc(n)} · ${esc(d)}</option>`).join("")}</optgroup>`).join("")}
+        </select>
+        <span class="${datos.coste_voz ? "coste" : "voz"}">${datos.coste_voz ? `De pago: ≈${datos.coste_voz.toFixed(2).replace(".", ",")} $ este guion` : "Gratis"}</span>
+      </div>
+    </div>
+    <div class="fila">
       <button class="primario" type="button" id="montar-final" ${v.previa ? "" : "disabled"}>${v.final ? "Volver a montar" : "Montar vídeo final"}</button>
       ${!v.previa ? `<span class="meta">Primero haz la previa (paso 4).</span>` : ""}</div>
     ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
@@ -464,7 +481,12 @@ function enlazarVideo(p) {
   if (p === 3) { $("proponer").onclick = () => enviar("/api/m/proponer"); pintarLinea(); }
   if (p === 4) $("hacer-previa").onclick = () => enviar("/api/m/previa");
   if (p === 5) {
-    $("montar-final").onclick = () => enviar("/api/m/final");
+    $("voz-elegida").onchange = (ev) => { const [proveedor, nombre] = ev.target.value.split("|"); enviar("/api/m/voz", { proveedor, nombre }); };
+    $("montar-final").onclick = () => {
+      // lo de pago, solo con un sí explícito y el importe delante
+      if (datos.coste_voz && !confirm(`La voz ${datos.video.voz_nombre} es de pago: ≈${datos.coste_voz.toFixed(2)} $ por este guion. ¿Montar?`)) return;
+      enviar("/api/m/final");
+    };
     if ($("hacer-short")) $("hacer-short").onclick = () => enviar("/api/m/short", { desde: segundos($("s-desde").value), hasta: segundos($("s-hasta").value) });
     if ($("rehacer-textos")) $("rehacer-textos").onclick = () => enviar("/api/m/textos");
     if ($("hacer-mini")) $("hacer-mini").onclick = () => {
