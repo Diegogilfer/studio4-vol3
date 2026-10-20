@@ -745,4 +745,4 @@ def _locutar_uno(segmentos: list[str], destino: Path, proveedor: str = "gemini",
                for i, c in enumerate(cortes)]
     return {"proveedor": proveedor, "duracion": round(total, 3), "escenas": escenas, "palabras": palabras,
             "dirigida": dirigida, "voz_nombre": voz_nombre or config.VOZ_GEMINI if proveedor == "gemini" else (voz_el_id if proveedor == "mimo" else (voz_nombre or "")),
-            "voice_id": voz_el_id if proveedor in ("elevenlabs", "mimo") else ""}
+            "voice_id": voz_el_id if proveedor in ("elevenlabs", "mimo", "fal") else ""}

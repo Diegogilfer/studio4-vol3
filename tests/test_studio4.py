@@ -2044,3 +2044,20 @@ def test_animacion_de_pestanas_y_sus_sonidos(tmp_path):
     assert "VICE CITY · 2002" in html and "#ff3ea5" in html and "__W__" not in html and "1920" in html
     fx = animacion.efectos(tmp_path)
     assert all(medios.duracion(f) > 0.05 for f in fx.values())
+
+
+def test_extractor_detecta_planos_y_corta_sin_audio(tmp_path):
+    """Un vídeo con dos planos (rojo y azul): se detecta el corte y el fragmento sale sin audio."""
+    from studio4 import extractor
+    v = tmp_path / "v.mp4"
+    medios.ffmpeg("-f", "lavfi", "-i", "color=red:s=320x180:d=2", "-f", "lavfi", "-i", "color=blue:s=320x180:d=2",
+                  "-f", "lavfi", "-i", "sine=d=4", "-filter_complex", "[0:v][1:v]concat=n=2:v=1[v]",
+                  "-map", "[v]", "-map", "2:a", "-pix_fmt", "yuv420p", str(v))
+    pl = extractor.planos(v)
+    assert len(pl) == 2 and abs(pl[0][1] - 2.0) < 0.2
+    trozo = extractor.cortar(v, pl[1][0], pl[1][1], tmp_path / "t.mp4")
+    import subprocess as _sp
+    pistas = _sp.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(trozo)],
+                     capture_output=True, text=True).stdout.split()
+    assert abs(medios.duracion(trozo) - 2.0) < 0.2 and pistas == ["video"]   # fuera su audio
+    assert extractor.opciones_ytdlp()["js_runtimes"] == {"node": {}}
