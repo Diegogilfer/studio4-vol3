@@ -2301,11 +2301,12 @@ def test_montaje_la_voz_respira_entre_frases(tmp_path):
                   "-ac", "1", str(wav))
     e = montaje.ENTRADA
     frases = [{"bloque": 0, "texto": "Uno dos tres."}, {"bloque": 1, "texto": "Cuatro cinco seis."}]
-    palabras = [{"palabra": "uno", "ini": e + 0.1, "fin": e + 0.5}, {"palabra": "cuatro", "ini": e + 2.2, "fin": e + 2.6}]
+    # «cuatro» viene con su inicio algo adelantado (1,95 s, antes del silencio): va con su frase por su centro
+    palabras = [{"palabra": "uno", "ini": e + 0.1, "fin": e + 0.5}, {"palabra": "cuatro", "ini": e + 1.95, "fin": e + 2.6}]
     tiempos, pal = montaje._respirar(wav, [(e, e + 1.9), (e + 2.1, e + 4)], palabras, frases, tmp_path / "p.wav")
     assert abs(medios.duracion(tmp_path / "p.wav") - (4 + montaje.PAUSA_BLOQUE)) < 0.05
     assert tiempos[0] == (e, e + 1.9) and abs(tiempos[1][0] - (e + 2.1 + montaje.PAUSA_BLOQUE)) < 1e-9
-    assert pal[0]["ini"] == e + 0.1 and abs(pal[1]["ini"] - (e + 2.2 + montaje.PAUSA_BLOQUE)) < 1e-9
+    assert pal[0]["ini"] == e + 0.1 and abs(pal[1]["ini"] - (e + 1.95 + montaje.PAUSA_BLOQUE)) < 1e-9
 
 
 def test_montaje_arranque_plano_y_cola_son_el_mismo_movimiento(tmp_path):

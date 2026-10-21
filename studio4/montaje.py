@@ -558,10 +558,13 @@ def _respirar(wav: Path, tiempos: list[tuple[float, float]], palabras: list[dict
     medios.ffmpeg("-i", str(wav), "-filter_complex", ";".join(filtros), "-map", "[a]", str(destino))
     desplaza = [sum(pausas[:k]) for k in range(len(tiempos))]
 
-    def tramo(t: float) -> int:
-        return sum(1 for c in cortes if t >= c)
+    def tramo(w: dict[str, Any]) -> int:
+        # por el centro de la palabra: sus tiempos vienen algo adelantados y una palabra que empieza justo en el corte
+        # («Según») se quedaba del lado anterior y salía en pantalla en plena pausa, antes de oírse
+        centro = (w["ini"] + w["fin"]) / 2
+        return sum(1 for c in cortes if centro >= c)
     return ([(a + desplaza[k], b + desplaza[k]) for k, (a, b) in enumerate(tiempos)],
-            [{**w, "ini": w["ini"] + desplaza[tramo(w["ini"])], "fin": w["fin"] + desplaza[tramo(w["ini"])]} for w in palabras])
+            [{**w, "ini": w["ini"] + desplaza[tramo(w)], "fin": w["fin"] + desplaza[tramo(w)]} for w in palabras])
 
 
 def _segmento(fuente_video: Path, ini: float, fin: float, d: float, ancho: int, alto: int, destino: Path) -> None:
