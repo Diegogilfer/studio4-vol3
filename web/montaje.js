@@ -404,6 +404,20 @@ function pasoMaterial(v) {
       <button class="primario" type="submit">Añadir</button>
     </form>
     <p class="meta">En un gameplay de horas, pon desde y hasta (el capítulo de la misión): así solo se baja ese tramo.</p>
+    <div class="flow-caja">
+      <span class="etiqueta">Escenas con IA · tu herramienta de Google Flow</span>
+      <p class="meta">1) Saca la escaleta y pégala en tu herramienta «Studio 4 · Guion a vídeo». 2) En Flow, genera y pulsa
+        «Exportar para Studio 4». 3) Deja el ZIP (o las escenas) en la carpeta de importar y pulsa «Importar de Flow».</p>
+      <div class="fila">
+        <button class="boton" type="button" id="escaleta-flow">Escaleta para Flow</button>
+        <button class="boton" type="button" id="carpeta-flow">Abrir carpeta de importar</button>
+        <button class="primario" type="button" id="importar-flow">Importar de Flow</button>
+      </div>
+      <div id="escaleta-caja" hidden>
+        <textarea class="campo" id="escaleta-json" readonly style="min-height:180px;font-family:monospace;font-size:12px"></textarea>
+        <div class="fila"><button class="boton" type="button" id="copiar-escaleta">Copiar escaleta</button><span class="meta" id="escaleta-info"></span></div>
+      </div>
+    </div>
     <div class="fuentes">${v.fuentes.map((fid) => { const f = datos.fuentes[fid]; return `
       <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt=""><div><b>${esc(f.nombre)}</b>
         <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
@@ -489,6 +503,7 @@ function pasoFinal(v) {
       ${!v.previa ? `<span class="meta">Primero haz la previa (paso 4).</span>` : ""}</div>
     ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
     ${calidadHTML(v.calidad?.final)}
+    ${v.ia ? `<div class="avisos"><p>Este vídeo lleva escenas generadas con IA: al subirlo a YouTube marca «Contenido alterado o sintético» (lo pide YouTube).</p></div>` : ""}
     <div class="fila"><a class="boton" href="/m/${esc(v.id)}/subtitulos.srt" download="${esc(v.titulo)}.srt">Subtítulos .srt para YouTube</a>
       <a class="boton" href="/m/${esc(v.id)}/final_16x9.mp4" download="${esc(v.titulo)}.mp4">Descargar vídeo</a></div>
     <div class="dos">
@@ -564,6 +579,29 @@ function enlazarVideo(p) {
       enviar("/api/m/fuente", { url: $("m-url").value, desde: segundos($("m-desde").value), hasta: segundos($("m-hasta").value) });
     };
     pintarBanco();
+  }
+  if (p === 2) {
+    $("escaleta-flow").onclick = async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = "Preparando la escaleta…";
+      try {
+        const r = await api("/api/m/escaleta", { id: datos.video.id });
+        $("escaleta-caja").hidden = false;
+        $("escaleta-json").value = JSON.stringify(r.escaleta, null, 1);
+        const seg = r.escaleta.escenas.reduce((s, e) => s + e.duracion, 0);
+        $("escaleta-info").textContent = `${r.escaleta.escenas.length} escenas · ${reloj(seg)} · ${r.escaleta.personajes.length} personajes · ${r.escaleta.ambientes.length} ambientes`;
+      } catch (e) { aviso(e); }
+      ev.target.disabled = false; ev.target.textContent = "Escaleta para Flow";
+    };
+    $("copiar-escaleta").onclick = () => navigator.clipboard.writeText($("escaleta-json").value).then(() => { $("copiar-escaleta").textContent = "Copiada"; });
+    $("carpeta-flow").onclick = () => api("/api/m/flow/carpeta", {}).catch(aviso);
+    $("importar-flow").onclick = async (ev) => {
+      ev.target.disabled = true; ev.target.textContent = "Importando…";
+      try {
+        const r = await api("/api/m/importar-flow", { id: datos.video.id });
+        aviso(new Error(`Importadas ${r.escenas} escenas de Flow en ${r.frases} frases.`));
+        await cargarVideo(datos.video.id);
+      } catch (e) { aviso(e); ev.target.disabled = false; ev.target.textContent = "Importar de Flow"; }
+    };
   }
   if (p === 3) {
     $("proponer").onclick = () => enviar("/api/m/proponer");

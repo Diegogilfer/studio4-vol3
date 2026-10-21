@@ -2436,3 +2436,34 @@ def test_montaje_resumen_storyboard_srt_y_automatico_con_guardas(aislado, tmp_pa
     srt = subtitulos.srt([{"palabra": w, "ini": k * 0.5, "fin": k * 0.5 + 0.4} for k, w in enumerate("Hola a todos. Esto es FourLevel.".split())],
                          tmp_path / "s.srt").read_text(encoding="utf-8")
     assert srt.startswith("1\n00:00:00,000 --> ") and "Hola a todos." in srt and "\n2\n" in srt
+
+
+def test_escaleta_para_flow_y_paquete_de_vuelta(aislado, tmp_path, monkeypatch):
+    """La escaleta reparte cada frase en escenas de 4/6/8 s y recuerda qué escena es de qué frase; el paquete
+    que exporta la herramienta de Flow (ZIP con escena_NNN.mp4 + escenas.json) entra como fuente y cada frase
+    recibe sus escenas."""
+    import zipfile
+    from studio4 import escaleta, extractor, montaje
+    monkeypatch.setattr(extractor, "CACHE", tmp_path / "_fv")
+    assert escaleta.tomas(3.0) == [4] and escaleta.tomas(5.2) == [6] and escaleta.tomas(9.5) == [6, 6] and escaleta.tomas(16) == [8, 8]
+    mid = montaje.crear("El faro", "Elena mira el mar desde el faro con miedo. Mateo llega con las cartas viejas del abuelo "
+                                   "y le cuenta todo lo que sabe del naufragio, sin dejarse ni un solo detalle de aquella noche.")
+    e = escaleta.exportar(mid, con_ia=False)   # sin red en las pruebas: sin personajes, pero con sus escenas
+    assert e["escaleta_studio4"] == 1 and e["formato"] == "16:9" and all(x["duracion"] in (4, 6, 8) for x in e["escenas"])
+    relacion = montaje.cargar(mid)["escaleta"]["escenas"]
+    assert relacion[0]["frase"] == 1 and relacion[-1]["frase"] == len(montaje.cargar(mid)["frases"])
+    paquete = tmp_path / "flow.zip"
+    with zipfile.ZipFile(paquete, "w") as z:
+        for r in relacion:
+            clip = tmp_path / f"escena_{r['n']:03d}.mp4"
+            medios.ffmpeg("-f", "lavfi", "-i", f"color=c={'red' if r['frase'] == 1 else 'blue'}:s=640x360:d=1:r=24",
+                          "-pix_fmt", "yuv420p", str(clip))
+            z.write(clip, f"escenas/{clip.name}")
+        z.writestr("escenas.json", json.dumps({"escaleta_studio4": 1, "escenas": e["escenas"]}))
+    r = escaleta.importar(mid, paquete)
+    p = montaje.cargar(mid)
+    assert r["escenas"] == len(relacion) and r["fuente"] in p["fuentes"] and p["ia"]
+    assert all(f.get("clip", {}).get("fuente") == r["fuente"] for f in p["frases"])
+    meta = montaje.fuente(r["fuente"])
+    assert (extractor.CACHE / meta["alta"]).exists() and len(meta["planos"]) == len(relacion)
+    assert montaje.storyboard(mid).exists()

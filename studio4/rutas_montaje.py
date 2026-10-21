@@ -15,7 +15,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from . import canales, extractor, linea, montaje, musica
+from . import canales, escaleta, extractor, linea, montaje, musica
 
 MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
 
@@ -95,6 +95,13 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/storyboard":   # la hoja para aprobar el montaje (se hace en segundos)
         montaje.storyboard(mid)
         return "json", {"ok": True, "url": f"/m/{mid}/storyboard.jpg"}
+    if ruta == "/api/m/escaleta":   # la escaleta para pegar en tu herramienta de Google Flow
+        return "json", {"ok": True, "escaleta": escaleta.exportar(mid, str(d.get("estilo") or escaleta.ESTILO), d.get("con_ia", True) is not False)}
+    if ruta == "/api/m/importar-flow":   # el paquete que exporta la herramienta → fuente del vídeo
+        return "json", {"ok": True, **escaleta.importar(mid, str(d["origen"]) if d.get("origen") else None)}
+    if ruta == "/api/m/flow/carpeta":
+        os.startfile(str(escaleta.carpeta_importar()))  # noqa: S606 - el Explorador en tu PC
+        return "json", {"ok": True}
     if ruta == "/api/m/textos":
         return "json", {"ok": True, "textos": montaje.hacer_textos(mid)}
     acciones = {

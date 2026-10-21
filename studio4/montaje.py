@@ -843,6 +843,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             def de(c: dict[str, Any]) -> tuple[Path, float]:
                 """El vídeo de donde sale el plano y su segundo 0. En el final, solo los segundos de ese plano en alta
                 (cada plano por separado: los elegidos pueden estar en cualquier orden del vídeo de origen)."""
+                if final and meta.get("alta"):   # escenas propias (Google Flow): ya están en alta en el banco
+                    return extractor.CACHE / meta["alta"], 0.0
                 if final:
                     return extractor.descargar_tramo(meta["url"], meta["desde"] + c["ini"], meta["desde"] + c["fin"], alto=1080), c["ini"]
                 return extractor.CACHE / meta["baja"], 0.0
@@ -877,7 +879,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                 sobra -= d_arranque
                 d_cola = (min(RESERVA, sobra) if j == len(cadena) - 1 and antes_de_animacion and min(RESERVA, sobra) >= 0.3
                           else 0.0)
-                clave = huella("trozo", meta["url"], meta["desde"], c["ini"], c["fin"], round(dur, 3),
+                clave = huella("trozo", meta["url"] or meta["id"], meta.get("importada", ""), meta["desde"], c["ini"], c["fin"], round(dur, 3),
                                round(d_arranque, 3), round(d_cola, 3), round(fin_l - ini_l, 2))
                 trozo = cache / f"{clave}.mp4"
                 partes = []
@@ -1212,8 +1214,9 @@ def hacer_textos(mid: str) -> dict[str, Any]:
     textos = {"titulos": [str(t)[:100] for t in d.get("titulos", [])][:3], "descripcion": str(d.get("descripcion", "")),
               "hashtags": [h for h in d.get("hashtags", []) if str(h).startswith("#")][:8],
               "texto_miniatura": str(d.get("texto_miniatura", ""))[:40], "capitulos": capitulos,
-              "creditos": "\n".join(x for x in ("Imágenes de los juegos con comentario y edición propios.",
-                                                   p.get("musica_credito", "")) if x)}
+              "creditos": "\n".join(x for x in (
+                  "Escenas generadas con IA (Google Flow · Veo), con guion, voz y edición propios." if p.get("ia")
+                  else "Imágenes de los juegos con comentario y edición propios.", p.get("musica_credito", "")) if x)}
     modificar(mid, lambda q: q.update(textos=textos, fuentes_titulos=creditos))
     return textos
 
@@ -1230,8 +1233,12 @@ def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]]) -> Path:
     for k, ft in enumerate(fotos[:2]):
         meta = fuente(ft["fuente"])
         pl = meta["planos"][int(ft["plano"]) - 1]
-        origen = extractor.descargar_tramo(meta["url"], meta["desde"] + pl["ini"], meta["desde"] + pl["fin"], alto=1080)
-        medios.ffmpeg("-ss", f"{(pl['fin'] - pl['ini']) / 2:.2f}", "-i", str(origen), "-frames:v", "1", str(trabajo / f"m{k}.jpg"))
+        if meta.get("alta"):   # escenas propias (Google Flow), ya en alta en el banco
+            origen, medio = extractor.CACHE / meta["alta"], pl["ini"] + (pl["fin"] - pl["ini"]) / 2
+        else:
+            origen = extractor.descargar_tramo(meta["url"], meta["desde"] + pl["ini"], meta["desde"] + pl["fin"], alto=1080)
+            medio = (pl["fin"] - pl["ini"]) / 2
+        medios.ffmpeg("-ss", f"{medio:.2f}", "-i", str(origen), "-frames:v", "1", str(trabajo / f"m{k}.jpg"))
         imgs.append(f"m{k}.jpg")
     logo = logo_de(p["canal"])
     if logo:
