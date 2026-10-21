@@ -15,9 +15,11 @@ from pathlib import Path
 from . import medios
 
 # Cadena final: compresión suave, techo y volumen de YouTube (YouTube baja lo que pase de −14; así llega lleno)
-MASTER = ("acompressor=threshold=-18dB:ratio=3:attack=5:release=150:makeup=2,"
+# (compresor lento: con uno rápido, al callarse la voz quedaba un hueco de 0,2 s que se oía como un corte)
+MASTER = ("acompressor=threshold=-18dB:ratio=2:attack=20:release=600:makeup=2,"
           "alimiter=limit=0.94:level=disabled,loudnorm=I=-11:TP=-1:LRA=7")
 REVERB = "aecho=0.8:0.55:60|130:0.22|0.12"   # una sala: los efectos no suenan «secos»
+SALA_VOZ = "aecho=0.8:0.7:45|90:0.18|0.1"     # la voz en una sala pequeña: al acabar cada frase se apaga, no se corta
 
 
 def biblioteca(carpeta: Path) -> dict[str, Path]:

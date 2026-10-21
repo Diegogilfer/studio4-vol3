@@ -803,7 +803,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     # En dos pasos: primero el sonido a un archivo y luego la imagen con ese sonido. Todo en una sola orden, FFmpeg se
     # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
     avisar("Subtítulos, voz y efectos" if final else "Efectos y fondo", 88)
-    vol_lecho = config.VOLUMEN_MUSICA if musica else 1.15
+    vol_lecho = config.VOLUMEN_MUSICA if musica else 1.6   # la cama sostiene las pausas de la voz
     # el vídeo no se corta en seco: los últimos 0,8 s funden a negro y el sonido se apaga con él
     cierre_a = f"afade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
@@ -812,9 +812,9 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                f"afade=t=out:st={max(0, total - 2):.3f}:d=2")
     if final:   # el lecho baja solo cuando habla la voz (sidechain) y vuelve en las pausas: nunca hay silencio
         entradas_a += ["-i", str(voz_montaje)]
-        audio = (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,apad,asplit=2[voz][llave];"
+        audio = (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,{sonido.SALA_VOZ},apad,asplit=2[voz][llave];"
                  f"[0:a]volume=0.6[fx];{lecho_f}[l0];"
-                 "[l0][llave]sidechaincompress=threshold=0.03:ratio=5:attack=20:release=220[lecho];"
+                 "[l0][llave]sidechaincompress=threshold=0.03:ratio=3:attack=40:release=450[lecho];"
                  f"[voz][fx][lecho]amix=inputs=3:duration=longest:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f},{cierre_a}[a]")
     else:   # la previa ya suena: efectos y lecho (sin voz), con el mismo master
         audio = f"[0:a]volume=0.6[fx];{lecho_f}[l];[fx][l]amix=inputs=2:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f},{cierre_a}[a]"
