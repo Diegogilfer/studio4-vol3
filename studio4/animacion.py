@@ -103,6 +103,8 @@ const ICONOS = {
   check: '<path d="M4 12.5l5 5L20 6.5"/>',
 };
 const icono = (n) => ICONOS[n] ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONOS[n]}</svg>` : n;
+const fotograma = (pref, i) => pref + String(i).padStart(5, "0") + ".jpg";
+const poner = (img, src) => { if (!img.src.endsWith(src)) img.src = src; };
 const nuevoPuente = (src) => { const c = document.createElement("div"); c.className = "puente";
   const img = document.createElement("img"); img.src = src; c.appendChild(img); capa.appendChild(c); return c; };
 // Las piezas de cada escena se crean una vez; __s4(t) solo las coloca.
@@ -204,6 +206,12 @@ window.__s4 = (t) => {
       e.pEntra.style.zIndex = pin < 1 ? 7 : 2;
       colocar(e.pEntra, PANTALLA, sitioA, pin, Math.sin(t * 1.2) * 8 * pin, Math.sin(t * 2));
       e.pEntra.firstChild.style.transform = `scale(${1 + 0.05 * pin})`;
+      if (e.entra_n) {   // sigue el plano anterior; si se acaba, va y vuelve despacio (nunca se queda quieto)
+        const n = e.entra_n, ciclo = Math.max(1, 2 * (n - 1)), atras = e.entra_modo === "atras";
+        // «atras»: empieza en su último fotograma (el que se veía a pantalla completa) y retrocede a media velocidad
+        let j = Math.floor(Math.max(0, u) * FPS * (atras ? 0.5 : 1)) % ciclo; if (j >= n) j = ciclo - j;
+        poner(e.pEntra.firstChild, fotograma(e.entra_pref, Math.min(n, (atras ? n - 1 - j : j) + 1)));
+      }
       e.pEntra.firstChild.style.filter = `brightness(${1 - 0.25 * pin})`;
     }
     if (e.pSale) {
@@ -216,6 +224,18 @@ window.__s4 = (t) => {
       e.pSale.style.opacity = visible ? Math.max(llega, pout) : 0;
       colocar(e.pSale, enSitio, PANTALLA, pout, Math.sin(t * 1.4 + 1) * 8 * (1 - pout), Math.sin(t * 2 + 1));
       e.pSale.firstChild.style.transform = `scale(${1.04 - 0.04 * pout})`;
+      if (e.sale_n) {
+        const n = e.sale_n, falta = Math.max(0, Math.round((dur - 1 / FPS - u) * FPS));
+        let i;
+        if (e.sale_modo === "hacia") {   // va y vuelve despacio y acaba en su primer fotograma, donde sigue el vídeo
+          const ciclo = Math.max(1, 2 * (n - 1));
+          let j = Math.floor(falta * 0.5) % ciclo; if (j >= n) j = ciclo - j;
+          i = j + 1;
+        } else {   // el arranque del plano siguiente: su último fotograma llega justo a pantalla completa
+          i = Math.max(1, n - falta);
+        }
+        poner(e.pSale.firstChild, fotograma(e.sale_pref, Math.min(n, i)));
+      }
       if (e.rs) {
         const q = fueraDe(0.45, 0.8, u - (conPanel ? 0.65 : 0.2));
         e.rs.style.opacity = visible ? Math.min(q * 3, 1 - fueraDe(0, 0.35, pout)) : 0;
@@ -338,6 +358,9 @@ def _html(escenas: list[dict[str, Any]], ancho: int, alto: int, fps: int = confi
     limpias = [{"ini": round(e["ini"], 3), "fin": round(e["fin"], 3), "titulo": e.get("titulo", ""),
                 "panel": con_iconos(e.get("panel")),
                 "entra": e.get("entra", ""), "sale": e.get("sale", ""), "etiqueta": e.get("etiqueta", ""),
+                "entra_pref": e.get("entra_pref", ""), "entra_n": e.get("entra_n", 0),
+                "sale_pref": e.get("sale_pref", ""), "sale_n": e.get("sale_n", 0),
+                "entra_modo": e.get("entra_modo", ""), "sale_modo": e.get("sale_modo", ""),
                 "color": COLORES.get(e.get("color", ""), e.get("color", "")),
                 "imagenes": [{"src": i.get("src", ""), "frames": i.get("frames", 0), "pref": i.get("pref", ""),
                               "etiqueta": i.get("etiqueta", ""), "color": COLORES.get(i.get("color", ""), i.get("color", ""))}
@@ -429,6 +452,13 @@ def renderizar(escenas: list[dict[str, Any]], total: float, destino: Path, ancho
                     nombre = f"{clave}{k:02d}{Path(e[clave]).suffix.lower()}"
                     shutil.copy(e[clave], trabajo / nombre)
                     puentes[clave] = nombre
+                if e.get(f"{clave}_video"):   # la tarjeta en movimiento: sus fotogramas a calidad casi sin pérdida
+                    carpeta_f = trabajo / f"{clave}{k:02d}"
+                    carpeta_f.mkdir()
+                    medios.ffmpeg("-i", str(e[f"{clave}_video"]), "-an", "-vf", f"fps={fps}", "-q:v", "2",
+                                  str(carpeta_f / "f%05d.jpg"))
+                    puentes[f"{clave}_pref"] = f"{clave}{k:02d}/f"
+                    puentes[f"{clave}_n"] = len(list(carpeta_f.glob("f*.jpg")))
             propias.append({**e, **puentes, "imagenes": ims})
         pagina = trabajo / "anim.html"
         if logo:

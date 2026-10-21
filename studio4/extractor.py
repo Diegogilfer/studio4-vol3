@@ -82,12 +82,23 @@ def descargar_tramo(url: str, ini: float, fin: float, alto: int = MAX_ALTO, nomb
     # en centésimas: dos planos dentro del mismo segundo no comparten archivo
     base = nombre or f"{vid.group(1) if vid else 'video'}_{int(ini * 100)}-{int(fin * 100)}_{alto}p"
     destino = CACHE / f"{base}.mp4"
-    if not destino.exists():
+
+    def completo() -> bool:   # una descarga cortada (red caída, PC suspendido) deja un tramo corto que congela el plano
+        try:
+            return destino.exists() and medios.duracion(destino) >= (fin - ini) - 0.3
+        except (ValueError, RuntimeError):
+            return False
+    for _intento in range(2):
+        if completo():
+            break
+        destino.unlink(missing_ok=True)
         with yt_dlp.YoutubeDL(opciones_ytdlp(
                 format=f"bv*[height<={alto}]+ba/b[height<={alto}]/b", merge_output_format="mp4",
                 download_ranges=download_range_func(None, [(ini, fin)]), force_keyframes_at_cuts=alto >= 720,
                 outtmpl=str(CACHE / f"{base}.%(ext)s"))) as y:
             y.download([url])
+    if not destino.exists():
+        raise RuntimeError(f"No se pudo descargar el tramo {ini:.1f}-{fin:.1f} s de {url}")
     return destino
 
 
