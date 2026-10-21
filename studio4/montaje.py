@@ -806,25 +806,28 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     # En dos pasos: primero el sonido a un archivo y luego la imagen con ese sonido. Todo en una sola orden, FFmpeg se
     # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
     avisar("Subtítulos, voz y efectos" if final else "Efectos y fondo", 88)
-    vol_lecho = config.VOLUMEN_MUSICA if musica else 1.6   # la cama sostiene las pausas de la voz
+    vol_lecho = config.VOLUMEN_MUSICA if musica else 1.4   # la cama suave sostiene las pausas de la voz
     # el vídeo no se corta en seco: los últimos 0,8 s funden a negro y el sonido se apaga con él
     cierre_a = f"afade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     entradas_a = ["-i", str(fx), *(["-stream_loop", "-1"] if musica else []), "-i", str(lecho)]
     lecho_f = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={vol_lecho},"
                f"afade=t=out:st={max(0, total - 2):.3f}:d=2")
-    if final:   # el lecho baja solo cuando habla la voz (sidechain) y vuelve en las pausas: nunca hay silencio
+    if final:
         entradas_a += ["-i", str(voz_montaje)]
-        audio = (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,{sonido.SALA_VOZ},apad,asplit=2[voz][llave];"
-                 f"[0:a]volume=0.6[fx];{lecho_f}[l0];"
-                 "[l0][llave]sidechaincompress=threshold=0.03:ratio=3:attack=40:release=450[lecho];"
-                 f"[voz][fx][lecho]amix=inputs=3:duration=longest:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f},{cierre_a}[a]")
-    else:   # la previa ya suena: efectos y lecho (sin voz), con el mismo master
-        audio = f"[0:a]volume=0.6[fx];{lecho_f}[l];[fx][l]amix=inputs=2:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f},{cierre_a}[a]"
-    mezcla = trabajo / "mezcla.wav"
-    # apad en la voz: el lecho sigue sonando después de la última palabra (sin ella, el sidechain se apagaba con la
-    # voz y el final quedaba en silencio absoluto); -t corta la mezcla justo en la duración del vídeo
-    medios.ffmpeg(*entradas_a, "-filter_complex", audio, "-map", "[a]", "-t", f"{total:.3f}", "-ar", "48000", str(mezcla))
+        voz_f = f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,apad"
+        if musica:   # una canción sí baja suave cuando habla la voz (sidechain lento); la cama suave no lo necesita
+            audio = (f"{voz_f},asplit=2[voz][llave];[0:a]volume=0.6[fx];{lecho_f}[l0];"
+                     "[l0][llave]sidechaincompress=threshold=0.03:ratio=2.5:attack=60:release=700[lecho];")
+        else:
+            audio = f"{voz_f}[voz];[0:a]volume=0.6[fx];{lecho_f}[lecho];"
+        audio += f"[voz][fx][lecho]amix=inputs=3:duration=longest:normalize=0,{sonido.LIMITE},apad,atrim=0:{total:.3f}[a]"
+    else:   # la previa ya suena: efectos y lecho (sin voz), con el mismo volumen final
+        audio = f"[0:a]volume=0.6[fx];{lecho_f}[l];[fx][l]amix=inputs=2:normalize=0,{sonido.LIMITE},apad,atrim=0:{total:.3f}[a]"
+    premezcla, mezcla = trabajo / "premezcla.wav", trabajo / "mezcla.wav"
+    # apad en la voz: el lecho sigue sonando después de la última palabra; -t corta justo en la duración del vídeo
+    medios.ffmpeg(*entradas_a, "-filter_complex", audio, "-map", "[a]", "-t", f"{total:.3f}", "-ar", "48000", str(premezcla))
+    sonido.masterizar(premezcla, mezcla, cierre_a)
 
     entradas = ["-i", str(cuerpo), "-i", str(mezcla)]
     filtros, mezcla_v = [], "[0:v]"

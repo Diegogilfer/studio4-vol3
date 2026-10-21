@@ -9,17 +9,28 @@ Las nuestras antes de esto: −13,9 LUFS · graves −32,4 dB · agudos −32,7 
 from __future__ import annotations
 
 import array
+import json
 import wave
 from pathlib import Path
 
 from . import medios
 
-# Cadena final: compresión suave, techo y volumen de YouTube (YouTube baja lo que pase de −14; así llega lleno)
-# (compresor lento: con uno rápido, al callarse la voz quedaba un hueco de 0,2 s que se oía como un corte)
-MASTER = ("acompressor=threshold=-18dB:ratio=2:attack=20:release=600:makeup=2,"
-          "alimiter=limit=0.94:level=disabled,loudnorm=I=-11:TP=-1:LRA=7")
+# Volumen final de YouTube (−11 LUFS: YouTube baja lo que pase de −14, así llega lleno). Sin compresores que
+# «respiren»: con ellos, al callarse la voz el fondo bajaba y volvía a subir y se oía como un corte. Primero solo se
+# recortan los picos (LIMITE) y luego masterizar() mide el volumen y lo sube de forma pareja (dos pasadas).
+LIMITE = "alimiter=limit=0.5:attack=5:release=80:level=disabled"
+OBJETIVO = "loudnorm=I=-11:TP=-1:LRA=11"
+
+
+def masterizar(entrada: Path, destino: Path, extra: str = "") -> Path:
+    """El volumen final, parejo: se mide la mezcla y se aplica una sola ganancia (loudnorm lineal, sin bombeo)."""
+    medida = medios.ffmpeg("-i", str(entrada), "-af", f"{OBJETIVO}:print_format=json", "-f", "null", "-")
+    d = json.loads(medida[medida.rindex("{"):medida.rindex("}") + 1])
+    af = (f"{OBJETIVO}:measured_I={d['input_i']}:measured_TP={d['input_tp']}:measured_LRA={d['input_lra']}:"
+          f"measured_thresh={d['input_thresh']}:offset={d['target_offset']}:linear=true")
+    medios.ffmpeg("-i", str(entrada), "-af", af + (f",{extra}" if extra else ""), "-ar", "48000", str(destino))
+    return destino
 REVERB = "aecho=0.8:0.55:60|130:0.22|0.12"   # una sala: los efectos no suenan «secos»
-SALA_VOZ = "aecho=0.8:0.7:45|90:0.18|0.1"     # la voz en una sala pequeña: al acabar cada frase se apaga, no se corta
 
 
 def biblioteca(carpeta: Path) -> dict[str, Path]:
@@ -52,15 +63,21 @@ def biblioteca(carpeta: Path) -> dict[str, Path]:
 
 
 def cama(total: float, destino: Path) -> Path:
-    """Fondo grave continuo para cuando no hay música: dos notas graves que respiran despacio y un poco de aire,
-    con los canales levemente desfasados para que suene ancho. Nunca hay silencio."""
-    expr = ("0.22*sin(2*PI*55*t)*(0.7+0.3*sin(2*PI*0.09*t))+0.12*sin(2*PI*82.4*t)*(0.6+0.4*sin(2*PI*0.06*t))"
-            "+0.06*sin(2*PI*110*t)*(0.5+0.5*sin(2*PI*0.05*t))")
+    """Fondo suave para cuando no hay música en tu carpeta: un acorde cálido (la menor) de notas dobles algo
+    desafinadas entre sí, que crecen y bajan despacio, con un grave discreto debajo. Sin ruido (el ruido grave sonaba
+    áspero, «como el mar a centímetros»). Nunca hay silencio."""
+    def nota(f: float, a: float, lfo: float, fase: float) -> str:
+        return (f"{a}*(sin(2*PI*{f}*t)+sin(2*PI*{f * 1.003:.3f}*t))*(0.55+0.45*sin(2*PI*{lfo}*t+{fase}))")
+    expr = "+".join([
+        "0.05*sin(2*PI*55*t)",                 # grave discreto
+        nota(110.0, 0.045, 0.05, 0.0),         # la
+        nota(164.81, 0.032, 0.07, 1.3),        # mi
+        nota(220.0, 0.022, 0.045, 2.1),        # la (octava)
+        nota(261.63, 0.016, 0.06, 3.0),        # do: le da el color menor
+    ])
     medios.ffmpeg("-f", "lavfi", "-i", f"aevalsrc='{expr}':d={total:.3f}:s=48000",
-                  "-f", "lavfi", "-i", f"anoisesrc=d={total:.3f}:c=brown:a=0.25:r=48000",
-                  "-filter_complex", "[1:a]lowpass=f=400[aire];[0:a][aire]amix=inputs=2:normalize=0,"
-                  "aformat=channel_layouts=stereo,adelay=0|12,afade=t=in:d=2,"
-                  f"afade=t=out:st={max(0.0, total - 2.5):.3f}:d=2.5",
+                  "-af", "lowpass=f=900,aformat=channel_layouts=stereo,adelay=0|15,aecho=0.8:0.6:120|210:0.25|0.15,"
+                  f"afade=t=in:d=2,afade=t=out:st={max(0.0, total - 2.5):.3f}:d=2.5,atrim=0:{total:.3f}",
                   "-ar", "48000", "-ac", "2", str(destino))
     return destino
 

@@ -2350,9 +2350,15 @@ def test_subtitulos_no_dejan_palabras_colgadas():
 
 
 def test_sonido_efectos_cama_y_master(tmp_path):
+    import re
     from studio4 import sonido
     fx = sonido.biblioteca(tmp_path / "_fx")
     assert set(fx) == {"impacto", "subida", "whoosh", "cruce", "pop"} and all(f.exists() for f in fx.values())
     assert abs(medios.duracion(sonido.cama(6, tmp_path / "c.wav")) - 6) < 0.1
     assert abs(medios.duracion(sonido.pista([(1, "impacto", 1), (-1, "subida", 1)], 5, tmp_path / "p.wav")) - 5) < 0.1
-    assert "loudnorm=I=-11" in sonido.MASTER
+    # el volumen final se mide y se aplica parejo: −11 LUFS sin compresores que bombeen
+    mezcla = tmp_path / "m.wav"
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=f=220:d=6", "-af", "volume=0.05", "-ac", "2", str(mezcla))
+    hecho = sonido.masterizar(mezcla, tmp_path / "f.wav")
+    medida = medios.ffmpeg("-i", str(hecho), "-af", "ebur128", "-f", "null", "-")
+    assert abs(float(re.findall(r"I:\s+(-?[\d.]+) LUFS", medida)[-1]) + 11) < 1.0
