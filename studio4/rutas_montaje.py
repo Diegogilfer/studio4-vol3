@@ -11,10 +11,11 @@ from __future__ import annotations
 
 import os
 import re
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from . import canales, extractor, linea, montaje
+from . import canales, extractor, linea, montaje, musica
 
 MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav)$")
 
@@ -29,6 +30,14 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"videos": montaje.listar(), "canal": canales.activo(),
                         "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
                                   for f in montaje.banco()]}
+    if ruta == "/api/m/musica":   # tu música de la Biblioteca de audio de YouTube, catalogada
+        return "json", {"carpeta": str(musica.carpeta()), "pistas": musica.catalogo(), "animos": list(musica.ANIMOS)}
+    m = re.fullmatch(r"/musica/(.+)", ruta)   # escuchar una pista (solo archivos de tu carpeta de música)
+    if m:
+        f = musica.ruta(urllib.parse.unquote(m.group(1)))
+        if not f:
+            raise NoExiste(ruta)
+        return "archivo", f
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
@@ -39,8 +48,12 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"linea": tl, "errores": linea.validar(tl)}
     if ruta == "/api/m/ver":
         p = montaje.cargar(q("id"))
+        elegida = musica.elegir(p)
         return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
-                        "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p)}
+                        "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p),
+                        "musica": {"modo": p.get("musica") or musica.AUTO, "elegida": elegida["titulo"] if elegida else "",
+                                   "pistas": [{"archivo": x["archivo"], "titulo": x["titulo"], "artista": x["artista"],
+                                               "animo": x["animo"]} for x in musica.catalogo()]}}
     m = re.fullmatch(r"/m/([\w-]+)/([\w.]+)", ruta)   # los vídeos, la previa, el Short, la miniatura y la voz
     if m:
         if not MEDIOS.match(m.group(2)):
@@ -73,6 +86,12 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         return "json", {"ok": True, "id": montaje.crear(str(d.get("titulo", "")), str(d.get("guion", "")))}
     if ruta == "/api/m/proponer":
         return "json", {"ok": True, "propuestas": montaje.proponer(mid)}
+    if ruta == "/api/m/musica/etiquetar":
+        return "json", {"ok": True, "pista": musica.etiquetar(str(d.get("archivo", "")), d.get("animo"), d.get("atribucion"),
+                                                               d.get("titulo"), d.get("artista"))}
+    if ruta == "/api/m/musica/carpeta":
+        os.startfile(str(musica.carpeta()))  # noqa: S606 - el Explorador en tu PC
+        return "json", {"ok": True}
     if ruta == "/api/m/textos":
         return "json", {"ok": True, "textos": montaje.hacer_textos(mid)}
     acciones = {
@@ -84,6 +103,7 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
                                                   d.get("rotulo"), d.get("panel"), list(d.get("mas") or [])),
         "/api/m/previa": lambda: montaje.previa(mid),
         "/api/m/voz": lambda: montaje.elegir_voz(mid, str(d.get("proveedor", "")), str(d.get("nombre", ""))),
+        "/api/m/musica/elegir": lambda: montaje.elegir_musica(mid, str(d.get("musica", ""))),
         "/api/m/final": lambda: montaje.montar_final(mid),
         "/api/m/short": lambda: montaje.montar_short(mid, float(d.get("desde", 0)), float(d.get("hasta", 0))),
         "/api/m/miniatura": lambda: montaje.miniatura(mid, str(d.get("texto", ""))[:40], list(d.get("fotos") or [])),

@@ -82,6 +82,12 @@ def cama(total: float, destino: Path) -> Path:
     return destino
 
 
+def silencio(total: float, destino: Path) -> Path:
+    """Un fondo vacío (para montar sin música ni cama, si la música se añade después)."""
+    medios.ffmpeg("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{total:.3f}", str(destino))
+    return destino
+
+
 MUESTRAS = 48000   # por segundo y canal; todos los efectos están en estéreo de 16 bits a 48 kHz
 
 

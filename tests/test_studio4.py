@@ -2362,3 +2362,26 @@ def test_sonido_efectos_cama_y_master(tmp_path):
     hecho = sonido.masterizar(mezcla, tmp_path / "f.wav")
     medida = medios.ffmpeg("-i", str(hecho), "-af", "ebur128", "-f", "null", "-")
     assert abs(float(re.findall(r"I:\s+(-?[\d.]+) LUFS", medida)[-1]) + 11) < 1.0
+
+
+def test_musica_cataloga_etiqueta_y_elige_por_animo(aislado):
+    """Las pistas de la Biblioteca de audio se catalogan solas (título, artista, volumen) y la automática elige
+    por el ánimo del guion; los créditos llevan la atribución si la pista la pide."""
+    from studio4 import musica
+    carpeta = musica.carpeta()
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=f=220:d=2", "-af", "volume=0.05", str(carpeta / "Noche en Coney - Artista Uno.mp3"))
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=f=330:d=2", "-af", "volume=7", str(carpeta / "Sol de verano.mp3"))
+    pistas = {p["archivo"]: p for p in musica.catalogo()}
+    noche = pistas["Noche en Coney - Artista Uno.mp3"]
+    assert (noche["titulo"], noche["artista"]) == ("Noche en Coney", "Artista Uno") and noche["licencia"] == musica.LICENCIA
+    assert musica.ganancia(noche) > musica.ganancia(pistas["Sol de verano.mp3"])   # la floja se sube más
+    musica.etiquetar("Noche en Coney - Artista Uno.mp3", animo=["tensión", "oscura", "inventado"], atribucion="Music by Uno")
+    musica.etiquetar("Sol de verano.mp3", animo=["alegre"])
+    guion = {"titulo": "Robar de noche", "guion": "La policía te persigue por la calle de noche: robar tenía riesgo."}
+    assert musica.elegir(guion)["archivo"] == "Noche en Coney - Artista Uno.mp3"
+    assert musica.elegir({**guion, "musica": "cama"}) is None and musica.elegir({**guion, "musica": "nada"}) is None
+    assert musica.elegir({**guion, "musica": "Sol de verano.mp3"})["archivo"] == "Sol de verano.mp3"
+    assert musica.credito(musica.elegir(guion)) == "Music by Uno"
+    assert musica.ruta("../.env") is None and musica.ruta("Sol de verano.mp3")
+    (carpeta / "Sol de verano.mp3").unlink()
+    assert [p["archivo"] for p in musica.catalogo()] == ["Noche en Coney - Artista Uno.mp3"]   # se olvida la borrada

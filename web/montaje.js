@@ -1,4 +1,4 @@
-// Studio 4 · panel: seis pantallas (Inicio, Vídeos, Biblioteca, Tendencias, Canal, Herramientas) y, dentro de cada
+// Studio 4 · panel: siete pantallas (Inicio, Vídeos, Biblioteca, Tendencias, Música, Canal, Herramientas) y, dentro de cada
 // vídeo, un paso por pantalla (guion → material → montaje → previa → final) con su línea de tiempo por pistas.
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -279,6 +279,55 @@ async function vistaHerramientas() {
   } catch (_) { /* es un extra */ }
 }
 
+// ============================================================ Música (Biblioteca de audio de YouTube)
+async function vistaMusica() {
+  $("vista").innerHTML = `
+    ${cabecera("<em>Música</em>", "Tus pistas de la Biblioteca de audio de YouTube: seguras para monetizar. Nada de YouTube Music (Content ID).")}
+    <section class="mantenimiento musica-pasos">
+      <span class="etiqueta">Cómo añadir pistas</span>
+      <ol>
+        <li>Abre <a href="https://studio.youtube.com/" target="_blank" rel="noopener">YouTube Studio</a> → <b>Biblioteca de audio</b>.</li>
+        <li>Filtra por género o ánimo, escucha y pulsa <b>Descargar</b>.</li>
+        <li>Guarda el archivo en tu carpeta de música (botón de abajo): Studio lo cataloga solo y le iguala el volumen.</li>
+        <li>Si la pista pide <b>atribución</b>, copia ese texto en su casilla: irá en la descripción y en los créditos.</li>
+      </ol>
+      <div class="fila"><button class="boton" type="button" id="abrir-musica">Abrir carpeta de música</button><span class="meta" id="carpeta-musica"></span></div>
+    </section>
+    <div id="pistas" class="pistas"><p class="meta">Catalogando tu música…</p></div>`;
+  $("abrir-musica").onclick = () => api("/api/m/musica/carpeta", {}).catch(aviso);
+  const m = await api("/api/m/musica");
+  $("carpeta-musica").textContent = m.carpeta;
+  pintarPistas(m);
+}
+
+function pintarPistas(m) {
+  if (!m.pistas.length) {
+    $("pistas").innerHTML = `<p class="meta">Aún no hay pistas. Mientras tanto, los vídeos llevan el fondo suave del Studio.</p>`;
+    return;
+  }
+  $("pistas").innerHTML = m.pistas.map((p) => `
+    <article class="pista" data-archivo="${esc(p.archivo)}">
+      <div class="pista-cab">
+        <div><b>${esc(p.titulo)}</b><small>${esc(p.artista || "Sin artista")} · ${reloj(p.duracion)} · ${p.usos.length ? `usada en ${p.usos.length} vídeo${p.usos.length > 1 ? "s" : ""}` : "sin usar"}</small></div>
+        <audio controls preload="none" src="/musica/${encodeURIComponent(p.archivo)}"></audio>
+      </div>
+      <div class="chips">${m.animos.map((a) => `<button class="chip ${p.animo.includes(a) ? "activo" : ""}" type="button" data-animo="${esc(a)}">${esc(a)}</button>`).join("")}</div>
+      <input class="campo" data-atribucion placeholder="Atribución (solo si la pista la pide)" value="${esc(p.atribucion)}">
+    </article>`).join("");
+  $("pistas").querySelectorAll(".pista").forEach((el) => {
+    const archivo = el.dataset.archivo;
+    el.querySelectorAll("[data-animo]").forEach((b) => {
+      b.onclick = async () => {
+        b.classList.toggle("activo");
+        const animo = [...el.querySelectorAll("[data-animo].activo")].map((x) => x.dataset.animo);
+        try { await api("/api/m/musica/etiquetar", { archivo, animo }); } catch (e) { aviso(e); }
+      };
+    });
+    const at = el.querySelector("[data-atribucion]");
+    at.onchange = () => api("/api/m/musica/etiquetar", { archivo, atribucion: at.value }).catch(aviso);
+  });
+}
+
 // ============================================================ Un vídeo, paso a paso
 async function cargarVideo(id) {
   datos = await api(`/api/m/ver?id=${encodeURIComponent(id)}`);
@@ -400,6 +449,20 @@ function pasoFinal(v) {
         <span class="${datos.coste_voz ? "coste" : "voz"}">${datos.coste_voz ? `De pago: ≈${datos.coste_voz.toFixed(2).replace(".", ",")} $ este guion` : "Gratis"}</span>
       </div>
     </div>
+    <div class="voz-elegir">
+      <span class="etiqueta">Música</span>
+      <div class="fila">
+        <select class="campo" id="musica-elegida">
+          <option value="auto" ${datos.musica.modo === "auto" ? "selected" : ""}>Automática por el ánimo del guion${datos.musica.modo === "auto" && datos.musica.elegida ? ` (ahora: ${esc(datos.musica.elegida)})` : ""}</option>
+          <option value="cama" ${datos.musica.modo === "cama" ? "selected" : ""}>Fondo suave del Studio (sin canción)</option>
+          <option value="nada" ${datos.musica.modo === "nada" ? "selected" : ""}>Sin fondo (la música la pongo después)</option>
+          ${datos.musica.pistas.length ? `<optgroup label="Tus pistas">${datos.musica.pistas.map((x) => `
+            <option value="${esc(x.archivo)}" ${datos.musica.modo === x.archivo ? "selected" : ""}>${esc(x.titulo)}${x.animo.length ? ` · ${esc(x.animo.join(", "))}` : ""}</option>`).join("")}</optgroup>` : ""}
+        </select>
+        <a class="boton" href="#musica">Tu música</a>
+      </div>
+      ${datos.musica.pistas.length ? "" : `<p class="meta">Aún no tienes pistas de la Biblioteca de audio de YouTube: va el fondo suave del Studio.</p>`}
+    </div>
     <div class="fila">
       <button class="primario" type="button" id="montar-final" ${v.previa ? "" : "disabled"}>${v.final ? "Volver a montar" : "Montar vídeo final"}</button>
       ${!v.previa ? `<span class="meta">Primero haz la previa (paso 4).</span>` : ""}</div>
@@ -482,6 +545,7 @@ function enlazarVideo(p) {
   if (p === 4) $("hacer-previa").onclick = () => enviar("/api/m/previa");
   if (p === 5) {
     $("voz-elegida").onchange = (ev) => { const [proveedor, nombre] = ev.target.value.split("|"); enviar("/api/m/voz", { proveedor, nombre }); };
+    $("musica-elegida").onchange = (ev) => enviar("/api/m/musica/elegir", { musica: ev.target.value });
     $("montar-final").onclick = () => {
       // lo de pago, solo con un sí explícito y el importe delante
       if (datos.coste_voz && !confirm(`La voz ${datos.video.voz_nombre} es de pago: ≈${datos.coste_voz.toFixed(2)} $ por este guion. ¿Montar?`)) return;
@@ -571,7 +635,7 @@ function pintarTrabajo(t) {
 
 // ============================================================ Rutas
 const VISTAS = { inicio: vistaInicio, videos: vistaVideos, biblioteca: vistaBiblioteca, tendencias: vistaTendencias,
-  canal: vistaCanal, herramientas: vistaHerramientas };
+  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas };
 async function ir() {
   $("trabajo").hidden = true;
   $("selector").hidden = true;

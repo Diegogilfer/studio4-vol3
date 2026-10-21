@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import animacion, canales, config, extractor, medios, sonido, subtitulos, voz
+from . import animacion, canales, config, extractor, medios, musica, sonido, subtitulos, voz
 
 logger = logging.getLogger("studio4.montaje")
 
@@ -809,8 +809,12 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             else:
                 escena["sale"] = str(_fotograma(piezas[k + 1], trabajo / f"{pieza.stem}_sale.png", ultimo=False))
         animacion.renderizar([escena], dur, pieza, ancho, alto)
+    pista = musica.elegir(p)   # la canción de la Biblioteca de audio de YouTube (o ninguna: cama suave o nada)
+    cancion = musica.ruta(pista["archivo"]) if pista else None
     if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
-        _creditos(base, p, usados)
+        _creditos(base, p, usados, pista)
+        if pista:
+            musica.apuntar_uso(pista["archivo"], mid)
     avisar("Uniendo los planos", 78)
     lista = trabajo / "lista.txt"
     lista.write_text("".join(f"file '{x.as_posix()}'\n" for x in piezas), encoding="utf-8")
@@ -819,24 +823,29 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     total = medios.duracion(cuerpo)
     avisar("Diseño de sonido", 82)
     fx = sonido.pista(eventos, total, trabajo / "fx.wav")
-    musica = _musica(p)
-    lecho = musica or sonido.cama(total, trabajo / "cama.wav")   # nunca silencio: música o fondo grave propio
+    if cancion:
+        lecho = cancion
+    elif p.get("musica") == musica.NADA:   # sin fondo (por ejemplo, si la música se pone después en YouTube)
+        lecho = sonido.silencio(total, trabajo / "silencio.wav")
+    else:
+        lecho = sonido.cama(total, trabajo / "cama.wav")   # el fondo suave propio: nunca silencio
     logo = logo_de(p["canal"])
     destino = base / ("final_16x9.mp4" if final else "previa.mp4")
     # En dos pasos: primero el sonido a un archivo y luego la imagen con ese sonido. Todo en una sola orden, FFmpeg se
     # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
     avisar("Subtítulos, voz y efectos" if final else "Efectos y fondo", 88)
-    vol_lecho = config.VOLUMEN_MUSICA if musica else 1.4   # la cama suave sostiene las pausas de la voz
+    # una canción se iguala a las demás y se baja; la cama suave sostiene las pausas de la voz
+    vol_lecho = config.VOLUMEN_MUSICA * musica.ganancia(pista) if cancion else 1.4
     # el vídeo no se corta en seco: los últimos 0,8 s funden a negro y el sonido se apaga con él
     cierre_a = f"afade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
-    entradas_a = ["-i", str(fx), *(["-stream_loop", "-1"] if musica else []), "-i", str(lecho)]
+    entradas_a = ["-i", str(fx), *(["-stream_loop", "-1"] if cancion else []), "-i", str(lecho)]
     lecho_f = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={vol_lecho},"
                f"afade=t=out:st={max(0, total - 2):.3f}:d=2")
     if final:
         entradas_a += ["-i", str(voz_montaje)]
         voz_f = f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,apad"
-        if musica:   # una canción sí baja suave cuando habla la voz (sidechain lento); la cama suave no lo necesita
+        if cancion:   # una canción sí baja suave cuando habla la voz (sidechain lento); la cama suave no lo necesita
             audio = (f"{voz_f},asplit=2[voz][llave];[0:a]volume=0.6[fx];{lecho_f}[l0];"
                      "[l0][llave]sidechaincompress=threshold=0.03:ratio=2.5:attack=60:release=700[lecho];")
         else:
@@ -887,13 +896,16 @@ def logo_de(canal: str) -> Path | None:
     return redondo
 
 
-def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]]) -> None:
+def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]], pista: dict[str, Any] | None = None) -> None:
     reloj = lambda s: f"{int(s) // 3600}:{int(s) % 3600 // 60:02d}:{int(s) % 60:02d}"  # noqa: E731
     lineas = [f"Fuentes y créditos · {p['titulo']}", "Fragmentos cortos, sin su audio, con comentario y edición propios.", ""]
     lineas += [f"Frase {u['frase']}: {u['fuente']} ({u['canal']}) · {reloj(u['desde'])}–{reloj(u['hasta'])} · {u['url']}"
                for u in usados]
+    credito_musica = musica.credito(pista) if pista else ""
+    if credito_musica:
+        lineas += ["", credito_musica]
     (base / "Fuentes y créditos.txt").write_text("\n".join(lineas) + "\n", encoding="utf-8")
-    modificar(p["id"], lambda q: q.update(creditos=usados))
+    modificar(p["id"], lambda q: q.update(creditos=usados, musica_credito=credito_musica))
 
 
 def _fotograma(video: Path, destino: Path, ultimo: bool) -> Path:
@@ -906,9 +918,17 @@ def _fotograma(video: Path, destino: Path, ultimo: bool) -> Path:
     return destino
 
 
+def elegir_musica(mid: str, modo: str) -> None:
+    """La música del vídeo: «auto» (por el ánimo del guion), «cama» (el fondo suave), «nada» o una pista concreta."""
+    if modo not in (musica.AUTO, musica.CAMA, musica.NADA) and not musica.ruta(modo):
+        raise ValueError("Esa pista no está en tu carpeta de música.")
+    modificar(mid, lambda p: p.update(musica=modo))
+
+
 def _musica(p: dict[str, Any]) -> Path | None:
-    from . import carpetas
-    return carpetas.elegir_musica(f"{p['titulo']} {p['guion'][:300]}")
+    """El archivo de la canción del vídeo (None si va con la cama suave o sin fondo)."""
+    pista = musica.elegir(p)
+    return musica.ruta(pista["archivo"]) if pista else None
 
 
 def previa(mid: str) -> None:
@@ -994,7 +1014,8 @@ def hacer_textos(mid: str) -> dict[str, Any]:
     textos = {"titulos": [str(t)[:100] for t in d.get("titulos", [])][:3], "descripcion": str(d.get("descripcion", "")),
               "hashtags": [h for h in d.get("hashtags", []) if str(h).startswith("#")][:8],
               "texto_miniatura": str(d.get("texto_miniatura", ""))[:40], "capitulos": capitulos,
-              "creditos": "Imágenes de los juegos con comentario y edición propios."}
+              "creditos": "\n".join(x for x in ("Imágenes de los juegos con comentario y edición propios.",
+                                                   p.get("musica_credito", "")) if x)}
     modificar(mid, lambda q: q.update(textos=textos, fuentes_titulos=creditos))
     return textos
 
