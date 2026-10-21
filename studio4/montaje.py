@@ -19,6 +19,7 @@ import array
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -450,6 +451,16 @@ def _avisar(mid: str, fase: str, progreso: int) -> None:
     modificar(mid, lambda p: p["trabajo"].update(fase=fase, progreso=max(0, min(100, progreso))))
 
 
+def _despierto(si: bool) -> None:
+    """Mientras se monta, Windows no suspende el PC por inactividad: un montaje de media hora se cortaba de noche
+    (FFmpeg «tardaba» las horas que el PC estuvo dormido). Solo pide no dormir; no impide cerrar la tapa ni apagar."""
+    if os.name != "nt":
+        return
+    import ctypes
+    continuo, sistema = 0x80000000, 0x00000001
+    ctypes.windll.kernel32.SetThreadExecutionState(continuo | (sistema if si else 0))
+
+
 def _en_fondo(mid: str, nombre: str, fn: Callable[[], None]) -> None:
     with _lock:
         p = cargar(mid)
@@ -459,6 +470,7 @@ def _en_fondo(mid: str, nombre: str, fn: Callable[[], None]) -> None:
         guardar(p)
 
     def correr():
+        _despierto(True)
         try:
             if nombre in PESADOS:
                 if not _turno.acquire(blocking=False):
@@ -475,6 +487,8 @@ def _en_fondo(mid: str, nombre: str, fn: Callable[[], None]) -> None:
             modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error=f"{nombre}: {str(e)[:300]}"))
         else:
             modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100, fase=f"{nombre}: listo"))
+        finally:
+            _despierto(False)
     threading.Thread(target=correr, name=f"montaje-{nombre}", daemon=True).start()
 
 
@@ -574,8 +588,13 @@ def _segmento(fuente_video: Path, ini: float, fin: float, d: float, ancho: int, 
     lento = min(LENTO_MAX, max(1.0, d / largo))
     # más lento sin repetir cuadros (eso se ve a tirones): se inventan los cuadros intermedios siguiendo el movimiento
     interpola = (f",minterpolate=fps={config.FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1" if lento > 1.01 else "")
+    # y un acercamiento lento (+6 % en todo el plano): aunque el juego esté quieto (un menú, el minijuego), la imagen
+    # nunca se ve parada. Se hace al doble de tamaño para que el movimiento sea fino, sin temblores.
+    cuadros = max(1, round(d * config.FPS))
+    acerca = (f",scale={ancho * 2}:{alto * 2}:flags=bicubic,zoompan=z='1+{ACERCA}*on/{cuadros}'"
+              f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS}")
     vf = (f"setpts={lento:.4f}*PTS,scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto}"
-          f"{interpola},fps={config.FPS},tpad=stop_mode=clone:stop_duration={d + 1:.3f},setsar=1")
+          f"{interpola},fps={config.FPS},tpad=stop_mode=clone:stop_duration={d + 1:.3f},trim=duration={d:.3f}{acerca},setsar=1")
     medios.ffmpeg("-ss", f"{ini:.3f}", "-t", f"{largo:.3f}", "-i", str(fuente_video), "-an", "-vf", vf,
                   "-t", f"{d:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
 
@@ -598,6 +617,7 @@ def _segmentos(fuente_video: Path, ini: float, fin: float, partes: list[tuple[fl
 
 
 LENTO_MAX = 1.35   # un plano corto se estira como mucho esto
+ACERCA = 0.06      # cuánto se acerca la cámara a lo largo de un plano (nunca una imagen quieta)
 RESERVA = 0.8      # segundos del mismo plano que van dentro de la tarjeta de un panel o de un cambio de bloque
 
 
