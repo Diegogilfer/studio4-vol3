@@ -15,11 +15,13 @@ rejilla de las transiciones, los paneles de texto y la miniatura.
 
 from __future__ import annotations
 
+import array
 import hashlib
 import json
 import logging
 import re
 import shutil
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -523,14 +525,34 @@ def _tiempos_estimados(p: dict[str, Any]) -> list[tuple[float, float]]:
     return salida
 
 
+def _silencio_cerca(muestras: array.array, hz: int, t: float, margen: float = 0.45) -> float:
+    """El punto más callado (ventanas de 30 ms) a menos de `margen` s de t: ahí se puede cortar la voz sin partir
+    una palabra. Los tiempos de cada frase son aproximados; el silencio real entre oraciones es este."""
+    paso, ventana = int(hz * 0.01), int(hz * 0.03)
+    mejor, mejor_t = None, t
+    for i in range(max(0, int((t - margen) * hz)), min(len(muestras) - ventana, int((t + margen) * hz)), paso):
+        energia = sum(x * x for x in muestras[i:i + ventana:4])
+        if mejor is None or energia < mejor or (energia == mejor and abs(i / hz - t) < abs(mejor_t - t)):
+            mejor, mejor_t = energia, (i + ventana / 2) / hz
+    return mejor_t
+
+
 def _respirar(wav: Path, tiempos: list[tuple[float, float]], palabras: list[dict[str, Any]],
               frases: list[dict[str, Any]], destino: Path) -> tuple[list[tuple[float, float]], list[dict[str, Any]]]:
-    """La voz con silencios entre oraciones y entre bloques: se corta en el hueco entre dos frases y se mete la pausa.
+    """La voz con silencios entre oraciones y entre bloques: se corta en el silencio real entre dos frases (nunca a
+    mitad de palabra), con un fundido de 10 ms para que no chasquee, y se mete la pausa.
     Devuelve los tiempos y las palabras movidos a su sitio nuevo."""
-    cortes = [(tiempos[k][1] + tiempos[k + 1][0]) / 2 for k in range(len(tiempos) - 1)]   # en la línea (con ENTRADA)
+    hz = 16000
+    crudo = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(wav), "-ac", "1", "-ar", str(hz), "-f", "s16le", "-"],
+                           stdin=subprocess.DEVNULL, capture_output=True, timeout=120).stdout
+    muestras = array.array("h")
+    muestras.frombytes(crudo[:len(crudo) // 2 * 2])
+    cortes = [_silencio_cerca(muestras, hz, (tiempos[k][1] + tiempos[k + 1][0]) / 2 - ENTRADA) + ENTRADA
+              for k in range(len(tiempos) - 1)]   # en la línea (con ENTRADA)
     pausas = [_pausa(frases, k) for k in range(len(tiempos))]
     bordes = [0.0, *[c - ENTRADA for c in cortes], medios.duracion(wav) + 1]
-    filtros = [f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,apad=pad_dur={pausas[k]:.3f}[p{k}]"
+    filtros = [f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=0.01,"
+               f"areverse,afade=t=in:d=0.01,areverse,apad=pad_dur={pausas[k]:.3f}[p{k}]"
                for k, (a, b) in enumerate(zip(bordes, bordes[1:]))]
     filtros.append("".join(f"[p{k}]" for k in range(len(tiempos))) + f"concat=n={len(tiempos)}:v=0:a=1[a]")
     medios.ffmpeg("-i", str(wav), "-filter_complex", ";".join(filtros), "-map", "[a]", str(destino))
@@ -547,8 +569,10 @@ def _segmento(fuente_video: Path, ini: float, fin: float, d: float, ancho: int, 
     nota a tirones) y después se queda en su último fotograma. Nunca se cuela el plano siguiente del vídeo de origen."""
     largo = max(0.3, min(fin, medios.duracion(fuente_video)) - ini)   # lo que de verdad hay en el archivo
     lento = min(LENTO_MAX, max(1.0, d / largo))
-    vf = (f"setpts={lento:.4f}*PTS,scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},"
-          f"fps={config.FPS},tpad=stop_mode=clone:stop_duration={d + 1:.3f},setsar=1")
+    # más lento sin repetir cuadros (eso se ve a tirones): se inventan los cuadros intermedios siguiendo el movimiento
+    interpola = (f",minterpolate=fps={config.FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1" if lento > 1.01 else "")
+    vf = (f"setpts={lento:.4f}*PTS,scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto}"
+          f"{interpola},fps={config.FPS},tpad=stop_mode=clone:stop_duration={d + 1:.3f},setsar=1")
     medios.ffmpeg("-ss", f"{ini:.3f}", "-t", f"{largo:.3f}", "-i", str(fuente_video), "-an", "-vf", vf,
                   "-t", f"{d:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
 
@@ -762,19 +786,24 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
     avisar("Subtítulos, voz y efectos" if final else "Efectos y fondo", 88)
     vol_lecho = config.VOLUMEN_MUSICA if musica else 1.15
+    # el vídeo no se corta en seco: los últimos 0,8 s funden a negro y el sonido se apaga con él
+    cierre_a = f"afade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
+    cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     entradas_a = ["-i", str(fx), *(["-stream_loop", "-1"] if musica else []), "-i", str(lecho)]
     lecho_f = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={vol_lecho},"
                f"afade=t=out:st={max(0, total - 2):.3f}:d=2")
     if final:   # el lecho baja solo cuando habla la voz (sidechain) y vuelve en las pausas: nunca hay silencio
         entradas_a += ["-i", str(voz_montaje)]
-        audio = (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,asplit=2[voz][llave];"
+        audio = (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,adelay={int(ENTRADA * 1000)}:all=1,apad,asplit=2[voz][llave];"
                  f"[0:a]volume=0.6[fx];{lecho_f}[l0];"
                  "[l0][llave]sidechaincompress=threshold=0.03:ratio=5:attack=20:release=220[lecho];"
-                 f"[voz][fx][lecho]amix=inputs=3:duration=longest:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f}[a]")
+                 f"[voz][fx][lecho]amix=inputs=3:duration=longest:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f},{cierre_a}[a]")
     else:   # la previa ya suena: efectos y lecho (sin voz), con el mismo master
-        audio = f"[0:a]volume=0.6[fx];{lecho_f}[l];[fx][l]amix=inputs=2:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f}[a]"
+        audio = f"[0:a]volume=0.6[fx];{lecho_f}[l];[fx][l]amix=inputs=2:normalize=0,{sonido.MASTER},apad,atrim=0:{total:.3f},{cierre_a}[a]"
     mezcla = trabajo / "mezcla.wav"
-    medios.ffmpeg(*entradas_a, "-filter_complex", audio, "-map", "[a]", "-ar", "48000", str(mezcla))
+    # apad en la voz: el lecho sigue sonando después de la última palabra (sin ella, el sidechain se apagaba con la
+    # voz y el final quedaba en silencio absoluto); -t corta la mezcla justo en la duración del vídeo
+    medios.ffmpeg(*entradas_a, "-filter_complex", audio, "-map", "[a]", "-t", f"{total:.3f}", "-ar", "48000", str(mezcla))
 
     entradas = ["-i", str(cuerpo), "-i", str(mezcla)]
     filtros, mezcla_v = [], "[0:v]"
@@ -786,9 +815,9 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         mezcla_v = "[v1]"
     if final:
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", ancho, alto, {"posicion": "abajo"})
-        filtros.append(f"{mezcla_v}ass={ass.name}[v]")
+        filtros.append(f"{mezcla_v}ass={ass.name},{cierre_v}[v]")
     else:
-        filtros.append(f"{mezcla_v}null[v]")
+        filtros.append(f"{mezcla_v}{cierre_v}[v]")
     medios.ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-map", "[v]", "-map", "1:a", "-t", f"{total:.3f}",
                   "-c:v", "libx264", "-preset", "medium", "-crf", "17" if final else "23", "-pix_fmt", "yuv420p",
                   "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(destino), cwd=trabajo)

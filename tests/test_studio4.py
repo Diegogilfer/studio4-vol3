@@ -2296,7 +2296,9 @@ def test_montaje_la_voz_respira_entre_frases(tmp_path):
     """Se mete silencio entre oraciones y entre bloques; las palabras se mueven con su frase."""
     from studio4 import medios, montaje
     wav = tmp_path / "voz.wav"
-    medios.ffmpeg("-f", "lavfi", "-i", "sine=f=300:d=4", "-ar", "24000", "-ac", "1", str(wav))
+    # dos oraciones con un silencio de verdad entre ellas (1,9-2,1 s), como una voz
+    medios.ffmpeg("-f", "lavfi", "-i", "aevalsrc='0.5*sin(2*PI*300*t)*(lt(t,1.9)+gte(t,2.1))':d=4:s=24000",
+                  "-ac", "1", str(wav))
     e = montaje.ENTRADA
     frases = [{"bloque": 0, "texto": "Uno dos tres."}, {"bloque": 1, "texto": "Cuatro cinco seis."}]
     palabras = [{"palabra": "uno", "ini": e + 0.1, "fin": e + 0.5}, {"palabra": "cuatro", "ini": e + 2.2, "fin": e + 2.6}]
@@ -2304,6 +2306,18 @@ def test_montaje_la_voz_respira_entre_frases(tmp_path):
     assert abs(medios.duracion(tmp_path / "p.wav") - (4 + montaje.PAUSA_BLOQUE)) < 0.05
     assert tiempos[0] == (e, e + 1.9) and abs(tiempos[1][0] - (e + 2.1 + montaje.PAUSA_BLOQUE)) < 1e-9
     assert pal[0]["ini"] == e + 0.1 and abs(pal[1]["ini"] - (e + 2.2 + montaje.PAUSA_BLOQUE)) < 1e-9
+
+
+def test_montaje_corta_la_voz_en_su_silencio():
+    """La pausa se mete en el silencio real entre dos oraciones, no en el punto medio aproximado (que caía a mitad de
+    palabra y se oía como un corte del guion)."""
+    import array
+    from studio4 import montaje
+    hz = 16000
+    voz = array.array("h", [8000 if (k // 40) % 2 else -8000 for k in range(hz * 2)])   # 2 s de «voz»
+    for k in range(int(1.30 * hz), int(1.45 * hz)):   # el silencio de verdad está en 1,30-1,45 s
+        voz[k] = 0
+    assert 1.30 <= montaje._silencio_cerca(voz, hz, 1.0) <= 1.45
 
 
 def test_subtitulos_no_dejan_palabras_colgadas():
