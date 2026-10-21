@@ -193,7 +193,7 @@ window.__s4 = (t) => {
     const visible = t >= e.ini - 0.01 && t < e.fin + 0.35;
     const u = t - e.ini, dur = e.fin - e.ini;
     // entrada: el último fotograma del vídeo se encoge; salida: el primero del siguiente crece a pantalla completa
-    const pin = e.pEntra ? salida(fueraDe(0, 0.6, u)) : 1;
+    const pin = e.pEntra ? suave(fueraDe(0, 0.75, u)) : 1;   // arranca despacio: el primer cuadro casi no cambia
     const pout = e.pSale ? suave(fueraDe(dur - 0.62, dur - 1 / FPS, u)) : 0;
     if (visible) fondo = Math.max(fondo, Math.min(e.pEntra ? fueraDe(0, 0.35, u) : salida(fueraDe(0, 0.3, u)), 1 - pout));
     const conPanel = !!e.pn;
@@ -206,11 +206,11 @@ window.__s4 = (t) => {
       e.pEntra.style.zIndex = pin < 1 ? 7 : 2;
       colocar(e.pEntra, PANTALLA, sitioA, pin, Math.sin(t * 1.2) * 8 * pin, Math.sin(t * 2));
       e.pEntra.firstChild.style.transform = `scale(${1 + 0.05 * pin})`;
-      if (e.entra_n) {   // sigue el plano anterior; si se acaba, va y vuelve despacio (nunca se queda quieto)
-        const n = e.entra_n, ciclo = Math.max(1, 2 * (n - 1)), atras = e.entra_modo === "atras";
-        // «atras»: empieza en su último fotograma (el que se veía a pantalla completa) y retrocede a media velocidad
-        let j = Math.floor(Math.max(0, u) * FPS * (atras ? 0.5 : 1)) % ciclo; if (j >= n) j = ciclo - j;
-        poner(e.pEntra.firstChild, fotograma(e.entra_pref, Math.min(n, (atras ? n - 1 - j : j) + 1)));
+      if (e.entra_n) {   // sigue el plano anterior al mismo ritmo; ya pequeña, va y vuelve despacio (nunca quieta)
+        const n = e.entra_n, ciclo = Math.max(1, 2 * (n - 1)), f = Math.floor(Math.max(0, u) * FPS);
+        let j = f < n ? f : (n - 1) - Math.floor((f - n + 1) * 0.5) % ciclo;
+        if (j < 0) j = -j;
+        poner(e.pEntra.firstChild, fotograma(e.entra_pref, Math.min(n, j + 1)));
       }
       e.pEntra.firstChild.style.filter = `brightness(${1 - 0.25 * pin})`;
     }
@@ -226,14 +226,11 @@ window.__s4 = (t) => {
       e.pSale.firstChild.style.transform = `scale(${1.04 - 0.04 * pout})`;
       if (e.sale_n) {
         const n = e.sale_n, falta = Math.max(0, Math.round((dur - 1 / FPS - u) * FPS));
+        // los últimos n cuadros: el arranque del plano siguiente al ritmo real, su último cuadro justo a pantalla
+        // completa; antes, mientras espera pequeña, va y vuelve despacio cerca de su primer cuadro
         let i;
-        if (e.sale_modo === "hacia") {   // va y vuelve despacio y acaba en su primer fotograma, donde sigue el vídeo
-          const ciclo = Math.max(1, 2 * (n - 1));
-          let j = Math.floor(falta * 0.5) % ciclo; if (j >= n) j = ciclo - j;
-          i = j + 1;
-        } else {   // el arranque del plano siguiente: su último fotograma llega justo a pantalla completa
-          i = Math.max(1, n - falta);
-        }
+        if (falta < n) i = n - falta;
+        else { const ciclo = Math.max(1, 2 * (n - 1)); let j = Math.floor((falta - n + 1) * 0.5) % ciclo; if (j >= n) j = ciclo - j; i = j + 1; }
         poner(e.pSale.firstChild, fotograma(e.sale_pref, Math.min(n, i)));
       }
       if (e.rs) {
@@ -360,7 +357,6 @@ def _html(escenas: list[dict[str, Any]], ancho: int, alto: int, fps: int = confi
                 "entra": e.get("entra", ""), "sale": e.get("sale", ""), "etiqueta": e.get("etiqueta", ""),
                 "entra_pref": e.get("entra_pref", ""), "entra_n": e.get("entra_n", 0),
                 "sale_pref": e.get("sale_pref", ""), "sale_n": e.get("sale_n", 0),
-                "entra_modo": e.get("entra_modo", ""), "sale_modo": e.get("sale_modo", ""),
                 "color": COLORES.get(e.get("color", ""), e.get("color", "")),
                 "imagenes": [{"src": i.get("src", ""), "frames": i.get("frames", 0), "pref": i.get("pref", ""),
                               "etiqueta": i.get("etiqueta", ""), "color": COLORES.get(i.get("color", ""), i.get("color", ""))}

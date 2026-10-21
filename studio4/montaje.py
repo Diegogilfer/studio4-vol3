@@ -577,7 +577,25 @@ def _segmento(fuente_video: Path, ini: float, fin: float, d: float, ancho: int, 
                   "-t", f"{d:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
 
 
+def _segmentos(fuente_video: Path, ini: float, fin: float, partes: list[tuple[float, Path]], ancho: int, alto: int) -> None:
+    """Un plano montado de una sola vez (misma velocidad de principio a fin) y partido en trozos seguidos: así el
+    arranque que va dentro de una tarjeta, el plano a pantalla completa y la cola de la tarjeta siguiente son el
+    mismo movimiento, sin saltos de velocidad ni de sentido en las uniones."""
+    if len(partes) == 1:
+        _segmento(fuente_video, ini, fin, partes[0][0], ancho, alto, partes[0][1])
+        return
+    entero = partes[0][1].with_name(partes[0][1].stem + "_entero.mp4")
+    _segmento(fuente_video, ini, fin, sum(d for d, _ in partes), ancho, alto, entero)
+    desde = 0.0
+    for d, destino in partes:
+        medios.ffmpeg("-i", str(entero), "-an", "-vf", f"trim=start={desde:.4f}:duration={d:.4f},setpts=PTS-STARTPTS",
+                      "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
+        desde += d
+    entero.unlink(missing_ok=True)
+
+
 LENTO_MAX = 1.35   # un plano corto se estira como mucho esto
+RESERVA = 0.8      # segundos del mismo plano que van dentro de la tarjeta de un panel o de un cambio de bloque
 
 
 def _cadena(meta: dict[str, Any], clip: dict[str, Any], d: float, pausas: list[float] | None = None
@@ -655,7 +673,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     # paneles y cambios de bloque: se dibujan al final, cuando ya existen sus vecinos (sus puentes con el vídeo)
     animadas: dict[Path, tuple[dict[str, Any], float]] = {}
     # las tarjetas de los puentes van en movimiento: lo que sigue del plano anterior (cola) y el arranque del siguiente
-    colas: dict[Path, tuple[Path, float, float]] = {}   # pieza → (vídeo, segundo donde sigue, cuánto queda)
+    colas: dict[Path, Path] = {}                        # pieza → lo que sigue de su plano (dentro de la tarjeta)
     arranques: dict[Path, Path] = {}                    # animación → los primeros segundos del plano que viene
     eventos: list[tuple[float, str, float]] = [(0.1, "impacto", 0.9)]   # (segundo, efecto, volumen)
     usados: list[dict[str, Any]] = []
@@ -702,25 +720,33 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                             (cursor + TRANSICION - 0.62, "whoosh", 0.45)]
                 cursor += TRANSICION
                 d -= TRANSICION
-            # si antes va una animación, su tarjeta final ya reproduce el arranque de este plano: el vídeo a pantalla
-            # completa sigue justo después (sin foto quieta y sin repetir nada)
+            # Con una animación delante, su tarjeta final ya reproduce el arranque de este plano; con una detrás, la
+            # tarjeta que se encoge sigue este mismo plano. Las tres partes salen de una sola pasada: mismo movimiento.
             previo = piezas[-1] if piezas else None
             visible = (animadas[previo][1] - (0.9 if "panel" in animadas[previo][0] else 0.25)) if previo in animadas else 0.0
+            sig = p["frases"][k + 1] if k + 1 < len(p["frases"]) else None
+            antes_de_animacion = bool(sig) and bool(sig.get("panel") or (
+                sig["bloque"] != f["bloque"] and tramos[k + 1][1] - tramos[k + 1][0] > TRANSICION + 0.8))
+            cola_frase = None
             trozos = []
             t_frase = 0.0
             for j, (c, dur) in enumerate(cadena):   # un trozo por plano elegido
                 trozo = trabajo / f"s{k:03d}_{j}.mp4"
                 origen, base_t = de(c)
                 ini_l, fin_l = c["ini"] - base_t, min(c["fin"] - base_t, medios.duracion(origen))
-                adelanto = max(0.0, min(visible, fin_l - ini_l - dur)) if j == 0 else 0.0
-                if adelanto >= 0.3:
-                    arranque = trabajo / f"a{k:03d}.mp4"
-                    _segmento(origen, ini_l, ini_l + adelanto, adelanto, ancho, alto, arranque)
-                    arranques[previo] = arranque
-                    ini_l += adelanto
-                _segmento(origen, ini_l, fin_l, dur, ancho, alto, trozo)
-                lento = min(LENTO_MAX, max(1.0, dur / max(0.3, fin_l - ini_l)))
-                ultimo = (origen, ini_l + dur / lento, fin_l - (ini_l + dur / lento))
+                # las tarjetas solo se llevan imagen que sobre (estirando como mucho LENTO_MAX): si no, el plano se
+                # quedaría corto a pantalla completa y se congelaría
+                sobra = max(0.0, (fin_l - ini_l) * LENTO_MAX - dur)
+                partes = []
+                if j == 0 and min(RESERVA, visible, sobra) >= 0.3:
+                    arranques[previo] = trabajo / f"a{k:03d}.mp4"
+                    partes.append((min(RESERVA, visible, sobra), arranques[previo]))
+                    sobra -= partes[-1][0]
+                partes.append((dur, trozo))
+                if j == len(cadena) - 1 and antes_de_animacion and min(RESERVA, sobra) >= 0.3:
+                    cola_frase = trabajo / f"c{k:03d}.mp4"
+                    partes.append((min(RESERVA, sobra), cola_frase))
+                _segmentos(origen, ini_l, fin_l, partes, ancho, alto)
                 trozos.append(trozo)
                 if j:
                     eventos.append((cursor + t_frase, "whoosh", 0.18))   # un roce suave en cada corte
@@ -740,8 +766,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                               "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(con))
                 seg = con
                 eventos += [(cursor + 0.15, "impacto", 0.55), (cursor + 0.45, "pop", 0.9)]
-            if ultimo[2] >= 0.3:   # lo que sobra del último plano: la tarjeta que se encoge sigue en movimiento
-                colas[seg] = (ultimo[0], ultimo[1], min(ultimo[2], 4.0))
+            if cola_frase:
+                colas[seg] = cola_frase
         piezas.append(seg)
         cursor += d
     for k, pieza in enumerate(piezas):   # las animaciones, con el último fotograma del anterior y el primero del siguiente
@@ -751,22 +777,14 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         escena, dur = animadas.pop(pieza)
         if k > 0:
             escena["entra"] = str(_fotograma(piezas[k - 1], trabajo / f"{pieza.stem}_entra.png", ultimo=True))
-            cola = trabajo / f"{pieza.stem}_cola.mp4"
-            if piezas[k - 1] in colas:   # lo que sigue del plano anterior
-                origen, desde, largo = colas[piezas[k - 1]]
-                _segmento(origen, desde, desde + largo, largo, ancho, alto, cola)
-            else:   # no sobra imagen: su último segundo y medio, que la tarjeta recorre hacia atrás despacio
-                _tramo_de(piezas[k - 1], cola, ultimo=True)
-                escena["entra_modo"] = "atras"
-            escena["entra_video"] = str(cola)
+            if piezas[k - 1] in colas:   # lo que sigue del plano anterior, al mismo ritmo
+                escena["entra_video"] = str(colas[piezas[k - 1]])
         if k + 1 < len(piezas) and piezas[k + 1] not in animadas:
-            if pieza in arranques:
+            if pieza in arranques:   # el arranque del plano siguiente: acaba justo donde sigue a pantalla completa
                 escena["sale"] = str(_fotograma(arranques[pieza], trabajo / f"{pieza.stem}_sale.png", ultimo=False))
                 escena["sale_video"] = str(arranques[pieza])
-            else:   # sin arranque aparte: el primer segundo y medio del plano, que acaba justo en su primer fotograma
+            else:
                 escena["sale"] = str(_fotograma(piezas[k + 1], trabajo / f"{pieza.stem}_sale.png", ultimo=False))
-                escena["sale_video"] = str(_tramo_de(piezas[k + 1], trabajo / f"{pieza.stem}_arranque.mp4", ultimo=False))
-                escena["sale_modo"] = "hacia"
         animacion.renderizar([escena], dur, pieza, ancho, alto)
     if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
         _creditos(base, p, usados)
@@ -850,14 +868,6 @@ def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]]) -> No
                for u in usados]
     (base / "Fuentes y créditos.txt").write_text("\n".join(lineas) + "\n", encoding="utf-8")
     modificar(p["id"], lambda q: q.update(creditos=usados))
-
-
-def _tramo_de(video: Path, destino: Path, ultimo: bool, largo: float = 1.5) -> Path:
-    """El primer o el último segundo y medio de un plano ya montado, para que la tarjeta del puente se mueva."""
-    posicion = ["-sseof", f"-{largo}"] if ultimo else []
-    medios.ffmpeg(*posicion, "-i", str(video), "-t", f"{largo}", "-an", "-c:v", "libx264", "-preset", "medium",
-                  "-crf", "16", "-pix_fmt", "yuv420p", str(destino))
-    return destino
 
 
 def _fotograma(video: Path, destino: Path, ultimo: bool) -> Path:

@@ -2308,6 +2308,23 @@ def test_montaje_la_voz_respira_entre_frases(tmp_path):
     assert pal[0]["ini"] == e + 0.1 and abs(pal[1]["ini"] - (e + 2.2 + montaje.PAUSA_BLOQUE)) < 1e-9
 
 
+def test_montaje_arranque_plano_y_cola_son_el_mismo_movimiento(tmp_path):
+    """Arranque (tarjeta), plano (pantalla completa) y cola (tarjeta) salen de una sola pasada y seguidos: el último
+    cuadro de uno y el primero del siguiente son cuadros consecutivos del mismo plano."""
+    from studio4 import medios, montaje
+    fuente = tmp_path / "f.mp4"
+    medios.ffmpeg("-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=4", "-pix_fmt", "yuv420p", str(fuente))
+    a, s, c = tmp_path / "a.mp4", tmp_path / "s.mp4", tmp_path / "c.mp4"
+    montaje._segmentos(fuente, 0.5, 3.8, [(0.8, a), (1.5, s), (0.8, c)], 320, 180)
+    assert [round(medios.duracion(x), 1) for x in (a, s, c)] == [0.8, 1.5, 0.8]
+    unido = tmp_path / "u.mp4"
+    lista = tmp_path / "l.txt"
+    lista.write_text("".join(f"file '{x.as_posix()}'\n" for x in (a, s, c)), encoding="utf-8")
+    medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista), "-c", "copy", str(unido))
+    log = medios.ffmpeg("-i", str(unido), "-vf", "freezedetect=n=0.001:d=0.05", "-f", "null", "-")
+    assert "freeze_start" not in log   # ni cuadros repetidos en las uniones
+
+
 def test_montaje_corta_la_voz_en_su_silencio():
     """La pausa se mete en el silencio real entre dos oraciones, no en el punto medio aproximado (que caía a mitad de
     palabra y se oía como un corte del guion)."""
