@@ -113,6 +113,24 @@ def _dos_lineas(textos: list[str], max_linea: int) -> str:
     return " ".join(textos[:mejor]) + "\\N" + " ".join(textos[mejor:])
 
 
+def srt(palabras: list[dict[str, Any]], destino: Path, max_linea: int = 42) -> Path:
+    """Los subtítulos en .srt para subirlos a YouTube (subtítulos aparte, que YouTube indexa): frases de una o dos
+    líneas, cortadas como en el cine (fin de frase, coma o pausa)."""
+    def ts(s: float) -> str:
+        ms = int(round(max(0.0, s) * 1000))
+        return f"{ms // 3600000:02d}:{ms // 60000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
+    frases = _frases(palabras, max_linea * 2)
+    bloques = []
+    for n, frase in enumerate(frases):
+        ini = frase[0]["ini"]
+        tope = frases[n + 1][0]["ini"] - 0.05 if n + 1 < len(frases) else float("inf")
+        fin = min(max(frase[-1]["fin"] + 0.3, ini + 0.9), tope)
+        texto = _dos_lineas([_limpia(p["palabra"]) for p in frase], max_linea).replace("\\N", "\n")
+        bloques.append(f"{n + 1}\n{ts(ini)} --> {ts(max(fin, ini + 0.2))}\n{texto}\n")
+    destino.write_text("\n".join(bloques), encoding="utf-8")
+    return destino
+
+
 def construir(palabras: list[dict[str, Any]], destino: Path, ancho: int, alto: int,
               ajustes: dict[str, Any] | None = None, gancho: str = "", segundos_gancho: float = 3.0,
               sonidos: list[dict[str, Any]] | None = None, inicio_gancho: float = 0.0) -> Path:

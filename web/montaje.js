@@ -367,10 +367,26 @@ function pintarVideo() {
 }
 
 const pasoCab = (n, titulo, texto) => `<div class="paso-cab"><span class="num">${n}</span><div><h2>${titulo}</h2><p>${texto}</p></div></div>`;
+// El resumen del guion: duración, capítulos (bloques) y escenas (frases)
+const resumenHTML = (r) => !r || !r.frases ? "" : `<div class="resumen">
+  <div><b>${reloj(r.duracion)}</b><small>${r.estimada ? "duración estimada" : "duración con la voz"}</small></div>
+  <div><b>${r.capitulos}</b><small>capítulos</small></div>
+  <div><b>${r.frases}</b><small>escenas</small></div>
+  <div><b>${r.paneles}</b><small>paneles</small></div>
+  <div><b>${r.con_imagen}/${r.frases}</b><small>con imagen</small></div></div>`;
+// La revisión de calidad que se hace sola al terminar la previa o el final
+function calidadHTML(c) {
+  if (!c) return "";
+  if (c.ok) return `<div class="calidad ok"><b>Revisión de calidad: lista para ver</b><small>Sin congelados, huecos de sonido ni subtítulos sueltos · ${String(c.lufs.toFixed(1)).replace(".", ",")} LUFS · ${c.hecha}</small>
+    ${c.avisos.length ? `<small>${c.avisos.map(esc).join(" · ")}</small>` : ""}</div>`;
+  return `<div class="calidad mal"><b>Revisión de calidad: ${c.fallos.length} cosa${c.fallos.length > 1 ? "s" : ""} por arreglar</b>
+    ${c.fallos.map((f) => `<small>✗ ${esc(f)}</small>`).join("")}</div>`;
+}
 
 function pasoGuion(v) {
   return `<section class="paso">
     ${pasoCab(1, "Guion", `${v.frases.length} frases en ${new Set(v.frases.map((f) => f.bloque)).size} bloques. Una línea en blanco separa los bloques: ahí entra la rejilla.`)}
+    ${resumenHTML(datos.resumen)}
     ${v.avisos?.length ? `<div class="avisos">${v.avisos.map((a) => `<p>${esc(a)}</p>`).join("")}</div>` : ""}
     ${!v.frases.length && v.trabajo?.ocupado ? `<p class="meta">Studio está investigando y escribiendo el guion: aparecerá aquí al terminar.</p>` : ""}
     <textarea class="campo guion" id="guion">${esc(v.guion)}</textarea>
@@ -418,7 +434,11 @@ function pasoMontaje(v, conClip) {
   }).join("");
   return `<section class="paso">
     ${pasoCab(3, "Montaje", `${conClip} de ${v.frases.length} frases con imagen. Toca un clip de la línea de tiempo o una imagen para cambiar el plano.`)}
-    <div class="fila"><button class="primario" type="button" id="proponer" ${v.fuentes.length ? "" : "disabled"}>Proponer planos para las frases vacías</button></div>
+    <div class="fila"><button class="primario" type="button" id="proponer" ${v.fuentes.length ? "" : "disabled"}>Proponer planos para las frases vacías</button>
+      <button class="boton" type="button" id="ver-storyboard" ${conClip ? "" : "disabled"}>Ver storyboard</button>
+      <button class="boton" type="button" id="automatico" ${conClip === v.frases.length && v.frases.length ? "" : "disabled"}
+        title="Vídeo final con voz, subtítulos y música, Short, textos, miniatura y revisión, sin pararse">Hacerlo todo</button></div>
+    ${datos.resumen?.cobertura?.length ? `<div class="avisos">${datos.resumen.cobertura.map((c) => `<p>Frase ${c.n}: su plano da ${String(c.hay).replace(".", ",")} s y necesita ${String(c.necesita).replace(".", ",")} s · ${c.congela ? "se quedaría quieto: añade otro plano o cámbialo" : "irá algo más lento"}</p>`).join("")}</div>` : ""}
     <div class="linea" id="linea"><p class="meta">Cargando la línea de tiempo…</p></div>
     ${frases}
   </section>`;
@@ -428,6 +448,7 @@ function pasoPrevia(v, conClip) {
   return `<section class="paso">
     ${pasoCab(4, "Previa", "En silencio, con los efectos y las transiciones. Gratis: revísala antes de la voz.")}
     ${v.previa ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/previa.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : `<div class="pantalla vacia">Aún no hay previa</div>`}
+    ${v.previa ? calidadHTML(v.calidad?.previa) : ""}
     <div class="fila"><button class="primario" type="button" id="hacer-previa" ${conClip === v.frases.length && v.frases.length ? "" : "disabled"}>${v.previa ? "Rehacer previa" : "Hacer previa"}</button>
       ${conClip < v.frases.length ? `<span class="meta">Faltan ${v.frases.length - conClip} frases por elegir (paso 3).</span>` : ""}</div>
   </section>`;
@@ -467,6 +488,9 @@ function pasoFinal(v) {
       <button class="primario" type="button" id="montar-final" ${v.previa ? "" : "disabled"}>${v.final ? "Volver a montar" : "Montar vídeo final"}</button>
       ${!v.previa ? `<span class="meta">Primero haz la previa (paso 4).</span>` : ""}</div>
     ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
+    ${calidadHTML(v.calidad?.final)}
+    <div class="fila"><a class="boton" href="/m/${esc(v.id)}/subtitulos.srt" download="${esc(v.titulo)}.srt">Subtítulos .srt para YouTube</a>
+      <a class="boton" href="/m/${esc(v.id)}/final_16x9.mp4" download="${esc(v.titulo)}.mp4">Descargar vídeo</a></div>
     <div class="dos">
       <div class="textos"><span class="etiqueta">Short vertical</span>
         <div class="fila"><input class="campo corto-t" id="s-desde" value="${reloj(v.short?.desde ?? 0)}">
@@ -541,7 +565,22 @@ function enlazarVideo(p) {
     };
     pintarBanco();
   }
-  if (p === 3) { $("proponer").onclick = () => enviar("/api/m/proponer"); pintarLinea(); }
+  if (p === 3) {
+    $("proponer").onclick = () => enviar("/api/m/proponer");
+    $("ver-storyboard").onclick = async () => {
+      const w = window.open("about:blank", "_blank");
+      try { const r = await api("/api/m/storyboard", { id: datos.video.id }); w.location = `${r.url}?v=${Date.now()}`; }
+      catch (e) { w.close(); aviso(e); }
+    };
+    $("automatico").onclick = () => {
+      const coste = datos.coste_voz;
+      const pregunta = coste
+        ? `La voz ${datos.video.voz_nombre} es de pago: ≈${coste.toFixed(2)} $. ¿Hacerlo todo (vídeo final, Short, textos y miniatura)?`
+        : "Se hace todo seguido: vídeo final con voz, subtítulos y música, Short, textos, miniatura y revisión. ¿Seguir?";
+      if (confirm(pregunta)) enviar("/api/m/automatico", { pago_ok: !!coste });
+    };
+    pintarLinea();
+  }
   if (p === 4) $("hacer-previa").onclick = () => enviar("/api/m/previa");
   if (p === 5) {
     $("voz-elegida").onchange = (ev) => { const [proveedor, nombre] = ev.target.value.split("|"); enviar("/api/m/voz", { proveedor, nombre }); };

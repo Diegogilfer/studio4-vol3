@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import animacion, canales, config, extractor, medios, musica, sonido, subtitulos, voz
+from . import animacion, calidad, canales, config, extractor, medios, musica, sonido, subtitulos, voz
 
 logger = logging.getLogger("studio4.montaje")
 
@@ -46,7 +46,7 @@ _lock = threading.RLock()
 # Un trabajo pesado a la vez (render, voz, descargas en alta): el PC no tiene tarjeta gráfica y dos montajes a la
 # par se ahogan. Los demás esperan su turno y el panel lo dice.
 _turno = threading.Lock()
-PESADOS = {"Previa", "Vídeo final", "Short"}
+PESADOS = {"Previa", "Vídeo final", "Short", "Automático"}
 
 
 # --- Guardado -----------------------------------------------------------------------------------------------------
@@ -108,6 +108,107 @@ def paso_actual(p: dict[str, Any]) -> int:
     if not p.get("previa"):
         return 4
     return 5
+
+
+def cobertura(p: dict[str, Any]) -> list[dict[str, Any]]:
+    """Las frases cuyo plano (con sus «mas») no da para lo que dura la frase: {n, necesita, hay, congela}.
+    «congela» = ni estirándolo llega (se quedaría quieto el final): hay que añadir un plano o cambiarlo."""
+    t = _tiempos_estimados(p)
+    tramos = [(0.0 if k == 0 else a, t[k + 1][0] if k + 1 < len(t) else b + 1.2) for k, (a, b) in enumerate(t)]
+    salida = []
+    for k, (f, (a, b)) in enumerate(zip(p["frases"], tramos)):
+        if f.get("panel") or not f.get("clip"):
+            continue
+        try:
+            meta = fuente(f["clip"]["fuente"])
+        except ValueError:
+            continue
+        nums = [x for x in [f["clip"]["plano"], *f["clip"].get("mas", [])] if 1 <= x <= len(meta["planos"])]
+        hay = sum(meta["planos"][x - 1]["fin"] - meta["planos"][x - 1]["ini"] for x in nums)
+        nuevo = k > 0 and f["bloque"] != p["frases"][k - 1]["bloque"]
+        necesita = (b - a) - (TRANSICION if nuevo and (b - a) > TRANSICION + 0.8 else 0)
+        if hay < necesita:
+            salida.append({"n": f["n"], "necesita": round(necesita, 1), "hay": round(hay, 1),
+                           "congela": hay * LENTO_MAX < necesita})
+    return salida
+
+
+def resumen(p: dict[str, Any]) -> dict[str, Any]:
+    """Lo que se ve al pegar el guion: duración, capítulos (bloques), escenas (frases) y cómo va el material."""
+    t = (p.get("voz") or {}).get("pausas", {}).get("tiempos") or _tiempos_estimados(p)
+    total = (t[-1][1] + 1.2) if t else 0.0
+    return {"duracion": round(total, 1), "estimada": not (p.get("voz") or {}).get("pausas"),
+            "capitulos": len({f["bloque"] for f in p["frases"]}), "frases": len(p["frases"]),
+            "paneles": sum(1 for f in p["frases"] if f.get("panel")),
+            "con_imagen": sum(1 for f in p["frases"] if f.get("clip") or f.get("panel")),
+            "cobertura": cobertura(p) if p["fuentes"] else []}
+
+
+def storyboard(mid: str) -> Path:
+    """Una hoja con cada frase y su imagen (o su panel), por bloques, para aprobar el montaje en segundos antes
+    de la previa. Marca en rojo las frases cuyo plano no da para lo que dura la frase."""
+    from PIL import Image, ImageDraw, ImageFont
+    p = cargar(mid)
+    letra = lambda tam, negrita=False: ImageFont.truetype("arialbd.ttf" if negrita else "arial.ttf", tam)  # noqa: E731
+    cortos = {c["n"]: c for c in cobertura(p)}
+    col, ancho_c, alto_img, alto_txt = 4, 420, 236, 118
+    filas = -(-len(p["frases"]) // col)
+    lienzo = Image.new("RGB", (col * ancho_c + 20, filas * (alto_img + alto_txt + 14) + 90), (10, 12, 14))
+    d = ImageDraw.Draw(lienzo)
+    d.text((20, 22), f"Storyboard · {p['titulo']}", fill=(240, 240, 240), font=letra(34, True))
+    r = resumen(p)
+    d.text((20, 62), f"{r['frases']} frases · {r['capitulos']} bloques · {r['paneles']} paneles · ≈{int(r['duracion'] // 60)}:"
+                     f"{int(r['duracion'] % 60):02d} min", fill=(150, 160, 160), font=letra(18))
+    acento = (57, 255, 136)
+    for k, f in enumerate(p["frases"]):
+        x, y = 10 + (k % col) * ancho_c, 90 + (k // col) * (alto_img + alto_txt + 14)
+        caja = (x + 6, y, x + ancho_c - 6, y + alto_img + alto_txt)
+        d.rounded_rectangle(caja, radius=14, fill=(22, 26, 28), outline=(255, 70, 70) if f["n"] in cortos else (45, 52, 56), width=2)
+        img_box = (x + 12, y + 6, x + ancho_c - 12, y + alto_img)
+        if f.get("panel"):
+            d.rounded_rectangle(img_box, radius=10, fill=(14, 30, 22), outline=acento, width=2)
+            d.text((img_box[0] + 16, img_box[1] + 14), f["panel"].get("titulo", "Panel"), fill=(255, 255, 255), font=letra(22, True))
+            for j, item in enumerate(f["panel"].get("items", [])[:5]):
+                d.text((img_box[0] + 22, img_box[1] + 52 + j * 30), f"● {item}"[:44], fill=acento, font=letra(17))
+        elif f.get("clip"):
+            nums = [f["clip"]["plano"], *f["clip"].get("mas", [])]
+            w = (img_box[2] - img_box[0]) // len(nums)
+            for j, n in enumerate(nums):
+                mini = extractor.CACHE / f"{f['clip']['fuente']}_planos" / f"{n:03d}.jpg"
+                if mini.exists():
+                    im = Image.open(mini).convert("RGB")
+                    im = im.resize((w - 2, int((w - 2) * im.height / im.width)))
+                    alto_m = img_box[3] - img_box[1]
+                    if im.height > alto_m:
+                        im = im.crop((0, (im.height - alto_m) // 2, im.width, (im.height - alto_m) // 2 + alto_m))
+                    lienzo.paste(im, (img_box[0] + j * w, img_box[1] + (alto_m - im.height) // 2))
+        else:
+            d.rounded_rectangle(img_box, radius=10, fill=(40, 20, 20))
+            d.text((img_box[0] + 20, img_box[1] + 100), "SIN IMAGEN", fill=(255, 90, 90), font=letra(24, True))
+        if f.get("rotulo"):
+            d.rounded_rectangle((img_box[0] + 8, img_box[3] - 36, img_box[0] + 18 + 11 * len(f["rotulo"]), img_box[3] - 8),
+                                radius=12, fill=(0, 0, 0), outline=(46, 230, 255), width=2)
+            d.text((img_box[0] + 16, img_box[3] - 33), f["rotulo"], fill=(46, 230, 255), font=letra(17, True))
+        nuevo = k == 0 or f["bloque"] != p["frases"][k - 1]["bloque"]
+        cab = f"{f['n']}" + (f" · BLOQUE {f['bloque'] + 1}" if nuevo else "")
+        d.text((x + 16, y + alto_img + 6), cab, fill=acento if nuevo else (150, 160, 160), font=letra(16, True))
+        palabras, lineas, linea = f["texto"].split(), [], ""
+        for w_ in palabras:
+            if len(linea) + len(w_) > 44:
+                lineas.append(linea)
+                linea = w_
+            else:
+                linea = f"{linea} {w_}".strip()
+        lineas.append(linea)
+        for j, l in enumerate(lineas[:4]):
+            d.text((x + 16, y + alto_img + 28 + j * 21), l, fill=(225, 228, 228), font=letra(16))
+        if f["n"] in cortos:
+            c = cortos[f["n"]]
+            d.text((x + ancho_c - 210, y + alto_img + 6), f"{'SE CONGELA' if c['congela'] else 'se estira'}: {c['hay']}/{c['necesita']} s",
+                   fill=(255, 90, 90), font=letra(14, True))
+    destino = carpeta(mid) / "storyboard.jpg"
+    lienzo.save(destino, quality=88)
+    return destino
 
 
 # --- 1 · Guion ----------------------------------------------------------------------------------------------------
@@ -498,7 +599,7 @@ def _tamano(ruta: Path) -> int:
 
 def espacio() -> dict[str, Any]:
     """Cuánto ocupa cada cosa y cuánto se puede liberar sin perder nada que se vea en el panel."""
-    temporales = sum(_tamano(d) for d in raiz().glob("*/render_previa")) + sum(_tamano(d) for d in raiz().glob("*/render_miniatura")) \
+    temporales = sum(_tamano(d) for pat in ("*/render_previa", "*/render_miniatura", "*/cache", "*/cache_previa") for d in raiz().glob(pat)) \
         + sum(f.stat().st_size for d in raiz().glob("*/render") for f in d.glob("*") if f.is_file() and f.name not in ("cuerpo.mp4", "subs.ass"))
     return {"montajes": _tamano(raiz()), "banco": _tamano(extractor.CACHE), "papelera": _tamano(config.PRODUCCIONES / "_papelera"),
             "liberable": temporales}
@@ -508,8 +609,10 @@ def liberar() -> int:
     """Borra solo lo temporal de los renders (trozos ya unidos). El vídeo final, la previa, el Short, la miniatura,
     la voz y lo necesario para rehacer el Short se quedan. Devuelve los bytes liberados."""
     antes = espacio()["liberable"]
-    for d in list(raiz().glob("*/render_previa")) + list(raiz().glob("*/render_miniatura")):
-        shutil.rmtree(d, ignore_errors=True)
+    # (la caché de trozos solo acelera volver a montar: se rehace sola si hace falta)
+    for pat in ("*/render_previa", "*/render_miniatura", "*/cache", "*/cache_previa"):
+        for d in raiz().glob(pat):
+            shutil.rmtree(d, ignore_errors=True)
     for d in raiz().glob("*/render"):
         for f in d.glob("*"):
             if f.is_file() and f.name not in ("cuerpo.mp4", "subs.ass"):
@@ -619,6 +722,8 @@ def _segmentos(fuente_video: Path, ini: float, fin: float, partes: list[tuple[fl
 LENTO_MAX = 1.35   # un plano corto se estira como mucho esto
 ACERCA = 0.06      # cuánto se acerca la cámara a lo largo de un plano (nunca una imagen quieta)
 RESERVA = 0.8      # segundos del mismo plano que van dentro de la tarjeta de un panel o de un cambio de bloque
+CACHE_VERSION = 1  # súbelo si cambia cómo se monta un trozo: la caché vieja deja de valer
+ANIMACION_VERSION = hashlib.sha1(animacion.PLANTILLA.encode("utf-8")).hexdigest()[:12]   # cambia la página → se redibuja
 
 
 def _cadena(meta: dict[str, Any], clip: dict[str, Any], d: float, pausas: list[float] | None = None
@@ -667,6 +772,15 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     trabajo = base / ("render" if final else "render_previa")
     shutil.rmtree(trabajo, ignore_errors=True)
     trabajo.mkdir(parents=True)
+    # Los trozos ya montados se guardan por su huella (todo lo que los define): si una frase no cambia, su trozo
+    # no se vuelve a montar. Cambiar un plano rehace ese plano y los paneles que lo tocan, no el vídeo entero.
+    cache = base / ("cache" if final else "cache_previa")
+    cache.mkdir(exist_ok=True)
+    en_uso: set[Path] = set()
+
+    def huella(*partes: Any) -> str:
+        datos = [CACHE_VERSION, final, ancho, alto, ACERCA, LENTO_MAX, RESERVA, TRANSICION, config.FPS, *partes]
+        return hashlib.sha1(json.dumps(datos, sort_keys=True, default=str, ensure_ascii=False).encode("utf-8")).hexdigest()[:20]
     if final:
         segmentos = [f["texto"] for f in p["frases"]]
         wav = base / "voz.wav"
@@ -754,40 +868,54 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             trozos = []
             t_frase = 0.0
             for j, (c, dur) in enumerate(cadena):   # un trozo por plano elegido
-                trozo = trabajo / f"s{k:03d}_{j}.mp4"
                 origen, base_t = de(c)
                 ini_l, fin_l = c["ini"] - base_t, min(c["fin"] - base_t, medios.duracion(origen))
                 # las tarjetas solo se llevan imagen que sobre (estirando como mucho LENTO_MAX): si no, el plano se
                 # quedaría corto a pantalla completa y se congelaría
                 sobra = max(0.0, (fin_l - ini_l) * LENTO_MAX - dur)
+                d_arranque = min(RESERVA, visible, sobra) if j == 0 and min(RESERVA, visible, sobra) >= 0.3 else 0.0
+                sobra -= d_arranque
+                d_cola = (min(RESERVA, sobra) if j == len(cadena) - 1 and antes_de_animacion and min(RESERVA, sobra) >= 0.3
+                          else 0.0)
+                clave = huella("trozo", meta["url"], meta["desde"], c["ini"], c["fin"], round(dur, 3),
+                               round(d_arranque, 3), round(d_cola, 3), round(fin_l - ini_l, 2))
+                trozo = cache / f"{clave}.mp4"
                 partes = []
-                if j == 0 and min(RESERVA, visible, sobra) >= 0.3:
-                    arranques[previo] = trabajo / f"a{k:03d}.mp4"
-                    partes.append((min(RESERVA, visible, sobra), arranques[previo]))
-                    sobra -= partes[-1][0]
+                if d_arranque:
+                    arranques[previo] = cache / f"{clave}_a.mp4"
+                    partes.append((d_arranque, arranques[previo]))
                 partes.append((dur, trozo))
-                if j == len(cadena) - 1 and antes_de_animacion and min(RESERVA, sobra) >= 0.3:
-                    cola_frase = trabajo / f"c{k:03d}.mp4"
-                    partes.append((min(RESERVA, sobra), cola_frase))
-                _segmentos(origen, ini_l, fin_l, partes, ancho, alto)
+                if d_cola:
+                    cola_frase = cache / f"{clave}_c.mp4"
+                    partes.append((d_cola, cola_frase))
+                if not all(x.exists() for _, x in partes):
+                    _segmentos(origen, ini_l, fin_l, partes, ancho, alto)
+                en_uso.update(x for _, x in partes)
                 trozos.append(trozo)
                 if j:
                     eventos.append((cursor + t_frase, "whoosh", 0.18))   # un roce suave en cada corte
                 t_frase += dur
-            if len(trozos) == 1:
-                trozos[0].replace(seg)
-            else:
-                lista_f = trabajo / f"s{k:03d}.txt"
-                lista_f.write_text("".join(f"file '{x.as_posix()}'\n" for x in trozos), encoding="utf-8")
-                medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista_f), "-c", "copy", str(seg))
-            if f.get("rotulo"):   # rótulo neón abajo a la izquierda los primeros segundos
-                png = _rotulo_png(f["rotulo"], colores[clip["fuente"]], trabajo / f"r{k:03d}.png", escala)
-                con = trabajo / f"s{k:03d}r.mp4"
-                medios.ffmpeg("-i", str(seg), "-loop", "1", "-i", str(png), "-filter_complex",
-                              f"[1:v]format=rgba,fade=t=in:st=0.2:d=0.3:alpha=1,fade=t=out:st={min(3.2, d - 0.4):.2f}:d=0.3:alpha=1[r];"
-                              f"[0:v][r]overlay=x={int(70 * escala)}:y=H-h-{int(150 * escala)}:shortest=1",
-                              "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(con))
-                seg = con
+            seg = cache / f"{huella('frase', [x.name for x in trozos], f.get('rotulo', ''), colores[clip['fuente']], round(d, 3))}.mp4"
+            if len(trozos) == 1 and not f.get("rotulo"):
+                seg = trozos[0]   # un solo plano sin rótulo: el trozo ya es la frase
+            elif not seg.exists():
+                if len(trozos) == 1:
+                    unido = trozos[0]
+                else:
+                    unido = trabajo / f"s{k:03d}.mp4"
+                    lista_f = trabajo / f"s{k:03d}.txt"
+                    lista_f.write_text("".join(f"file '{x.as_posix()}'\n" for x in trozos), encoding="utf-8")
+                    medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista_f), "-c", "copy", str(unido))
+                if f.get("rotulo"):   # rótulo neón abajo a la izquierda los primeros segundos
+                    png = _rotulo_png(f["rotulo"], colores[clip["fuente"]], trabajo / f"r{k:03d}.png", escala)
+                    medios.ffmpeg("-i", str(unido), "-loop", "1", "-i", str(png), "-filter_complex",
+                                  f"[1:v]format=rgba,fade=t=in:st=0.2:d=0.3:alpha=1,fade=t=out:st={min(3.2, d - 0.4):.2f}:d=0.3:alpha=1[r];"
+                                  f"[0:v][r]overlay=x={int(70 * escala)}:y=H-h-{int(150 * escala)}:shortest=1",
+                                  "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(seg))
+                else:
+                    shutil.copyfile(unido, seg)
+            en_uso.add(seg)
+            if f.get("rotulo"):
                 eventos += [(cursor + 0.15, "impacto", 0.55), (cursor + 0.45, "pop", 0.9)]
             if cola_frase:
                 colas[seg] = cola_frase
@@ -798,6 +926,16 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             continue
         avisar("Paneles y transiciones", 76)
         escena, dur = animadas.pop(pieza)
+        siguiente = arranques.get(pieza) or (piezas[k + 1] if k + 1 < len(piezas) and piezas[k + 1] not in animadas else None)
+        clave = huella("animacion", ANIMACION_VERSION, escena, round(dur, 3), piezas[k - 1].name if k > 0 else "",
+                       colas[piezas[k - 1]].name if k > 0 and piezas[k - 1] in colas else "",
+                       siguiente.name if siguiente else "")
+        hecha = cache / f"{clave}.mp4"
+        piezas[k] = hecha
+        en_uso.add(hecha)
+        if hecha.exists():
+            continue
+        pieza = trabajo / pieza.name   # los fotogramas de sus puentes, al lado
         if k > 0:
             escena["entra"] = str(_fotograma(piezas[k - 1], trabajo / f"{pieza.stem}_entra.png", ultimo=True))
             if piezas[k - 1] in colas:   # lo que sigue del plano anterior, al mismo ritmo
@@ -808,7 +946,10 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                 escena["sale_video"] = str(arranques[pieza])
             else:
                 escena["sale"] = str(_fotograma(piezas[k + 1], trabajo / f"{pieza.stem}_sale.png", ultimo=False))
-        animacion.renderizar([escena], dur, pieza, ancho, alto)
+        animacion.renderizar([escena], dur, hecha, ancho, alto)
+    for viejo in cache.iterdir():   # lo que ya no usa este vídeo (planos cambiados) se borra
+        if viejo not in en_uso:
+            viejo.unlink(missing_ok=True)
     pista = musica.elegir(p)   # la canción de la Biblioteca de audio de YouTube (o ninguna: cama suave o nada)
     cancion = musica.ruta(pista["archivo"]) if pista else None
     if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
@@ -931,27 +1072,47 @@ def _musica(p: dict[str, Any]) -> Path | None:
     return musica.ruta(pista["archivo"]) if pista else None
 
 
+def _revisar(mid: str, video: Path, final: bool) -> dict[str, Any]:
+    """La revisión de calidad al terminar (congelados, huecos, subtítulos, volumen): se ve en el panel."""
+    _avisar(mid, "Revisión de calidad", 98)
+    p = cargar(mid)
+    v = p.get("voz") or {}
+    palabras = (v.get("pausas") or v).get("palabras") if final else None
+    r = calidad.revisar(video, palabras, carpeta(mid) / "render" / "voz_pausas.wav" if final else None)
+    r["hecha"] = time.strftime("%Y-%m-%d %H:%M")
+    modificar(mid, lambda q: q.setdefault("calidad", {}).update({"final" if final else "previa": r}))
+    return r
+
+
+def _hacer_previa(mid: str) -> None:
+    destino = _render(mid, False, lambda f, n: _avisar(mid, f, n))
+    modificar(mid, lambda p: p.update(previa=destino.name))
+    _revisar(mid, destino, final=False)
+
+
 def previa(mid: str) -> None:
-    def fase():
-        destino = _render(mid, False, lambda f, n: _avisar(mid, f, n))
-        modificar(mid, lambda p: p.update(previa=destino.name))
-    _en_fondo(mid, "Previa", fase)
+    _en_fondo(mid, "Previa", lambda: _hacer_previa(mid))
 
 
 def montar_final(mid: str) -> None:
-    def fase():
-        destino = _render(mid, True, lambda f, n: _avisar(mid, f, n))
-        modificar(mid, lambda p: p.update(final={"archivo": destino.name, "hecho": time.strftime("%Y-%m-%d %H:%M")}))
-        from . import linea   # la línea de tiempo por pistas, junto al vídeo (para abrirla en otro editor o revisarla)
-        q = cargar(mid)
-        (carpeta(mid) / "linea_de_tiempo.json").write_text(
-            json.dumps(linea.desde_montaje(q, {fid: fuente(fid) for fid in q["fuentes"]}), ensure_ascii=False, indent=1), encoding="utf-8")
-        _avisar(mid, "Textos para publicar", 97)
-        try:
-            hacer_textos(mid)
-        except Exception as e:  # noqa: BLE001 - el vídeo ya está; los textos se pueden repetir
-            logger.warning("Textos: %s", e)
-    _en_fondo(mid, "Vídeo final", fase)
+    _en_fondo(mid, "Vídeo final", lambda: _hacer_final(mid))
+
+
+def _hacer_final(mid: str) -> None:
+    destino = _render(mid, True, lambda f, n: _avisar(mid, f, n))
+    modificar(mid, lambda p: p.update(final={"archivo": destino.name, "hecho": time.strftime("%Y-%m-%d %H:%M")}))
+    from . import linea   # la línea de tiempo por pistas, junto al vídeo (para abrirla en otro editor o revisarla)
+    q = cargar(mid)
+    (carpeta(mid) / "linea_de_tiempo.json").write_text(
+        json.dumps(linea.desde_montaje(q, {fid: fuente(fid) for fid in q["fuentes"]}), ensure_ascii=False, indent=1), encoding="utf-8")
+    v = q.get("voz") or {}   # los subtítulos aparte, para subirlos a YouTube
+    subtitulos.srt((v.get("pausas") or v).get("palabras") or [], carpeta(mid) / "subtitulos.srt")
+    _avisar(mid, "Textos para publicar", 96)
+    try:
+        hacer_textos(mid)
+    except Exception as e:  # noqa: BLE001 - el vídeo ya está; los textos se pueden repetir
+        logger.warning("Textos: %s", e)
+    _revisar(mid, destino, final=True)
 
 
 # --- Short vertical sacado del 16:9 ---------------------------------------------------------------------------------
@@ -963,30 +1124,67 @@ def montar_short(mid: str, desde: float, hasta: float) -> None:
         raise ValueError("Primero monta el vídeo final.")
     if not 5 <= hasta - desde <= 60:
         raise ValueError("Un Short dura entre 5 y 60 segundos.")
+    _en_fondo(mid, "Short", lambda: _hacer_short(mid, desde, hasta))
+
+
+def _hacer_short(mid: str, desde: float, hasta: float) -> None:
+    q = cargar(mid)
+    base = carpeta(mid)
+    trabajo = base / "render_short"
+    shutil.rmtree(trabajo, ignore_errors=True)
+    trabajo.mkdir()
+    _avisar(mid, "Encuadrando en vertical", 20)
+    # el vídeo final ya lleva subtítulos horizontales: se parte del cuerpo sin subtítulos + la misma mezcla
+    palabras = [{**w, "ini": w["ini"] - desde, "fin": w["fin"] - desde}
+                for w in (q["voz"].get("pausas") or q["voz"])["palabras"]
+                if desde <= w["ini"] < hasta]
+    ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920, {"posicion": "abajo"})
+    medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
+                  "-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / q["final"]["archivo"]),
+                  "-filter_complex",
+                  "[0:v]split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+                  "gblur=sigma=30,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
+                  f"[fondo][centro]overlay=0:(H-h)/2-120,ass={ass.name}[v]",
+                  "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                  "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+                  str(base / "short_9x16.mp4"), cwd=trabajo)
+    modificar(mid, lambda r: r.update(short={"archivo": "short_9x16.mp4", "desde": desde, "hasta": hasta}))
+
+
+def tramo_short(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
+    """El Short automático: desde el principio (el gancho) hasta el final de la frase más cercana a `maximo` s."""
+    tiempos = (p.get("voz") or {}).get("pausas", {}).get("tiempos") or _tiempos_estimados(p)
+    fin = max((b for _a, b in tiempos if b + 0.4 <= maximo), default=min(maximo, tiempos[-1][1] if tiempos else maximo))
+    return 0.0, round(max(5.0, fin + 0.4), 2)
+
+
+def automatico(mid: str, pago_ok: bool = False) -> None:
+    """Con todas las frases con imagen: storyboard → vídeo final (voz, subtítulos, música, textos, .srt y
+    revisión) → Short → miniatura, sin pararse. Una voz de pago solo con «pago_ok» (el sí explícito del autor)."""
+    p = cargar(mid)
+    if not p["frases"] or any(not (f.get("clip") or f.get("panel")) for f in p["frases"]):
+        raise ValueError("Antes de hacerlo todo, cada frase necesita su imagen o su panel (paso 3).")
+    if coste_voz(p) > 0 and not pago_ok:
+        raise ValueError(f"La voz {p['voz_nombre']} es de pago (≈{coste_voz(p):.2f} $): confírmalo o elige una gratis.")
 
     def fase():
+        _avisar(mid, "Storyboard", 2)
+        storyboard(mid)
+        _hacer_final(mid)
         q = cargar(mid)
-        base = carpeta(mid)
-        trabajo = base / "render_short"
-        shutil.rmtree(trabajo, ignore_errors=True)
-        trabajo.mkdir()
-        _avisar(mid, "Encuadrando en vertical", 20)
-        # el vídeo final ya lleva subtítulos horizontales: se parte del cuerpo sin subtítulos + la misma mezcla
-        palabras = [{**w, "ini": w["ini"] - desde, "fin": w["fin"] - desde}
-                    for w in (q["voz"].get("pausas") or q["voz"])["palabras"]
-                    if desde <= w["ini"] < hasta]
-        ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920, {"posicion": "abajo"})
-        medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
-                      "-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / q["final"]["archivo"]),
-                      "-filter_complex",
-                      "[0:v]split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
-                      "gblur=sigma=30,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
-                      f"[fondo][centro]overlay=0:(H-h)/2-120,ass={ass.name}[v]",
-                      "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-                      "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
-                      str(base / "short_9x16.mp4"), cwd=trabajo)
-        modificar(mid, lambda r: r.update(short={"archivo": "short_9x16.mp4", "desde": desde, "hasta": hasta}))
-    _en_fondo(mid, "Short", fase)
+        desde, hasta = tramo_short(q)
+        _avisar(mid, "Short vertical", 99)
+        _hacer_short(mid, desde, hasta)
+        con_imagen = [f["clip"] for f in q["frases"] if f.get("clip")]
+        if con_imagen:
+            _avisar(mid, "Miniatura", 99)
+            texto = ((q.get("textos") or {}).get("texto_miniatura") or q["titulo"])[:40]
+            fotos = [con_imagen[0], con_imagen[len(con_imagen) // 2]] if len(con_imagen) > 1 else con_imagen
+            try:
+                miniatura(mid, texto, fotos)
+            except Exception as e:  # noqa: BLE001 - el vídeo y el Short ya están; la miniatura se rehace a mano
+                logger.warning("Miniatura automática: %s", e)
+    _en_fondo(mid, "Automático", fase)
 
 
 # --- Textos para publicar y miniatura -------------------------------------------------------------------------------

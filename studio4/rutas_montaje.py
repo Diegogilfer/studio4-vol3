@@ -17,7 +17,7 @@ from typing import Any
 
 from . import canales, extractor, linea, montaje, musica
 
-MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav)$")
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
 
 
 class NoExiste(Exception):
@@ -50,7 +50,7 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         p = montaje.cargar(q("id"))
         elegida = musica.elegir(p)
         return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
-                        "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p),
+                        "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p), "resumen": montaje.resumen(p),
                         "musica": {"modo": p.get("musica") or musica.AUTO, "elegida": elegida["titulo"] if elegida else "",
                                    "pistas": [{"archivo": x["archivo"], "titulo": x["titulo"], "artista": x["artista"],
                                                "animo": x["animo"]} for x in musica.catalogo()]}}
@@ -92,6 +92,9 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/musica/carpeta":
         os.startfile(str(musica.carpeta()))  # noqa: S606 - el Explorador en tu PC
         return "json", {"ok": True}
+    if ruta == "/api/m/storyboard":   # la hoja para aprobar el montaje (se hace en segundos)
+        montaje.storyboard(mid)
+        return "json", {"ok": True, "url": f"/m/{mid}/storyboard.jpg"}
     if ruta == "/api/m/textos":
         return "json", {"ok": True, "textos": montaje.hacer_textos(mid)}
     acciones = {
@@ -105,6 +108,7 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         "/api/m/voz": lambda: montaje.elegir_voz(mid, str(d.get("proveedor", "")), str(d.get("nombre", ""))),
         "/api/m/musica/elegir": lambda: montaje.elegir_musica(mid, str(d.get("musica", ""))),
         "/api/m/final": lambda: montaje.montar_final(mid),
+        "/api/m/automatico": lambda: montaje.automatico(mid, bool(d.get("pago_ok"))),
         "/api/m/short": lambda: montaje.montar_short(mid, float(d.get("desde", 0)), float(d.get("hasta", 0))),
         "/api/m/miniatura": lambda: montaje.miniatura(mid, str(d.get("texto", ""))[:40], list(d.get("fotos") or [])),
         "/api/m/carpeta": lambda: os.startfile(str(montaje.carpeta(mid))),  # noqa: S606 - el Explorador en tu PC

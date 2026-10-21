@@ -2385,3 +2385,54 @@ def test_musica_cataloga_etiqueta_y_elige_por_animo(aislado):
     assert musica.ruta("../.env") is None and musica.ruta("Sol de verano.mp3")
     (carpeta / "Sol de verano.mp3").unlink()
     assert [p["archivo"] for p in musica.catalogo()] == ["Noche en Coney - Artista Uno.mp3"]   # se olvida la borrada
+
+
+def test_montaje_rehace_solo_lo_que_cambia(aislado, tmp_path, monkeypatch):
+    """Volver a montar sin cambios no monta ningún plano; cambiar el plano de una frase monta solo esa frase."""
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("Prueba", "Primera frase del vídeo con seis palabras. Segunda frase también con seis palabras.")
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.asignar(mid, 1, "fuenteA", 2)
+    montaje.asignar(mid, 2, "fuenteA", 3)
+    llamadas, original = [], montaje._segmentos
+
+    def contar(*a, **k):
+        llamadas.append(a[1])
+        return original(*a, **k)
+    monkeypatch.setattr(montaje, "_segmentos", contar)
+    montaje._render(mid, False, lambda *_: None)
+    assert len(llamadas) == 2
+    llamadas.clear()
+    montaje._render(mid, False, lambda *_: None)
+    assert llamadas == []   # nada cambió: nada se vuelve a montar
+    montaje.asignar(mid, 2, "fuenteA", 4)
+    llamadas.clear()
+    montaje._render(mid, False, lambda *_: None)
+    assert llamadas == [6.0]   # solo la frase 2, con su plano nuevo (el 4 empieza en el segundo 6)
+    assert medios.duracion(montaje.carpeta(mid) / "previa.mp4") > 3
+    assert len(list((montaje.carpeta(mid) / "cache_previa").iterdir())) == 2   # el trozo viejo se borró
+
+
+def test_montaje_resumen_storyboard_srt_y_automatico_con_guardas(aislado, tmp_path, monkeypatch):
+    """El resumen cuenta escenas y capítulos; el storyboard sale en segundos; el .srt tiene sus tiempos; el modo
+    automático no arranca con frases sin imagen ni con una voz de pago sin el sí del autor."""
+    from studio4 import montaje, subtitulos
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("Prueba", "Primera frase del vídeo con seis palabras.\n\nSegunda frase también con seis palabras.")
+    montaje.usar_fuente(mid, "fuenteA")
+    r = montaje.resumen(montaje.cargar(mid))
+    assert (r["frases"], r["capitulos"], r["con_imagen"]) == (2, 2, 0) and r["estimada"] and r["duracion"] > 3
+    with pytest.raises(ValueError):
+        montaje.automatico(mid)   # faltan imágenes
+    montaje.asignar(mid, 1, "fuenteA", 2)
+    montaje.asignar(mid, 2, "fuenteA", 3, panel=None)
+    montaje.asignar(mid, 2, "", 0, panel={"titulo": "Datos", "items": ["Vice City"]})
+    assert montaje.storyboard(mid).stat().st_size > 10_000
+    monkeypatch.setattr(montaje, "coste_voz", lambda p: 0.4)
+    with pytest.raises(ValueError, match="de pago"):
+        montaje.automatico(mid)
+    assert montaje.tramo_short({"voz": {"pausas": {"tiempos": [(0.25, 30), (30.3, 50), (50.3, 70)]}}, "frases": []}) == (0.0, 50.4)
+    srt = subtitulos.srt([{"palabra": w, "ini": k * 0.5, "fin": k * 0.5 + 0.4} for k, w in enumerate("Hola a todos. Esto es FourLevel.".split())],
+                         tmp_path / "s.srt").read_text(encoding="utf-8")
+    assert srt.startswith("1\n00:00:00,000 --> ") and "Hola a todos." in srt and "\n2\n" in srt
