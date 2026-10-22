@@ -2496,3 +2496,12 @@ def test_montaje_imagen_en_una_frase(aislado, tmp_path, monkeypatch):
     assert montaje.storyboard(mid).exists()
     montaje.asignar(mid, 2, "fuenteA", 3)   # un plano quita la imagen
     assert "imagen" not in montaje.cargar(mid)["frases"][1]
+
+
+def test_enlace_de_la_herramienta_de_flow(aislado):
+    from studio4 import escaleta
+    assert escaleta.herramienta() == ""
+    assert escaleta.guardar_herramienta(" https://labs.google/fx/tools/flow/tool/abc ") == "https://labs.google/fx/tools/flow/tool/abc"
+    assert escaleta.herramienta() == "https://labs.google/fx/tools/flow/tool/abc"
+    with pytest.raises(ValueError):
+        escaleta.guardar_herramienta("https://otra-web.com/x")

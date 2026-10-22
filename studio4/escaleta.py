@@ -94,6 +94,27 @@ def exportar(mid: str, estilo: str = ESTILO, con_ia: bool = True) -> dict[str, A
     return escaleta
 
 
+def _ajustes() -> Path:
+    from . import config
+    return config.PRODUCCIONES / "_flow.json"
+
+
+def herramienta() -> str:
+    """El enlace de tu herramienta de Google Flow (el de compartir), para abrirla desde el panel."""
+    try:
+        return json.loads(_ajustes().read_text(encoding="utf-8")).get("enlace", "")
+    except (OSError, ValueError):
+        return ""
+
+
+def guardar_herramienta(enlace: str) -> str:
+    enlace = enlace.strip()
+    if enlace and not re.match(r"^https://([\w-]+\.)*(google\.com|labs\.google|flow\.google)/", enlace):
+        raise ValueError("Pega el enlace de tu herramienta de Google Flow (empieza por https://… de Google).")
+    _ajustes().write_text(json.dumps({"enlace": enlace}, ensure_ascii=False), encoding="utf-8")
+    return enlace
+
+
 # --- Importar el paquete que exporta la herramienta -----------------------------------------------------------------
 def carpeta_importar() -> Path:
     c = carpetas.RAIZ_USUARIO / "Flow" / "Importar"

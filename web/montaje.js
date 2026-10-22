@@ -251,8 +251,25 @@ async function vistaHerramientas() {
       <a class="herramienta" href="/clasico#crear"><svg><use href="#i-crear"/></svg><b>Pegar guiones de Agron</b><small>Biblioteca y plan del mes (panel clásico)</small></a>
       <a class="herramienta" href="/clasico"><svg><use href="#i-render"/></svg><b>Panel clásico</b><small>Todo lo de antes, tal cual</small></a>
     </div>
+    <section class="mantenimiento"><span class="etiqueta">Tu herramienta de Google Flow</span>
+      <p class="meta">Pega aquí el enlace de compartir de tu herramienta «Studio 4 · Guion a vídeo»: así la abres con un clic
+        desde cada vídeo (paso Material).</p>
+      <div class="fila"><input class="campo" id="flow-enlace" placeholder="https://labs.google/fx/…">
+        <button class="boton" type="button" id="flow-guardar">Guardar</button><a class="boton" id="flow-abrir" target="_blank" rel="noopener" hidden>Abrir</a></div>
+    </section>
     <div id="conexiones"></div>
     <div id="mantenimiento"></div>`;
+  seguro("/api/m/flow").then((r) => {
+    if (!r || !$("flow-enlace")) return;
+    $("flow-enlace").value = r.enlace || "";
+    if (r.enlace) { $("flow-abrir").href = r.enlace; $("flow-abrir").hidden = false; }
+  });
+  $("flow-guardar").onclick = async () => {
+    try {
+      const r = await api("/api/m/flow/enlace", { enlace: $("flow-enlace").value });
+      $("flow-abrir").href = r.enlace; $("flow-abrir").hidden = !r.enlace; $("flow-guardar").textContent = "Guardado";
+    } catch (e) { aviso(e); }
+  };
   seguro("/api/m/conexiones").then((c) => {
     if (!c || !$("conexiones")) return;
     $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Conexiones (las mismas claves del proyecto anterior)</span>
@@ -410,6 +427,7 @@ function pasoMaterial(v) {
       <p class="meta">1) Saca la escaleta y pégala en tu herramienta «Studio 4 · Guion a vídeo». 2) En Flow, genera y pulsa
         «Exportar para Studio 4». 3) Deja el ZIP (o las escenas) en la carpeta de importar y pulsa «Importar de Flow».</p>
       <div class="fila">
+        <a class="boton" id="abrir-flow" target="_blank" rel="noopener" hidden>Abrir mi herramienta</a>
         <button class="boton" type="button" id="escaleta-flow">Escaleta para Flow</button>
         <button class="boton" type="button" id="carpeta-flow">Abrir carpeta de importar</button>
         <button class="primario" type="button" id="importar-flow">Importar de Flow</button>
@@ -607,6 +625,7 @@ function enlazarVideo(p) {
     };
     $("copiar-escaleta").onclick = () => navigator.clipboard.writeText($("escaleta-json").value).then(() => { $("copiar-escaleta").textContent = "Copiada"; });
     $("carpeta-flow").onclick = () => api("/api/m/flow/carpeta", {}).catch(aviso);
+    seguro("/api/m/flow").then((r) => { if (r?.enlace && $("abrir-flow")) { $("abrir-flow").href = r.enlace; $("abrir-flow").hidden = false; } });
     $("importar-flow").onclick = async (ev) => {
       ev.target.disabled = true; ev.target.textContent = "Importando…";
       try {

@@ -38,6 +38,8 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         if not f:
             raise NoExiste(ruta)
         return "archivo", f
+    if ruta == "/api/m/flow":   # el enlace de tu herramienta de Google Flow
+        return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
@@ -113,6 +115,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         return "json", {"ok": True, "escaleta": escaleta.exportar(mid, str(d.get("estilo") or escaleta.ESTILO), d.get("con_ia", True) is not False)}
     if ruta == "/api/m/importar-flow":   # el paquete que exporta la herramienta → fuente del vídeo
         return "json", {"ok": True, **escaleta.importar(mid, str(d["origen"]) if d.get("origen") else None)}
+    if ruta == "/api/m/flow/enlace":
+        return "json", {"ok": True, "enlace": escaleta.guardar_herramienta(str(d.get("enlace", "")))}
     if ruta == "/api/m/flow/carpeta":
         os.startfile(str(escaleta.carpeta_importar()))  # noqa: S606 - el Explorador en tu PC
         return "json", {"ok": True}
