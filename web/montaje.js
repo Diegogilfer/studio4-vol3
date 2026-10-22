@@ -348,8 +348,10 @@ function pintarPistas(m) {
 // ============================================================ Un vídeo, paso a paso
 async function cargarVideo(id) {
   datos = await api(`/api/m/ver?id=${encodeURIComponent(id)}`);
-  const { trabajo, ...resto } = datos.video;
-  const nueva = JSON.stringify([resto, Object.keys(datos.fuentes), pasoVisto]);
+  // cada aviso de progreso cambia «actualizado»: si contara, el panel se redibujaba entero (imágenes y
+  // reproductores) cada 1,5 s mientras trabaja. Se redibuja solo si cambia algo de verdad o al acabar el trabajo.
+  const { trabajo, actualizado, ...resto } = datos.video;
+  const nueva = JSON.stringify([resto, Object.keys(datos.fuentes), pasoVisto, !!trabajo?.ocupado]);
   pintarTrabajo(trabajo);
   const escribiendo = document.activeElement && $("vista").contains(document.activeElement) && /INPUT|TEXTAREA/.test(document.activeElement.tagName);
   if (nueva !== firma && !(escribiendo && firma)) { firma = nueva; pintarVideo(); }
@@ -439,7 +441,7 @@ function pasoMaterial(v) {
       </div>
     </div>
     <div class="fuentes">${v.fuentes.map((fid) => { const f = datos.fuentes[fid]; return `
-      <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt=""><div><b>${esc(f.nombre)}</b>
+      <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt="" loading="lazy"><div><b>${esc(f.nombre)}</b>
         <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
     <div id="banco"></div>
   </section>`;

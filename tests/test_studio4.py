@@ -2555,3 +2555,9 @@ def test_montaje_busca_material_del_tema_para_anadirlo(aislado, monkeypatch):
     p = montaje.cargar(mid)
     assert not p["trabajo"]["error"] and p["material_sugerido"][0]["videos"][0]["id"] == "b1"
     assert "sugeridoHTML" in (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
+
+
+def test_panel_no_se_redibuja_entero_con_cada_aviso_de_progreso():
+    """Los avisos de progreso cambian «actualizado»; el panel no debe volver a pintar imágenes y vídeos por eso."""
+    js = (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
+    assert "const { trabajo, actualizado, ...resto } = datos.video;" in js

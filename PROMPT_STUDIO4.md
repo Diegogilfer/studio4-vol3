@@ -25,7 +25,7 @@ producción es independiente (borrarla la desvincula; va a `producciones/_papele
 | # | Paso | Qué hace | Quién lo hace (módulo) |
 |---|---|---|---|
 | 1 | Investigación | Dossier con hechos, fechas, nombres, "lo que casi nadie sabe", dudas. Primero las **fuentes de confianza del canal** (p. ej. gtabase.com), luego Wikipedia ES/EN; YouTube aporta qué existe ya sobre el tema y qué funciona en tu canal | `investigacion.py`, `fuentes.py` (respeta robots.txt, 1 petición/s), `youtube.py`, `tendencias.py` |
-| 2 | Guion | Texto de la voz en off con las reglas del canal | `guion.py` → DeepSeek (`deepseek-v4-flash`); si falla, Gemini |
+| 2 | Guion | Texto de la voz en off con las reglas del canal | `guion.py` → DeepSeek (`deepseek-flash`); si falla, Gemini |
 | 3 | Escenas | Gemini divide el guion en escenas: texto de voz, plano, cámara, acción, personajes con ficha fija, vídeo o imagen, segundos (máx. 8 por clip) | `director.py` |
 | 4 | Voz | Gemini TTS (voz por defecto «Charon»), tiempos de cada escena y palabra | `voz.py` (ElevenLabs opcional) |
 | 5 | Visuales | Cada escena necesita un clip o imagen. Opciones: **Google Flow a mano** con la extensión, subir tus archivos, fotos de archivo de dominio público (Wikimedia Commons), tarjetas de diseño gratis o API de pago (fal.ai / Google con facturación) | `flow.py` + `extension-flow/`, `archivo.py`, `tarjetas.py`, `visuales_api.py` |

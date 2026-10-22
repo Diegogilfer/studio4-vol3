@@ -29,7 +29,7 @@ Estudio de vídeo local (Windows) que convierte una idea, un guion o un vídeo e
 | Paso | Servicio | Coste |
 |---|---|---|
 | Investigación, escenas, entregas | Gemini API (AI Studio), nivel gratis + Wikipedia + YouTube Data API v3 | 0 $ |
-| Guion | DeepSeek (`deepseek-v4-flash`) o Gemini gratis (`STUDIO4_SIN_PAGO=1`) | Céntimos o 0 $ |
+| Guion | DeepSeek (`deepseek-flash`) o Gemini gratis (`STUDIO4_SIN_PAGO=1`) | Céntimos o 0 $ |
 | Voz | Gemini TTS, nivel gratis (ElevenLabs opcional) | 0 $ |
 | Visuales gratis | Google Flow en el navegador (con la extensión), tarjetas de diseño (Edge headless) y fotos de dominio público (Wikimedia Commons) | 0 $ / tu suscripción |
 | Visuales por API (opcional) | fal.ai o Google Imagen/Veo con tope de gasto por producción (`Presupuesto`) | Prepago con tope |
