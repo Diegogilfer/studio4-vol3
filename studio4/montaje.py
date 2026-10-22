@@ -315,6 +315,7 @@ def desde_idea(n: int) -> str:
     from . import fuentes as fuentes_web
     from . import guion as guionista
     from . import ideas, investigacion
+    from . import material as materiales
     cid = canales.activo()["id"]
     lista = ideas.diarias(cid).get("ideas") or []
     if not 0 <= n < len(lista):
@@ -334,6 +335,11 @@ def desde_idea(n: int) -> str:
                     dossier["dossier"] = f"DE TUS FUENTES DE CONFIANZA:\n{extra['texto']}\n\n" + dossier.get("dossier", "")
             except Exception as e:  # noqa: BLE001 - sin sus fuentes el guion sale igual
                 logger.warning("Fuentes del canal: %s", e)
+        _avisar(mid, "Buscando el material real del tema", 50)   # el guion sale de donde salen las imágenes
+        inv = materiales.inventario(idea["idea"], dossier.get("dossier", ""), produccion=mid)
+        modificar(mid, lambda p: p.update(material_sugerido=inv))
+        if hay := materiales.para_guion(inv):
+            dossier["dossier"] = f"{hay}\n\n" + dossier.get("dossier", "")
         _avisar(mid, "Escribiendo el guion", 60)
         escrito = guionista.escribir(idea["idea"], dossier.get("dossier", ""), {"largo": 300}, produccion=mid,
                                      referencias=idea.get("texto", ""), identidad=guionista.identidad_del_canal(canales.obtener(cid)))
@@ -489,6 +495,19 @@ def anadir_fuente(mid: str, url: str, desde: float | None = None, hasta: float |
         meta = preparar_fuente(url, desde, hasta, nombre, avisar=lambda f, n: _avisar(mid, f, n))
         modificar(mid, lambda p: p["fuentes"].append(meta["id"]) if meta["id"] not in p["fuentes"] else None)
     _en_fondo(mid, "Material", fase)
+
+
+def buscar_material(mid: str) -> None:
+    """El material real que existe para el tema del vídeo (tráilers oficiales y gameplay sin comentario), para
+    añadirlo con un clic. Mira el título y el guion: así se ve también si el guion pide algo que no hay."""
+    from . import material as materiales
+
+    def fase():
+        p = cargar(mid)
+        _avisar(mid, "Buscando el material real del tema", 20)
+        inv = materiales.inventario(p["titulo"], p.get("guion", ""), produccion=mid)
+        modificar(mid, lambda q: q.update(material_sugerido=inv))
+    _en_fondo(mid, "Buscar material", fase)
 
 
 def usar_fuente(mid: str, fid: str) -> None:

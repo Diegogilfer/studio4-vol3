@@ -18,6 +18,13 @@ VERDAD = [
     "Nada de emojis dentro de los guiones.",
 ]
 
+# El guion sale de donde salen las imágenes: verdadero y que se pueda enseñar (informativo y entretenido)
+MATERIAL = [
+    "Antes de escribir, mira qué material existe del tema (tráilers oficiales, gameplay sin comentario, imágenes de"
+    " webs oficiales o con licencia libre): solo se cuenta lo que se puede enseñar con ese material, y cada frase tiene un clip o una imagen real que la muestre.",
+    "Si una parte es inventada o especulativa, se dice («imaginen…», «lo que pudo ser») y aun así habla de cosas de las que hay imágenes.",
+]
+
 FORMA = [
     "Primera frase con un dato fuerte; cada nombre que el público no conozca se presenta.",
     "Frases cortas (cada ~18 palabras se muestra con una captura de 8 segundos).",
@@ -31,6 +38,7 @@ CORTO = ("CORTO: trata una sola cosa, con su propio gancho, contada completa par
 
 CONTROL = [
     "Datos verificables; lo no confirmado, marcado como rumor.",
+    "Cada frase tiene un clip o una imagen real que la muestre (y está en el plan de material).",
     "Primera frase con un dato fuerte; nadie se pierde.",
     'Español latino ("ustedes"), primera persona, frases cortas.',
     "Cada ~18 palabras se puede mostrar con una captura del juego.",
@@ -40,7 +48,7 @@ CONTROL = [
 
 def reglas() -> list[str]:
     """Todas las reglas, una por línea (las mismas que lleva el prompt del asistente por chat)."""
-    return [IDIOMA, *VERDAD, *FORMA, LARGO, CORTO]
+    return [IDIOMA, *VERDAD, *MATERIAL, *FORMA, LARGO, CORTO]
 
 
 def para_sistema() -> str:

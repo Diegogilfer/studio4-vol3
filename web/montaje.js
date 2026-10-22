@@ -422,6 +422,7 @@ function pasoMaterial(v) {
       <button class="primario" type="submit">Añadir</button>
     </form>
     <p class="meta">En un gameplay de horas, pon desde y hasta (el capítulo de la misión): así solo se baja ese tramo.</p>
+    ${sugeridoHTML(v)}
     <div class="flow-caja">
       <span class="etiqueta">Escenas con IA · tu herramienta de Google Flow</span>
       <p class="meta">1) Saca la escaleta y pégala en tu herramienta «Studio 4 · Guion a vídeo». 2) En Flow, genera y pulsa
@@ -442,6 +443,27 @@ function pasoMaterial(v) {
         <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
     <div id="banco"></div>
   </section>`;
+}
+
+function sugeridoHTML(v) {
+  const usadas = new Set(v.fuentes.map((fid) => datos.fuentes[fid]?.url).filter(Boolean));
+  const escenas = (v.material_sugerido || []).map((e) => `
+    <div class="sugerida"><b>${esc([e.juego, e.que].filter(Boolean).join(" · "))}</b>
+      ${e.videos.length ? e.videos.map((x) => `
+        <div class="sugerido"><img src="https://i.ytimg.com/vi/${esc(x.id)}/mqdefault.jpg" alt="" loading="lazy">
+          <div><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.titulo)}</a>
+            <small class="meta">${esc(x.canal)} · ${reloj(x.duracion)}</small></div>
+          ${usadas.has(x.url) ? `<span class="meta">Añadido</span>`
+            : `<button class="boton" type="button" data-sugerido="${esc(x.url)}">Añadir</button>`}</div>`).join("")
+        : `<p class="meta">No hay material de esto: mejor quitarlo del guion o contarlo en un panel.</p>`}
+    </div>`).join("");
+  return `<div class="sugerido-caja">
+    <span class="etiqueta">Material real del tema</span>
+    <p class="meta">Tráilers oficiales y gameplay sin comentario de los juegos de los que habla el guion. Nada de vídeos
+      de análisis o reacciones de otros canales. Si algo del guion no tiene material, no se cuenta.</p>
+    ${escenas}
+    <div class="fila"><button class="boton" type="button" id="buscar-material">${v.material_sugerido ? "Buscar otra vez" : "Buscar material del tema"}</button></div>
+  </div>`;
 }
 
 function pasoMontaje(v, conClip) {
@@ -610,6 +632,10 @@ function enlazarVideo(p) {
       enviar("/api/m/fuente", { url: $("m-url").value, desde: segundos($("m-desde").value), hasta: segundos($("m-hasta").value) });
     };
     pintarBanco();
+    $("buscar-material").onclick = () => enviar("/api/m/material/buscar");
+    document.querySelectorAll("[data-sugerido]").forEach((b) => {
+      b.onclick = () => { b.disabled = true; b.textContent = "Añadiendo…"; enviar("/api/m/fuente", { url: b.dataset.sugerido }); };
+    });
   }
   if (p === 2) {
     $("escaleta-flow").onclick = async (ev) => {

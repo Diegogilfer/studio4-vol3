@@ -78,6 +78,8 @@ PASO 2 (cuando yo escriba "siguiente"): entrega el siguiente tema como un PAQUET
     Cada corto trata una sola cosa, con su propio gancho, contada completa para quien no sabe nada, y
     termina invitando al vídeo largo.
   En todos:
+  - Antes de escribir, mira qué material existe del tema (tráilers oficiales, gameplay sin comentario, imágenes de webs oficiales o con licencia libre): solo se cuenta lo que se puede enseñar con ese material, y cada frase tiene un clip o una imagen real que la muestre.
+  - Si una parte es inventada o especulativa, se dice («imaginen…», «lo que pudo ser») y aun así habla de cosas de las que hay imágenes.
   - Primera frase con un dato fuerte; cada nombre que el público no conozca se presenta.
   - Frases cortas (cada ~18 palabras se muestra con una captura de 8 segundos).
 
@@ -102,8 +104,12 @@ FUENTES: una dirección completa por línea (https://…) y, a continuación, en
 de ella. Usa las páginas concretas, no la portada: p. ej. https://www.gtabase.com/gta-6/weapons/ y
 https://www.gtabase.com/gta-6/vehicles/ (Studio 4 saca de esas mismas páginas las imágenes reales del vídeo),
 https://www.rockstargames.com/VI y la Wikipedia del juego.
+MATERIAL: por cada bloque del guion largo, qué lo enseña: tráiler oficial o gameplay sin comentario (título y
+enlace de YouTube, y si puedes el minuto), o imagen de una web oficial o con licencia libre. Nunca vídeos de análisis
+de otros canales. Si de algo no hay material, quítalo del guion o conviértelo en un dato para un panel.
 CONTROL DE CALIDAD (marca cada punto; si alguno falla, reescribe antes de entregar):
 [ ] Datos verificables; lo no confirmado, marcado como rumor.
+[ ] Cada frase tiene un clip o una imagen real que la muestre (y está en el plan de material).
 [ ] Primera frase con un dato fuerte; nadie se pierde.
 [ ] Español latino ("ustedes"), primera persona, frases cortas.
 [ ] Cada ~18 palabras se puede mostrar con una captura del juego.

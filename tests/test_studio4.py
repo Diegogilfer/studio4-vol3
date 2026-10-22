@@ -2505,3 +2505,53 @@ def test_enlace_de_la_herramienta_de_flow(aislado):
     assert escaleta.herramienta() == "https://labs.google/fx/tools/flow/tool/abc"
     with pytest.raises(ValueError):
         escaleta.guardar_herramienta("https://otra-web.com/x")
+
+
+def test_material_solo_original_y_nunca_el_trabajo_de_otros_creadores():
+    from studio4 import material
+    bien = [("Grand Theft Auto VI Trailer 2", "Rockstar Games", 167),
+            ("The Warriors - FULL GAME - No Commentary", "SourceSpy91", 25399),
+            ("Grand Theft Auto VI - Tráiler de lanzamiento", "Rockstar Games España", 91),
+            ("GTA San Andreas Burger Shot gameplay sin comentarios", "Alguien", 600)]
+    mal = [("MI REACCIÓN AL TRÁILER 2 DE GTA VI", "Otro", 12343), ("500 DETALLES de GTA 6 gameplay", "Otro", 900),
+           ("GTA 6 trailer analysis", "Otro", 700), ("The Rockstar Classic That Started It All For Me: The Warriors gameplay", "Otro", 2540),
+           ("GTA 6 trailer #shorts", "Otro", 20), ("Mi vlog de hoy", "Otro", 600), ("Top 10 GTA 6 trailer secrets", "Otro", 600)]
+    assert all(material.apto({"titulo": t, "canal": c, "duracion": d}) for t, c, d in bien)
+    assert not any(material.apto({"titulo": t, "canal": c, "duracion": d}) for t, c, d in mal)
+    oficial = material.puntos({"titulo": "Grand Theft Auto V: The Official Trailer", "canal": "Rockstar Games"})
+    movil = material.puntos({"titulo": "GTA San Andreas Mobile gameplay", "canal": "Alguien"})
+    assert oficial > movil
+
+
+def test_material_inventario_y_lo_que_recibe_el_guionista(monkeypatch):
+    from studio4 import gemini, material
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: '{"escenas": [{"juego": "GTA San Andreas", "que": "Burger Shot",'
+                        ' "busqueda": "sa burger"}, {"juego": "GTA V", "que": "tráiler", "busqueda": "gta v"},'
+                        ' {"juego": "Inventado", "que": "nada", "busqueda": "nada"}]}')
+    res = {"sa burger": [{"id": "a1", "url": "u1", "titulo": "GTA San Andreas Burger Shot gameplay no commentary", "canal": "X", "duracion": 600},
+                         {"id": "a2", "url": "u2", "titulo": "Burger Shot REACCIÓN", "canal": "Y", "duracion": 600}],
+           "gta v": [{"id": "a1", "url": "u1", "titulo": "GTA San Andreas Burger Shot gameplay no commentary", "canal": "X", "duracion": 600},
+                     {"id": "b1", "url": "u3", "titulo": "Grand Theft Auto V: The Official Trailer", "canal": "Rockstar Games", "duracion": 61}],
+           "nada": []}
+    monkeypatch.setattr(material, "buscar", lambda q, n=8: res[q])
+    inv = material.inventario("Burger Shot en GTA")
+    assert [[v["id"] for v in e["videos"]] for e in inv] == [["a1"], ["b1"], []]   # sin reacciones ni repetidos
+    texto = material.para_guion(inv)
+    assert texto.startswith("MATERIAL QUE EXISTE") and "Burger Shot" in texto and "Official Trailer" in texto
+    assert "Inventado" not in texto and "REACCIÓN" not in texto
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sin cupo")))
+    assert all(e["busqueda"].startswith("tema") for e in material.escenas("tema x"))   # sin Gemini, busca el tema tal cual
+
+
+def test_montaje_busca_material_del_tema_para_anadirlo(aislado, monkeypatch):
+    from studio4 import material, montaje
+    monkeypatch.setattr(material, "inventario", lambda tema, guion="", produccion="": [
+        {"juego": "GTA V", "que": tema, "busqueda": "q", "videos": [{"id": "b1", "url": "u", "titulo": "t", "canal": "c", "duracion": 61}]}])
+    mid = montaje.crear("Burger Shot", "Una frase con seis palabras justas aquí.")
+    montaje.buscar_material(mid)
+    fin = _time.time() + 10
+    while montaje.cargar(mid)["trabajo"].get("ocupado") and _time.time() < fin:
+        _time.sleep(0.05)
+    p = montaje.cargar(mid)
+    assert not p["trabajo"]["error"] and p["material_sugerido"][0]["videos"][0]["id"] == "b1"
+    assert "sugeridoHTML" in (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
