@@ -92,9 +92,14 @@ def listar() -> list[dict[str, Any]]:
         except ValueError:
             continue
         salida.append({"id": p["id"], "titulo": p["titulo"], "creado": p["creado"], "paso": paso_actual(p),
-                       "frases": len(p["frases"]), "con_clip": sum(1 for x in p["frases"] if x.get("clip") or x.get("panel")),
+                       "frases": len(p["frases"]), "con_clip": sum(1 for x in p["frases"] if con_imagen(x)),
                        "final": bool(p.get("final"))})
     return salida
+
+
+def con_imagen(f: dict[str, Any]) -> bool:
+    """La frase ya tiene qué enseñar: un plano de vídeo, un panel de texto o una imagen."""
+    return bool(f.get("clip") or f.get("panel") or f.get("imagen"))
 
 
 def paso_actual(p: dict[str, Any]) -> int:
@@ -103,7 +108,7 @@ def paso_actual(p: dict[str, Any]) -> int:
         return 1
     if not p["fuentes"]:
         return 2
-    if any(not (x.get("clip") or x.get("panel")) for x in p["frases"]):
+    if any(not con_imagen(x) for x in p["frases"]):
         return 3
     if not p.get("previa"):
         return 4
@@ -140,7 +145,7 @@ def resumen(p: dict[str, Any]) -> dict[str, Any]:
     return {"duracion": round(total, 1), "estimada": not (p.get("voz") or {}).get("pausas"),
             "capitulos": len({f["bloque"] for f in p["frases"]}), "frases": len(p["frases"]),
             "paneles": sum(1 for f in p["frases"] if f.get("panel")),
-            "con_imagen": sum(1 for f in p["frases"] if f.get("clip") or f.get("panel")),
+            "con_imagen": sum(1 for f in p["frases"] if con_imagen(f)),
             "cobertura": cobertura(p) if p["fuentes"] else []}
 
 
@@ -170,6 +175,11 @@ def storyboard(mid: str) -> Path:
             d.text((img_box[0] + 16, img_box[1] + 14), f["panel"].get("titulo", "Panel"), fill=(255, 255, 255), font=letra(22, True))
             for j, item in enumerate(f["panel"].get("items", [])[:5]):
                 d.text((img_box[0] + 22, img_box[1] + 52 + j * 30), f"● {item}"[:44], fill=acento, font=letra(17))
+        elif f.get("imagen"):
+            im = Image.open(carpeta_imagenes(mid) / f["imagen"]["archivo"]).convert("RGB")
+            im.thumbnail((img_box[2] - img_box[0], img_box[3] - img_box[1]))
+            lienzo.paste(im, (img_box[0] + (img_box[2] - img_box[0] - im.width) // 2, img_box[1] + (img_box[3] - img_box[1] - im.height) // 2))
+            d.text((img_box[0] + 8, img_box[1] + 6), "IMAGEN", fill=(46, 230, 255), font=letra(14, True))
         elif f.get("clip"):
             nums = [f["clip"]["plano"], *f["clip"].get("mas", [])]
             w = (img_box[2] - img_box[0]) // len(nums)
@@ -505,6 +515,7 @@ def asignar(mid: str, n: int, fid: str = "", plano: int = 0, rotulo: str | None 
         if fid:
             f["clip"] = {"fuente": fid, "plano": plano, **({"mas": mas} if mas else {})}
             f.pop("panel", None)
+            f.pop("imagen", None)
         if panel is not None:
             items = [str(i).strip()[:80] for i in panel.get("items", []) if str(i).strip()][:5]
             # iconos elegidos a mano (si no, la animación los deduce del texto de cada punto)
@@ -513,10 +524,100 @@ def asignar(mid: str, n: int, fid: str = "", plano: int = 0, rotulo: str | None 
                           **({"iconos": iconos} if any(iconos) else {})} if items or panel.get("titulo") else None
             if not f["panel"]:
                 f.pop("panel")
+            else:
+                f.pop("imagen", None)
         if rotulo is not None:
             f["rotulo"] = rotulo.strip()[:40]
         p.update(previa="", final=None, short=None)
     modificar(mid, cambio)
+
+
+def carpeta_imagenes(mid: str) -> Path:
+    c = carpeta(mid) / "imagenes"
+    c.mkdir(exist_ok=True)
+    return c
+
+
+def poner_imagen(mid: str, n: int, url: str = "", datos_b64: str = "", credito: str = "") -> dict[str, Any]:
+    """Una imagen (arte oficial, captura, foto de un producto) para una frase: desde un enlace o un archivo tuyo.
+    Se guarda en el vídeo como JPG; en el montaje lleva movimiento lento y, si no es apaisada, va como tarjeta."""
+    import base64
+    import io
+
+    from PIL import Image
+    if datos_b64:
+        crudo = base64.b64decode(datos_b64.split(",", 1)[-1])
+    elif url.startswith(("http://", "https://")):
+        import requests
+        r = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Studio4"})
+        r.raise_for_status()
+        crudo = r.content
+    else:
+        raise ValueError("Pega el enlace de una imagen (https://…) o elige un archivo.")
+    try:
+        im = Image.open(io.BytesIO(crudo))
+        im.load()
+    except OSError as e:
+        raise ValueError("Eso no es una imagen que se pueda abrir (prueba con JPG, PNG o WEBP).") from e
+    if min(im.size) < 360:
+        raise ValueError(f"La imagen es muy pequeña ({im.width}x{im.height}): a pantalla completa se vería mal.")
+    im = im.convert("RGB")
+    im.thumbnail((3840, 3840))
+    nombre = f"{n:03d}_{hashlib.sha1(crudo).hexdigest()[:8]}.jpg"
+    im.save(carpeta_imagenes(mid) / nombre, quality=92)
+    imagen = {"archivo": nombre, "ancho": im.width, "alto": im.height, "url": url if not datos_b64 else "",
+              "credito": credito.strip()[:160]}
+
+    def cambio(p):
+        f = next((x for x in p["frases"] if x["n"] == n), None)
+        if not f:
+            raise ValueError("Esa frase no existe.")
+        f["imagen"] = imagen
+        f.pop("clip", None)
+        f.pop("panel", None)
+        p.update(previa="", final=None, short=None)
+    modificar(mid, cambio)
+    return imagen
+
+
+def quitar_imagen(mid: str, n: int) -> None:
+    def cambio(p):
+        for f in p["frases"]:
+            if f["n"] == n:
+                f.pop("imagen", None)
+        p.update(previa="", final=None, short=None)
+    modificar(mid, cambio)
+
+
+def buscar_imagenes(mid: str, consulta: str) -> list[dict[str, Any]]:
+    """Imágenes reales en las fuentes de confianza del canal (las mismas del panel clásico)."""
+    from . import galeria
+    if len(consulta.strip()) < 3:
+        raise ValueError("Escribe qué imagen buscas (por ejemplo: «Rockstar Toronto logo»).")
+    p = cargar(mid)
+    return [{"url": galeria.grande(i["url"]), "miniatura": i["url"], "descripcion": i.get("descripcion", ""),
+             "pagina": i.get("pagina", "")} for i in galeria.buscar(p["canal"], consulta, n=24, produccion=mid, sitio_entero=True)]
+
+
+def _segmento_imagen(imagen: Path, d: float, ancho: int, alto: int, destino: Path) -> None:
+    """Una imagen durante `d` s con un acercamiento lento. Apaisada: a pantalla completa. Si no (una caja, un
+    cartel vertical, un producto): como tarjeta sobre la misma imagen desenfocada, sin bandas negras."""
+    from PIL import Image
+    with Image.open(imagen) as im:
+        w, h = im.size
+    cuadros = max(1, round(d * config.FPS))
+    acerca = (f"scale={ancho * 2}:{alto * 2}:flags=bicubic,zoompan=z='1+{ACERCA * 1.5}*on/{cuadros}'"
+              f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS},setsar=1")
+    if 1.55 <= w / h <= 1.95:
+        filtro = ["-vf", f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},{acerca}"]
+    else:
+        filtro = ["-filter_complex",
+                  f"[0:v]split=2[a][b];[a]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},"
+                  f"gblur=sigma={max(8, int(40 * ancho / 1920))},eq=brightness=-0.22[fondo];"
+                  f"[b]scale={int(ancho * 0.84)}:{int(alto * 0.84)}:force_original_aspect_ratio=decrease[frente];"
+                  f"[fondo][frente]overlay=(W-w)/2:(H-h)/2,{acerca}[v]", "-map", "[v]"]
+    medios.ffmpeg("-loop", "1", "-framerate", str(config.FPS), "-t", f"{d:.3f}", "-i", str(imagen), *filtro,
+                  "-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
 
 
 def proponer(mid: str) -> int:
@@ -533,7 +634,7 @@ def proponer(mid: str) -> int:
     def cambio(q):
         nonlocal hechas, turno
         for f in q["frases"]:
-            if f.get("clip") or f.get("panel"):
+            if con_imagen(f):
                 continue
             for _ in range(len(q["fuentes"])):
                 fid = q["fuentes"][turno % len(q["fuentes"])]
@@ -828,6 +929,14 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             if nuevo_bloque:   # la pausa larga antes del panel no queda vacía
                 eventos.append((cursor - 0.9, "subida", 0.5))
             eventos += [(cursor + 0.8 + j * 0.42, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
+        elif f.get("imagen"):   # una imagen (arte, captura, producto) con movimiento lento
+            seg = cache / f"{huella('imagen', f['imagen']['archivo'], round(d, 3))}.mp4"
+            if not seg.exists():
+                _segmento_imagen(carpeta_imagenes(mid) / f["imagen"]["archivo"], d, ancho, alto, seg)
+            en_uso.add(seg)
+            usados.append({"frase": f["n"], "fuente": f["imagen"].get("credito") or "Imagen", "canal": "",
+                           "url": f["imagen"].get("url", ""), "imagen": True})
+            eventos.append((cursor + 0.05, "whoosh", 0.25))
         else:
             clip = f["clip"]
             meta = fuentes_ok[clip["fuente"]]
@@ -1042,7 +1151,8 @@ def logo_de(canal: str) -> Path | None:
 def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]], pista: dict[str, Any] | None = None) -> None:
     reloj = lambda s: f"{int(s) // 3600}:{int(s) % 3600 // 60:02d}:{int(s) % 60:02d}"  # noqa: E731
     lineas = [f"Fuentes y créditos · {p['titulo']}", "Fragmentos cortos, sin su audio, con comentario y edición propios.", ""]
-    lineas += [f"Frase {u['frase']}: {u['fuente']} ({u['canal']}) · {reloj(u['desde'])}–{reloj(u['hasta'])} · {u['url']}"
+    lineas += [f"Frase {u['frase']}: imagen · {u['fuente']}" + (f" · {u['url']}" if u["url"] else "") if u.get("imagen")
+               else f"Frase {u['frase']}: {u['fuente']} ({u['canal']}) · {reloj(u['desde'])}–{reloj(u['hasta'])} · {u['url']}"
                for u in usados]
     credito_musica = musica.credito(pista) if pista else ""
     if credito_musica:
@@ -1164,7 +1274,7 @@ def automatico(mid: str, pago_ok: bool = False) -> None:
     """Con todas las frases con imagen: storyboard → vídeo final (voz, subtítulos, música, textos, .srt y
     revisión) → Short → miniatura, sin pararse. Una voz de pago solo con «pago_ok» (el sí explícito del autor)."""
     p = cargar(mid)
-    if not p["frases"] or any(not (f.get("clip") or f.get("panel")) for f in p["frases"]):
+    if not p["frases"] or any(not con_imagen(f) for f in p["frases"]):
         raise ValueError("Antes de hacerlo todo, cada frase necesita su imagen o su panel (paso 3).")
     if coste_voz(p) > 0 and not pago_ok:
         raise ValueError(f"La voz {p['voz_nombre']} es de pago (≈{coste_voz(p):.2f} $): confírmalo o elige una gratis.")

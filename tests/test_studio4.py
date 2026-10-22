@@ -2467,3 +2467,32 @@ def test_escaleta_para_flow_y_paquete_de_vuelta(aislado, tmp_path, monkeypatch):
     meta = montaje.fuente(r["fuente"])
     assert (extractor.CACHE / meta["alta"]).exists() and len(meta["planos"]) == len(relacion)
     assert montaje.storyboard(mid).exists()
+
+
+def test_montaje_imagen_en_una_frase(aislado, tmp_path, monkeypatch):
+    """Una frase puede llevar una imagen (archivo o enlace): se guarda en el vídeo, sale en el storyboard y en el
+    montaje se mueve despacio; si no es apaisada, va como tarjeta sobre la misma imagen desenfocada."""
+    import base64
+    import io
+    from PIL import Image
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("Prueba", "Primera frase del vídeo con seis palabras. Segunda frase también con seis palabras.")
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.asignar(mid, 1, "fuenteA", 2)
+    caja = io.BytesIO()
+    Image.new("RGB", (600, 900), (200, 30, 30)).save(caja, "PNG")   # vertical, como la caja de un juego
+    img = montaje.poner_imagen(mid, 2, datos_b64="data:image/png;base64," + base64.b64encode(caja.getvalue()).decode(), credito="Arte oficial")
+    p = montaje.cargar(mid)
+    assert p["frases"][1]["imagen"]["archivo"] == img["archivo"] and montaje.paso_actual(p) == 4
+    with pytest.raises(ValueError):
+        montaje.poner_imagen(mid, 2, url="no-es-un-enlace")
+    seg = tmp_path / "img.mp4"
+    montaje._segmento_imagen(montaje.carpeta_imagenes(mid) / img["archivo"], 2.0, 320, 180, seg)
+    assert abs(medios.duracion(seg) - 2.0) < 0.1
+    medios.ffmpeg("-ss", "1", "-i", str(seg), "-frames:v", "1", str(tmp_path / "f.png"))
+    borde = Image.open(tmp_path / "f.png").convert("RGB").getpixel((5, 90))
+    assert borde != (0, 0, 0) and borde[0] > borde[2]   # sin bandas negras: el fondo es la misma imagen desenfocada
+    assert montaje.storyboard(mid).exists()
+    montaje.asignar(mid, 2, "fuenteA", 3)   # un plano quita la imagen
+    assert "imagen" not in montaje.cargar(mid)["frases"][1]

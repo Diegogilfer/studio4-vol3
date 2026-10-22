@@ -307,3 +307,9 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 
 /* Escenas con IA de tu herramienta de Google Flow */
 .flow-caja { display: grid; gap: 10px; margin-top: 18px; padding: 18px 20px; border-radius: var(--r); background: var(--caja); border: 1px solid rgba(57, 255, 136, .35); }
+
+/* Imágenes por frase */
+.resultados-img { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.resultado-img { padding: 0; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; background: var(--caja-2); cursor: pointer; aspect-ratio: 16 / 9; }
+.resultado-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.resultado-img:hover { border-color: var(--rosa); }

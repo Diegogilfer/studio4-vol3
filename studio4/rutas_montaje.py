@@ -59,6 +59,12 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         if not MEDIOS.match(m.group(2)):
             raise NoExiste(ruta)
         return "archivo", montaje.carpeta(m.group(1)) / m.group(2)
+    m = re.fullmatch(r"/m/([\w-]+)/imagenes/(\d{3}_[0-9a-f]{8}\.jpg)", ruta)   # las imágenes puestas en las frases
+    if m:
+        f = montaje.carpeta(m.group(1)) / "imagenes" / m.group(2)
+        if not f.exists():
+            raise NoExiste(ruta)
+        return "archivo", f
     m = re.fullmatch(r"/canal/([\w-]+)/logo\.png", ruta)   # el logo del canal (en círculo)
     if m:
         logo = montaje.logo_de(m.group(1))
@@ -92,6 +98,14 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/musica/carpeta":
         os.startfile(str(musica.carpeta()))  # noqa: S606 - el Explorador en tu PC
         return "json", {"ok": True}
+    if ruta == "/api/m/imagen":   # una imagen para una frase: enlace o archivo (base64)
+        return "json", {"ok": True, "imagen": montaje.poner_imagen(mid, int(d.get("n", 0)), str(d.get("url", "")).strip(),
+                                                                    str(d.get("datos", "")), str(d.get("credito", "")))}
+    if ruta == "/api/m/imagen/quitar":
+        montaje.quitar_imagen(mid, int(d.get("n", 0)))
+        return "json", {"ok": True}
+    if ruta == "/api/m/imagenes/buscar":
+        return "json", {"ok": True, "imagenes": montaje.buscar_imagenes(mid, str(d.get("consulta", "")))}
     if ruta == "/api/m/storyboard":   # la hoja para aprobar el montaje (se hace en segundos)
         montaje.storyboard(mid)
         return "json", {"ok": True, "url": f"/m/{mid}/storyboard.jpg"}

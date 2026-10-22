@@ -55,6 +55,11 @@ def desde_montaje(p: dict[str, Any], fuentes: dict[str, dict[str, Any]], tiempos
                           "speed": round(max(0.5, min(1.0, largo / d)) if d > 0 else 1.0, 3),
                           "transform": {"x": 0.5, "y": 0.5, "scale": 1.0, "rotation": 0, "opacity": 1.0, "anchor": "center"},
                           **({"transitionIn": {"type": "grid", "duration": montaje.TRANSICION}} if nuevo_bloque else {})})
+        elif f.get("imagen"):
+            video.append({"id": f"frase-{f['n']}", "start": round(a, 3), "end": round(b, 3),
+                          "source": f"imagen:{f['imagen']['archivo']}", "label": f["imagen"].get("credito", "Imagen"),
+                          "in": 0.0, "out": round(b - a, 3), "speed": 1.0,
+                          "transform": {"x": 0.5, "y": 0.5, "scale": 1.0, "rotation": 0, "opacity": 1.0, "anchor": "center"}})
         if f.get("rotulo"):
             texto.append({"id": f"rotulo-{f['n']}", "start": round(a + 0.2, 3), "end": round(min(b, a + 3.5), 3), "content": f["rotulo"],
                           "style": {"font": "Arial Bold", "size": 46, "color": "#ff3ea5", "position": "bottom-left"},

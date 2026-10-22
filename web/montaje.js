@@ -340,6 +340,7 @@ async function cargarVideo(id) {
 
 function miniaturaDe(f) {
   if (f.panel) return `<span>Panel: ${esc(f.panel.titulo || "texto")}</span>`;
+  if (f.imagen) return `<img src="/m/${esc(datos.video.id)}/imagenes/${esc(f.imagen.archivo)}" alt="" loading="lazy"><em>Imagen${f.imagen.credito ? ` · ${esc(f.imagen.credito)}` : ""}</em>`;
   if (!f.clip) return `<span>Elegir plano</span>`;
   const fu = datos.fuentes[f.clip.fuente];
   const pl = fu?.planos[f.clip.plano - 1];
@@ -351,7 +352,7 @@ function pintarVideo() {
   const v = datos.video, paso = datos.paso;
   const p = pasoVisto || paso;
   const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
-  const conClip = v.frases.filter((f) => f.clip || f.panel).length;
+  const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen).length;
   $("vista").innerHTML = `
     <a class="volver" href="#videos">← Tus vídeos</a>
     <div class="cabeza"><h1>${esc(v.titulo)}</h1>
@@ -436,6 +437,18 @@ function pasoMontaje(v, conClip) {
         <div class="fila">
           <input class="campo rotulo" data-rotulo="${f.n}" value="${esc(f.rotulo || "")}" placeholder="Rótulo (opcional): THE WARRIORS · 2005">
           <button class="boton" type="button" data-panel="${f.n}">${f.panel ? "Editar panel" : "Panel de texto"}</button>
+          <button class="boton" type="button" data-imagen="${f.n}">${f.imagen ? "Cambiar imagen" : "Imagen"}</button>
+        </div>
+        <div class="panel-txt" data-imagen-form="${f.n}" hidden>
+          <span class="etiqueta">Imagen para esta frase (arte oficial, captura, producto…)</span>
+          <div class="fila"><input class="campo" data-iurl="${f.n}" placeholder="Pega el enlace de una imagen (https://…)">
+            <button class="primario" type="button" data-poner-url="${f.n}">Poner</button></div>
+          <div class="fila"><input class="campo" type="file" accept="image/*" data-ifile="${f.n}">
+            <input class="campo" data-icred="${f.n}" placeholder="De dónde es (crédito)" value="${esc(f.imagen?.credito || "")}"></div>
+          <div class="fila"><input class="campo" data-ibuscar="${f.n}" placeholder="Buscar en tus fuentes: Rockstar Toronto, Vespa mods 1964…">
+            <button class="boton" type="button" data-buscar-img="${f.n}">Buscar</button>
+            ${f.imagen ? `<button class="boton" type="button" data-quitar-imagen="${f.n}">Quitar imagen</button>` : ""}</div>
+          <div class="resultados-img" data-iresultados="${f.n}"></div>
         </div>
         <div class="panel-txt" data-panel-form="${f.n}" hidden>
           <input class="campo" data-pt="${f.n}" placeholder="Título del panel" value="${esc(f.panel?.titulo || "")}">
@@ -640,8 +653,32 @@ function enlazarVideo(p) {
 
 // delegación: lo que se repite por frase, el banco, abrir y nuevo
 $("vista").addEventListener("click", (ev) => {
-  const el = ev.target.closest("[data-elegir],[data-panel],[data-guardar-panel],[data-quitar-panel],[data-usar],[data-copiar],[data-abrir],[data-nuevo]");
+  const el = ev.target.closest("[data-elegir],[data-panel],[data-guardar-panel],[data-quitar-panel],[data-usar],[data-copiar],[data-abrir],[data-nuevo],"
+    + "[data-imagen],[data-poner-url],[data-buscar-img],[data-quitar-imagen],[data-elegir-img]");
   if (!el) return;
+  // imágenes por frase: enlace, archivo de tu PC o búsqueda en las fuentes del canal
+  if (el.dataset.imagen) { const f = document.querySelector(`[data-imagen-form="${el.dataset.imagen}"]`); f.hidden = !f.hidden; return; }
+  const credito = (n) => document.querySelector(`[data-icred="${n}"]`)?.value || "";
+  if (el.dataset.ponerUrl) {
+    const n = Number(el.dataset.ponerUrl);
+    return enviar("/api/m/imagen", { n, url: document.querySelector(`[data-iurl="${n}"]`).value, credito: credito(n) });
+  }
+  if (el.dataset.quitarImagen) return enviar("/api/m/imagen/quitar", { n: Number(el.dataset.quitarImagen) });
+  if (el.dataset.elegirImg) {
+    const n = Number(el.dataset.n);
+    return enviar("/api/m/imagen", { n, url: el.dataset.elegirImg, credito: credito(n) || el.dataset.pagina || "" });
+  }
+  if (el.dataset.buscarImg) {
+    const n = el.dataset.buscarImg, caja = document.querySelector(`[data-iresultados="${n}"]`);
+    caja.innerHTML = `<p class="meta">Buscando en tus fuentes…</p>`;
+    api("/api/m/imagenes/buscar", { id: datos.video.id, consulta: document.querySelector(`[data-ibuscar="${n}"]`).value })
+      .then((r) => {
+        caja.innerHTML = r.imagenes.length ? r.imagenes.map((i) => `<button type="button" class="resultado-img" data-n="${n}"
+          data-elegir-img="${esc(i.url)}" data-pagina="${esc(i.pagina ? new URL(i.pagina).hostname : "")}" title="${esc(i.descripcion)}">
+          <img src="${esc(i.miniatura)}" alt="" loading="lazy"></button>`).join("") : `<p class="meta">No encontré imágenes con eso. Prueba otras palabras o pega un enlace.</p>`;
+      }).catch((e) => { caja.innerHTML = ""; aviso(e); });
+    return;
+  }
   if (el.dataset.nuevo !== undefined) return abrirNuevo();
   if (el.dataset.abrir) { ev.preventDefault(); location.hash = `v=${el.dataset.abrir}`; return; }
   if (el.dataset.elegir) return abrirSelector(Number(el.dataset.elegir));
@@ -660,6 +697,13 @@ $("vista").addEventListener("click", (ev) => {
   enviar("/api/m/asignar", { n, panel });
 });
 $("vista").addEventListener("change", (ev) => {
+  const archivo = ev.target.closest("[data-ifile]");
+  if (archivo && archivo.files[0]) {   // una imagen de tu PC: se manda como texto (base64)
+    const n = Number(archivo.dataset.ifile), lector = new FileReader();
+    lector.onload = () => enviar("/api/m/imagen", { n, datos: lector.result, credito: document.querySelector(`[data-icred="${n}"]`)?.value || "" });
+    lector.readAsDataURL(archivo.files[0]);
+    return;
+  }
   const r = ev.target.closest("[data-rotulo]");
   if (r) enviar("/api/m/asignar", { n: Number(r.dataset.rotulo), rotulo: r.value });
 });

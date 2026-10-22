@@ -135,7 +135,7 @@ class Panel(BaseHTTPRequestHandler):
 
     def _cuerpo_json(self) -> dict[str, Any]:
         n = int(self.headers.get("Content-Length") or 0)
-        if n > 1_000_000:
+        if n > 25_000_000:   # una imagen de tu PC llega dentro del JSON (base64); el servidor solo escucha en tu PC
             raise Error(413, "Demasiado grande")
         try:
             return json.loads(self.rfile.read(n) or b"{}")
