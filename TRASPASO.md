@@ -121,3 +121,19 @@
   final) con **línea de tiempo por pistas** (`studio4/linea.py`, formato corregido del autor). Motor:
   `studio4/montaje.py`, `extractor.py`, `animacion.py`. Rutas aparte en `studio4/rutas_montaje.py`: el panel nuevo
   no carga el estudio antiguo (prueba `test_panel_nuevo_no_carga_el_estudio_antiguo`).
+
+- 2026-10-21 · Claude · **Studio 4 Plus** (nombre de la actualización; sigue siendo Studio 4). Commits `b613ed8`…`4e474ea`, 151 pruebas.
+  · Montaje sin saltos: cortes solo a planos elegidos (`clip.mas`) y en pausas de la voz, voz que respira
+    (`_respirar`, corte en el silencio real), subtítulos sin palabras colgadas, mezcla en dos pasos, sonido nuevo
+    (`sonido.py`: efectos, cama suave sin compresores, `masterizar` a −11 LUFS lineal), cámara lenta interpolada,
+    acercamiento lento en cada plano, fundido final, descargas comprobadas y con reintento, el PC no se suspende al montar.
+  · Paneles y cambios de bloque con puentes: el vídeo se encoge a tarjeta y vuelve a pantalla completa en el mismo
+    movimiento (`_segmentos`: arranque · plano · cola), fondo = vídeo desenfocado, cristal neón, iconos.
+  · Rehacer solo lo que cambia (caché por huella en `cache/`), revisión de calidad (`calidad.py`) al terminar cada
+    previa y final, storyboard, resumen del guion, `.srt`, modo automático «Hacerlo todo».
+  · Música de la Biblioteca de audio de YouTube (`musica.py`, pantalla Música), imágenes en las frases (enlace,
+    archivo o búsqueda), puente con la herramienta de Google Flow (`escaleta.py`, `PROMPT_FLOW_HERRAMIENTA.md`).
+  · Habilidades del proyecto: `revisar-video`, `elegir-planos`, `lecciones-canal` (lee `fourlevel.md` antes de cada
+    vídeo), `auditar-repo`. Tareas programadas: `scripts/tareas.py` (ideas 08:00, resumen semanal lunes 09:00).
+  · Pendiente: final de The Warriors (4:36) y previa del vídeo de 8 min «Lo que GTA VI heredó de The Warriors»
+    (109 frases, guion en `Vídeos\STUDIO 4\Guiones`); botón directo a la herramienta de Flow (falta el enlace del autor).

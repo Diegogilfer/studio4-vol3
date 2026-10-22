@@ -62,3 +62,29 @@ gratis). Logo difuminado arriba a la derecha.
   ya comprueba la duración y repite. Si aun así pasa, borra el archivo del tramo en `_fuentes_video`.
 - **Evidencia**: tramo de 4,5 s en vez de 7,4 s → 1,3 s congelado.
 - **Confianza**: alta
+
+### 2026-10-21 · Wikimedia Commons: miniaturas, despacio y con crédito
+- **Señal**: imágenes de personas, lugares u objetos reales sin material del juego (p. ej. mods y rockers de los 60).
+- **Lección**: buscar en Wikimedia Commons solo CC BY, CC BY-SA, CC0 o dominio público (nunca NC ni ND); pedir la
+  miniatura estándar de 1280 o 1920 px (`/1920px-` en la URL), no el original, y dejar 5-20 s entre descargas: si no,
+  responde 429. El crédito va en cada imagen: «Foto: autor · Wikimedia Commons · licencia».
+- **Evidencia**: 11 fotos del bloque We Are the Mods; los originales dieron 429 y las miniaturas entraron.
+- **Confianza**: alta
+
+### 2026-10-21 · Material oficial de GTA VI
+- **Señal**: frases sobre GTA VI.
+- **Lección**: además de los tráileres 1 y 2, el tráiler de lanzamiento `rz1B4B2yBZY` (15-10-2026): logo (L7),
+  Jason al teléfono (L4, sirve para WAINK), Jason y Lucia en el auto rojo (L8, L16), gimnasio (L21), ciudad de noche
+  (L29, 15 s). «An Extended Look» (`tJbzMqJGH4k`, 27 min de gameplay) tiene restricción de edad: sin cookies no se
+  baja; si el autor lo quiere, lo descarga él y se importa como archivo.
+- **Evidencia**: búsqueda en el canal oficial de Rockstar Games, 2026-10-21.
+- **Confianza**: alta
+
+### 2026-10-21 · Flow para escenas inventadas, no para hablar de juegos reales
+- **Señal**: el autor quiere usar su herramienta de Flow con un guion de GTA o The Warriors.
+- **Lección**: Flow rechaza personajes y marcas con derechos y, con un guion pegado como texto, inventa un
+  protagonista genérico. Para vídeos de juegos: material real en Studio (gameplay, tráileres, imágenes, paneles).
+  Flow solo para escenas propias y pocas, con la escaleta de Studio. Mirar siempre el «Pendiente» de créditos: el
+  guion de 8 min pedía ~1.740 créditos.
+- **Evidencia**: captura de la herramienta del autor con «Pendiente: ~1740 cr».
+- **Confianza**: alta
