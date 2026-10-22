@@ -88,15 +88,22 @@ def descargar_tramo(url: str, ini: float, fin: float, alto: int = MAX_ALTO, nomb
             return destino.exists() and medios.duracion(destino) >= (fin - ini) - 0.3
         except (ValueError, RuntimeError):
             return False
-    for _intento in range(2):
+    ultimo_error: Exception | None = None
+    for intento in range(3):
         if completo():
             break
         destino.unlink(missing_ok=True)
-        with yt_dlp.YoutubeDL(opciones_ytdlp(
-                format=f"bv*[height<={alto}]+ba/b[height<={alto}]/b", merge_output_format="mp4",
-                download_ranges=download_range_func(None, [(ini, fin)]), force_keyframes_at_cuts=alto >= 720,
-                outtmpl=str(CACHE / f"{base}.%(ext)s"))) as y:
-            y.download([url])
+        try:
+            with yt_dlp.YoutubeDL(opciones_ytdlp(
+                    format=f"bv*[height<={alto}]+ba/b[height<={alto}]/b", merge_output_format="mp4",
+                    download_ranges=download_range_func(None, [(ini, fin)]), force_keyframes_at_cuts=alto >= 720,
+                    outtmpl=str(CACHE / f"{base}.%(ext)s"))) as y:
+                y.download([url])
+        except yt_dlp.utils.DownloadError as e:   # a veces el ffmpeg del descargador se cae al cortar: se repite
+            ultimo_error = e
+            time.sleep(4 * (intento + 1))
+    if not completo() and ultimo_error:
+        raise RuntimeError(f"No se pudo descargar el tramo {ini:.1f}-{fin:.1f} s de {url}: {ultimo_error}") from ultimo_error
     if not destino.exists():
         raise RuntimeError(f"No se pudo descargar el tramo {ini:.1f}-{fin:.1f} s de {url}")
     return destino
