@@ -2515,7 +2515,7 @@ def test_material_solo_original_y_nunca_el_trabajo_de_otros_creadores():
             ("GTA San Andreas Burger Shot gameplay sin comentarios", "Alguien", 600)]
     mal = [("MI REACCIÓN AL TRÁILER 2 DE GTA VI", "Otro", 12343), ("500 DETALLES de GTA 6 gameplay", "Otro", 900),
            ("GTA 6 trailer analysis", "Otro", 700), ("The Rockstar Classic That Started It All For Me: The Warriors gameplay", "Otro", 2540),
-           ("GTA 6 trailer #shorts", "Otro", 20), ("Mi vlog de hoy", "Otro", 600), ("Top 10 GTA 6 trailer secrets", "Otro", 600)]
+           ("GTA 6 trailer #shorts", "Otro", 20), ("This is what happens if Arthur drinks 100 Hair Tonics before a Cutscene", "Otro", 90), ("Mi vlog de hoy", "Otro", 600), ("Top 10 GTA 6 trailer secrets", "Otro", 600)]
     assert all(material.apto({"titulo": t, "canal": c, "duracion": d}) for t, c, d in bien)
     assert not any(material.apto({"titulo": t, "canal": c, "duracion": d}) for t, c, d in mal)
     oficial = material.puntos({"titulo": "Grand Theft Auto V: The Official Trailer", "canal": "Rockstar Games"})

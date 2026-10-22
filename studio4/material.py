@@ -23,7 +23,7 @@ FUERA = re.compile(
     r"detalles|details|secretos|secrets|curiosidades|easter eggs?|top \d+|\d+ (cosas|things|detalles|details)|"
     r"review|rese[ñn]a|opini[oó]n|podcast|noticias|news|rumou?rs?|rumores|leaks?|filtraci[oó]n|vs\.?|versus|"
     r"comparaci[oó]n|comparison|everything|todo lo que|lo que (nadie|no)|why|por qu[eé]|ranking|tier list|"
-    r"for me|my (favou?rite|first|thoughts)|mi (opini[oó]n|favorito)|meme|funny|gracioso|fails?|shorts?|tiktok|en vivo|live|stream|directo|parodia|parody|fan ?made|concept|mod)\b",
+    r"what happens|qu[eé] pasa si|for me|my (favou?rite|first|thoughts)|mi (opini[oó]n|favorito)|meme|funny|gracioso|fails?|shorts?|tiktok|en vivo|live|stream|directo|parodia|parody|fan ?made|concept|mod)\b",
     re.IGNORECASE)
 # Lo que buscamos: material original del juego, sin voz de nadie
 BUENO = re.compile(r"\b(tr[aá]iler|trailer|gameplay|walkthrough|no commentary|sin comentarios?|longplay|full game|"
