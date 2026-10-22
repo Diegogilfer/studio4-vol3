@@ -674,12 +674,14 @@ def _avisar(mid: str, fase: str, progreso: int) -> None:
 
 def _despierto(si: bool) -> None:
     """Mientras se monta, Windows no suspende el PC por inactividad: un montaje de media hora se cortaba de noche
-    (FFmpeg «tardaba» las horas que el PC estuvo dormido). Solo pide no dormir; no impide cerrar la tapa ni apagar."""
+    (FFmpeg «tardaba» las horas que el PC estuvo dormido). Solo pide no dormir; no impide cerrar la tapa ni apagar.
+    En portátiles con «espera moderna» (S0) no basta con el sistema: al apagarse la pantalla entran en espera y todo
+    se congela (08:41 → 17:46 un día entero), así que mientras se monta también se pide la pantalla encendida."""
     if os.name != "nt":
         return
     import ctypes
-    continuo, sistema = 0x80000000, 0x00000001
-    ctypes.windll.kernel32.SetThreadExecutionState(continuo | (sistema if si else 0))
+    continuo, sistema, pantalla = 0x80000000, 0x00000001, 0x00000002
+    ctypes.windll.kernel32.SetThreadExecutionState(continuo | ((sistema | pantalla) if si else 0))
 
 
 def _en_fondo(mid: str, nombre: str, fn: Callable[[], None]) -> None:

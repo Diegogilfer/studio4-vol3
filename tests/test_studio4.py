@@ -2561,3 +2561,17 @@ def test_panel_no_se_redibuja_entero_con_cada_aviso_de_progreso():
     """Los avisos de progreso cambian «actualizado»; el panel no debe volver a pintar imágenes y vídeos por eso."""
     js = (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
     assert "const { trabajo, actualizado, ...resto } = datos.video;" in js
+
+
+def test_mientras_se_monta_el_portatil_no_entra_en_espera(monkeypatch):
+    """Espera moderna: con la pantalla apagada el PC se dormía y el render se congelaba horas."""
+    import ctypes
+    import os as _os
+    from studio4 import montaje
+    if _os.name != "nt":
+        pytest.skip("solo Windows")
+    pedidos = []
+    monkeypatch.setattr(ctypes.windll.kernel32, "SetThreadExecutionState", lambda f: pedidos.append(f) or 1)
+    montaje._despierto(True)
+    montaje._despierto(False)
+    assert pedidos == [0x80000003, 0x80000000]   # sistema y pantalla mientras trabaja; nada al acabar
