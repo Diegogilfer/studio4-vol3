@@ -454,6 +454,74 @@ def preparar_fuente(url: str, desde: float | None = None, hasta: float | None = 
     return meta
 
 
+VIDEO_PERMITIDO = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
+
+
+def preparar_fuente_local(archivo: Path, nombre: str = "", avisar: Callable[[str, int], None] = lambda *_: None
+                          ) -> dict[str, Any]:
+    """Un vídeo de tu PC como fuente del banco: en alta (1080p, para el montaje final, sin volver a bajar nada), en
+    baja (360p, para ver) y con sus planos. El mismo archivo dos veces es la misma fuente (por su huella)."""
+    h = hashlib.sha1()
+    with archivo.open("rb") as f:
+        for bloque in iter(lambda: f.read(1 << 20), b""):
+            h.update(bloque)
+    fid = f"local_{h.hexdigest()[:12]}"
+    meta_ruta = extractor.CACHE / f"{fid}.banco.json"
+    if meta_ruta.exists():
+        return json.loads(meta_ruta.read_text(encoding="utf-8"))
+    try:
+        total = medios.duracion(archivo)
+    except Exception as e:  # noqa: BLE001 - lo que no lee FFmpeg no es un vídeo
+        raise ValueError("Ese archivo no es un vídeo que se pueda leer (prueba con MP4, MOV, MKV o WEBM).") from e
+    if total > 45 * 60:
+        raise ValueError("Es muy largo (más de 45 min): recórtalo antes o sube solo la parte que te interesa.")
+    extractor.CACHE.mkdir(parents=True, exist_ok=True)
+    alta, baja = extractor.CACHE / f"{fid}_1080p.mp4", extractor.CACHE / f"{fid}_360p.mp4"
+    avisar("Preparando el vídeo en alta calidad", 10)
+    medios.ffmpeg("-i", str(archivo), "-vf", f"scale=-2:'min(1080,ih)',fps={config.FPS},setsar=1", "-c:v", "libx264",
+                  "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(alta))
+    avisar("Versión ligera para ver los planos", 40)
+    medios.ffmpeg("-i", str(alta), "-vf", "scale=-2:360", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+                  "-an", str(baja))
+    avisar("Buscando los cambios de plano", 60)
+    planos = extractor.planos(baja)
+    if len(planos) < max(3, total / 30):   # sin cortes (gameplay grabado): tramos fijos de 6 s
+        tot = medios.duracion(baja)
+        planos = [(round(a, 2), round(min(a + 6, tot), 2)) for a in [i * 6.0 for i in range(max(1, int(tot // 6)))]]
+    miniaturas = extractor.CACHE / f"{fid}_planos"
+    miniaturas.mkdir(exist_ok=True)
+    for k, (a, b) in enumerate(planos):
+        medios.ffmpeg("-ss", f"{(a + b) / 2:.2f}", "-i", str(baja), "-frames:v", "1", "-vf", "scale=320:180",
+                      str(miniaturas / f"{k + 1:03d}.jpg"))
+    meta = {"id": fid, "url": "", "titulo": nombre or "Vídeo subido", "nombre": (nombre or "Vídeo subido")[:60],
+            "canal": "Subido desde tu PC", "desde": 0.0, "hasta": round(total, 3), "baja": baja.name, "alta": alta.name,
+            "local": True, "planos": [{"n": k + 1, "ini": a, "fin": b} for k, (a, b) in enumerate(planos)],
+            "fecha": time.strftime("%Y-%m-%d")}
+    _marcar_pobres(meta)
+    meta_ruta.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+    return meta
+
+
+def subir_video(tmp: Path, nombre: str, mid: str = "") -> str:
+    """Un vídeo arrastrado o elegido con «Examinar» → material. Con `mid`, se añade a ese vídeo; sin él, vídeo nuevo.
+    La preparación (alta, baja, planos) va en segundo plano; el archivo temporal se borra al terminar."""
+    nombre = Path(nombre or "video.mp4").name
+    if Path(nombre).suffix.lower() not in VIDEO_PERMITIDO:
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"Sube un vídeo ({', '.join(VIDEO_PERMITIDO)}).")
+    if not mid:
+        mid = crear(Path(nombre).stem[:80] or "Vídeo subido", "", canales.activo()["id"], sin_guion=True)
+
+    def fase():
+        try:
+            meta = preparar_fuente_local(tmp, Path(nombre).stem[:60], avisar=lambda f, n: _avisar(mid, f, n))
+        finally:
+            tmp.unlink(missing_ok=True)
+        modificar(mid, lambda p: p["fuentes"].append(meta["id"]) if meta["id"] not in p["fuentes"] else None)
+    _en_fondo(mid, "Material", fase)
+    return mid
+
+
 def _marcar_pobres(meta: dict[str, Any]) -> dict[str, Any]:
     """Marca los planos que no sirven como imagen: negros, fundidos, lisos (rótulos de clasificación, logos sobre
     negro) o de menos de 0,8 s. La propuesta automática se los salta; el autor aún puede elegirlos a mano."""

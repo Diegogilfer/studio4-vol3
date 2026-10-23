@@ -119,6 +119,7 @@ def estilo_valido(estilo: str) -> str:
     return estilo if estilo in ESTILOS else ESTILO_POR_DEFECTO
 
 MAX_BYTES_MEDIO = 400 * 1024 * 1024
+MAX_BYTES_VIDEO = 8 * 1024 * 1024 * 1024   # vídeos de tu PC para editar (gameplay grabado puede pesar varios GB)
 
 
 def salud() -> list[str]:

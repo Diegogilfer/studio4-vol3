@@ -2837,3 +2837,41 @@ def test_mover_escena_entre_bloques_no_desordena_transiciones(aislado, tmp_path,
     despues = montaje.cargar(mid)["frases"]
     assert [f["n"] for f in despues] == [antes[1][0], antes[0][0]]
     assert [f["bloque"] for f in despues] == [0, 1]   # los bloques siguen en su sitio: una sola transición
+
+
+def _video_prueba(destino, segundos=4):
+    """Un MP4 de verdad (dos colores = un cambio de plano) para probar la subida."""
+    medios.ffmpeg("-f", "lavfi", "-i", f"color=red:s=640x360:d={segundos / 2}:r=30", "-f", "lavfi",
+                  "-i", f"color=blue:s=640x360:d={segundos / 2}:r=30", "-filter_complex", "[0:v][1:v]concat=n=2:v=1[v]",
+                  "-map", "[v]", "-pix_fmt", "yuv420p", str(destino))
+    return destino
+
+
+def test_subir_video_de_tu_pc_crea_material_en_alta(servidor, tmp_path, monkeypatch):
+    """Arrastrar/Examinar: el archivo llega, se prepara en alta + baja + planos y queda como fuente del vídeo."""
+    import time as _t
+    import http.client
+    from studio4 import extractor, montaje
+    monkeypatch.setattr(extractor, "CACHE", tmp_path / "_fv")
+    _, puerto = servidor
+    datos = _video_prueba(tmp_path / "mi gameplay.mp4").read_bytes()
+    c = http.client.HTTPConnection("127.0.0.1", puerto, timeout=30)
+    c.request("POST", "/api/m/subir", body=datos, headers={"X-Nombre": "mi%20gameplay.mp4", "Content-Type": "video/mp4"})
+    r = c.getresponse(); d = json.loads(r.read())
+    assert r.status == 200, d
+    mid = d["id"]
+    fin = _t.time() + 60
+    while montaje.cargar(mid)["trabajo"].get("ocupado") and _t.time() < fin:
+        _t.sleep(0.1)
+    p = montaje.cargar(mid)
+    assert not p["trabajo"]["error"], p["trabajo"]["error"]
+    fid = p["fuentes"][0]
+    meta = montaje.fuente(fid)
+    assert fid.startswith("local_") and meta["alta"] and meta["local"] and len(meta["planos"]) >= 1
+    assert (extractor.CACHE / meta["alta"]).exists() and (extractor.CACHE / meta["baja"]).exists()
+    assert p["titulo"] == "mi gameplay"
+    # lo que no es vídeo se rechaza
+    c.request("POST", "/api/m/subir", body=b"hola", headers={"X-Nombre": "notas.txt"})
+    r2 = c.getresponse(); r2.read()
+    assert r2.status == 400
+    c.close()

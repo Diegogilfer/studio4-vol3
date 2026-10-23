@@ -12,6 +12,50 @@ async function api(ruta, datos) {
   return d;
 }
 const seguro = async (ruta) => { try { return await api(ruta); } catch (_) { return null; } };
+
+// ============================================================ Subir vídeos de tu PC (Examinar o arrastrar)
+function subirVideo(archivo, id, alAvanzar) {
+  return new Promise((ok, mal) => {
+    const x = new XMLHttpRequest();   // XHR y no fetch: da el progreso de la subida (vídeos de varios GB)
+    x.open("POST", "/api/m/subir" + (id ? `?id=${encodeURIComponent(id)}` : ""));
+    x.setRequestHeader("X-Nombre", encodeURIComponent(archivo.name));
+    x.upload.onprogress = (e) => { if (e.lengthComputable && alAvanzar) alAvanzar(Math.round((100 * e.loaded) / e.total)); };
+    x.onload = () => {
+      let d = {};
+      try { d = JSON.parse(x.responseText); } catch (_) { /* respuesta vacía */ }
+      if (x.status < 300) ok(d); else mal(new Error(d.error || `Error ${x.status}`));
+    };
+    x.onerror = () => mal(new Error("No se pudo subir: se cortó la conexión con el estudio."));
+    x.send(archivo);
+  });
+}
+async function traerArchivo(archivo) {
+  const enVideo = location.hash.match(/^#v=([\w-]+)/);   // dentro de un vídeo: se añade a ese; fuera: vídeo nuevo
+  const estado = (t) => { if ($("subida-estado")) $("subida-estado").textContent = t; else if (t) aviso(t); };
+  estado(`Subiendo «${archivo.name}»… 0 %`);
+  try {
+    const r = await subirVideo(archivo, enVideo ? enVideo[1] : "", (pc) => estado(`Subiendo «${archivo.name}»… ${pc} %`));
+    estado("Subido. Preparando el material…");
+    if (enVideo && enVideo[1] === r.id) cargarVideo(r.id);
+    location.hash = `v=${r.id}/2`;
+  } catch (e) { estado(""); aviso(e); }
+}
+// soltar un vídeo en cualquier parte del panel (salvo en los campos de imagen de cada frase, que tienen lo suyo)
+const esCampoPropio = (ev) => ev.target.closest?.("input[type=file]:not(#archivo-input)");
+document.addEventListener("dragover", (ev) => {
+  if (esCampoPropio(ev) || ![...(ev.dataTransfer?.types || [])].includes("Files")) return;
+  ev.preventDefault();
+  document.body.classList.add("soltando");
+});
+document.addEventListener("dragleave", (ev) => { if (!ev.relatedTarget) document.body.classList.remove("soltando"); });
+document.addEventListener("drop", (ev) => {
+  document.body.classList.remove("soltando");
+  const f = ev.dataTransfer?.files?.[0];
+  if (!f || esCampoPropio(ev)) return;
+  ev.preventDefault();
+  if (!f.type.startsWith("video/") && !/\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(f.name)) { aviso("Suelta un vídeo (MP4, MOV, MKV o WEBM)."); return; }
+  traerArchivo(f);
+});
 function aviso(e) {
   $("aviso").textContent = e.message || String(e);
   $("aviso").hidden = false;
@@ -49,12 +93,17 @@ async function vistaInicio() {
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
     <section class="url-magica">
-      <div><span class="etiqueta">Desde una URL</span><h2>Pega un <em>enlace de vídeo</em> y edítalo</h2>
-        <p class="meta">Se baja como material y abres el vídeo para elegir planos o montar los 3 formatos.</p></div>
+      <div><span class="etiqueta">Trae tu vídeo</span><h2>Pega un <em>enlace</em> o suelta un <em>archivo</em></h2>
+        <p class="meta">Entra como material y lo editas: planos, 3 formatos, subtítulos.</p></div>
       <form class="fila" id="url-form">
         <input class="campo" id="url-input" placeholder="https://…  (enlace de un vídeo)" required>
         <button class="primario" type="submit">Traer vídeo</button>
       </form>
+      <label class="soltar" id="soltar">
+        <input type="file" id="archivo-input" accept="video/*" hidden>
+        <b>Arrastra aquí tu vídeo</b><span class="meta">o pulsa para <u>examinar</u> · MP4, MOV, MKV, WEBM</span>
+        <small class="meta" id="subida-estado"></small>
+      </label>
     </section>
     <div id="i-ideas"></div>
     <div id="i-radar"></div>
@@ -65,6 +114,7 @@ async function vistaInicio() {
         ${m.videos.slice(0, 5).map(tarjetaVideo).join("")}
       </div>
     </section>`;
+  $("archivo-input").onchange = (ev) => ev.target.files[0] && traerArchivo(ev.target.files[0]);
   $("url-form").onsubmit = async (ev) => {
     ev.preventDefault();
     const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Trayendo…";
@@ -446,6 +496,7 @@ function pasoMaterial(v) {
       <input class="campo" id="m-hasta" placeholder="Hasta (2:50:33)">
       <button class="primario" type="submit">Añadir</button>
     </form>
+    <label class="boton subir-material"><input type="file" accept="video/*" hidden data-subir-material>Subir vídeo de tu PC</label>
     <p class="meta">En un gameplay de horas, pon desde y hasta (el capítulo de la misión): así solo se baja ese tramo.</p>
     ${sugeridoHTML(v)}
     <div class="flow-caja">
@@ -779,6 +830,8 @@ $("vista").addEventListener("click", (ev) => {
   enviar("/api/m/asignar", { n, panel });
 });
 $("vista").addEventListener("change", (ev) => {
+  const material = ev.target.closest("[data-subir-material]");
+  if (material && material.files[0]) { traerArchivo(material.files[0]); return; }
   const archivo = ev.target.closest("[data-ifile]");
   if (archivo && archivo.files[0]) {   // una imagen de tu PC: se manda como texto (base64)
     const n = Number(archivo.dataset.ifile), lector = new FileReader();

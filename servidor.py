@@ -153,12 +153,13 @@ class Panel(BaseHTTPRequestHandler):
         except ValueError as e:
             raise Error(400, "JSON no válido") from e
 
-    def _cuerpo_a_temporal(self) -> Path:
+    def _cuerpo_a_temporal(self, maximo: int | None = None) -> Path:
         n = int(self.headers.get("Content-Length") or 0)
+        maximo = maximo or config.MAX_BYTES_MEDIO
         if n <= 0:
             raise Error(400, "No llegó ningún archivo")
-        if n > config.MAX_BYTES_MEDIO:
-            raise Error(413, "El archivo supera 400 MB")
+        if n > maximo:
+            raise Error(413, f"El archivo supera {maximo // (1 << 20)} MB")
         fd, nombre = tempfile.mkstemp(prefix="studio4_", dir=config.PRODUCCIONES)
         tmp = Path(nombre)
         with os.fdopen(fd, "wb") as f:  # mismo descriptor: en Windows un segundo open lo dejaría bloqueado
@@ -426,6 +427,12 @@ class Panel(BaseHTTPRequestHandler):
 
         # --- panel ---
         self._solo_panel()
+        if ruta == "/api/m/subir":   # un vídeo de tu PC (arrastrado o con «Examinar») → material para editar
+            from studio4 import montaje
+            nombre = urllib.parse.unquote(self.headers.get("X-Nombre", "")) or "video.mp4"
+            tmp = self._cuerpo_a_temporal(maximo=config.MAX_BYTES_VIDEO)
+            self._por_leer = 0
+            return self._json({"ok": True, "id": montaje.subir_video(tmp, nombre, (query.get("id") or [""])[0])})
         if ruta.startswith("/api/m/"):   # panel nuevo: sus rutas viven en studio4/rutas_montaje.py
             self._panel_nuevo(rutas_montaje.post, ruta, self._cuerpo_json())
             return

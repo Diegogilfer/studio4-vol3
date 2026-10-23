@@ -348,3 +348,12 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 .plan .primario, .plan .boton { width: 100%; justify-content: center; text-align: center; }
 .plan-cinta { position: absolute; top: -11px; left: 24px; padding: 4px 12px; border-radius: 999px; font-size: 12px;
   font-weight: 700; color: #0b0b10; background: var(--grad); }
+
+/* --- subir vídeos (Examinar / arrastrar) --- */
+.soltar { display: grid; justify-items: center; gap: 4px; padding: 22px; border-radius: var(--r-chico); cursor: pointer;
+  border: 1.5px dashed color-mix(in srgb, var(--cian) 45%, var(--borde)); text-align: center; transition: background .2s; }
+.soltar:hover, body.soltando .soltar { background: color-mix(in srgb, var(--cian) 10%, transparent); }
+body.soltando::after { content: "Suelta el vídeo para traerlo"; position: fixed; inset: 14px; z-index: 60; display: grid;
+  place-items: center; border-radius: var(--r); border: 2px dashed var(--cian); background: rgba(7,7,12,.82);
+  font: 600 22px var(--sans); color: var(--texto); pointer-events: none; }
+.subir-material { display: inline-flex; margin-top: 10px; }
