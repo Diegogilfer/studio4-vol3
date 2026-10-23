@@ -1,0 +1,54 @@
+{
+ "nombre": "Vídeo de detalles (cada detalle = un Short)",
+ "origen": "Desmontaje de un vídeo de referencia de detalles de GTA VI (64 min, 289 000 vistas en 6 semanas), medido el 2026-10-22 sobre 8 momentos (4,3 min). Solo técnica: ni su material ni su texto se usan.",
+ "unidad": {
+  "que_es": "Un detalle cerrado: qué se ve → dónde mirar → por qué importa (juego anterior, mecánica nueva, física, algo gracioso o latino) → remate",
+  "segundos_detalle_suelto": [3, 5],
+  "segundos_detalle_contado": [23, 38],
+  "short": "Un Short = una unidad contada de 23-38 s; se escribe para que funcione sola (gancho en la primera frase)"
+ },
+ "ritmo": {
+  "detalle_nuevo_cada_s": 3.8,
+  "cortes_por_minuto": {"inicio": 8, "mitad": 12, "final": 6},
+  "plano_medio_s": 8.0,
+  "nota": "Casi no corta: deja correr el material oficial y edita encima (congelados, zooms, flechas, tarjetas)"
+ },
+ "congelados": {
+  "porcentaje_del_tiempo": 42,
+  "duracion_mediana_s": 1.9,
+  "duracion_media_s": 2.0,
+  "rango_s": [0.4, 6.7],
+  "cuando": "Justo cuando la voz nombra el detalle (a la vez o +0.2 s); se suelta al pasar al siguiente"
+ },
+ "zoom": {
+  "tipo": "zoom_in digital sobre el detalle, sostenido mientras se explica",
+  "duracion_s": [0.5, 4.8],
+  "entra": "a la vez que la voz nombra el objeto"
+ },
+ "senalar": {
+  "contador": {"texto": "#N", "posicion": "arriba izquierda", "color": "#FFE600", "estilo": "negrita, sin animación", "cambia": "con cada detalle nuevo"},
+  "flecha": {"estilo": "flecha blanca curva dibujada a mano, fina", "duracion_s": [2, 5], "entra": "con la palabra del detalle (+0.2 s)"},
+  "etiqueta": {"posicion": "abajo centro", "color": "#FFFFFF", "estilo": "sans-serif gruesa con sombra suave", "palabras": [1, 2], "ejemplos": ["Transpiración", "Verrugas/Lunares", "3 colores"]},
+  "tarjeta_comparacion": {"uso": "juego anterior o vida real (GTA V, marca real)", "posicion": "izquierda o derecha, ~1/3 de ancho, con sombra", "duracion_s": [1.2, 6]},
+  "gancho_inicio": {"texto": "número grande que impresiona (478 DÍAS, 46000 FRAMES, 500 DETALLES)", "color": "#FFE600", "posicion": "centro, sobre el gameplay"}
+ },
+ "voz": {
+  "palabras_por_segundo": 3.46,
+  "pausa_entre_detalles_s": [0.6, 0.9],
+  "pausa_larga_s": [1.0, 5.3],
+  "pausa_larga_uso": "dejar oír el juego (una frase o un sonido del material) antes de un remate",
+  "cortes_y_voz": "los cortes caen a ±0.2 s del inicio de una palabra (la imagen cambia con la palabra nueva), casi nunca en mitad de la pausa"
+ },
+ "sonido": {
+  "lufs_total": [-13.8, -11.1],
+  "lra": 2.0,
+  "fondo": "el audio original del juego/tráiler, no música aparte: bajo la voz y sube a ~-12.5 LUFS cuando la voz calla",
+  "musica": "nombra la canción que suena (portada + título + artista abajo) cuando es parte del material"
+ },
+ "subtitulos": {
+  "referencia": "no lleva subtítulos quemados: solo etiquetas de 1-2 palabras",
+  "fourlevel": "mantener subtítulos karaoke en Shorts (se ven sin sonido); en el largo, opcionales si hay etiquetas"
+ },
+ "flojo_en_la_referencia": ["64 min sin capítulos", "baja a 6 cortes/min al final", "se para en carteles ilegibles"],
+ "para_fourlevel": ["8-12 min con bloques y paneles de transición", "cada bloque con 3-6 detalles numerados", "Sadaltager va más lenta (2.25 pal/s frente a 3.46): ~35 % menos palabras por detalle y el mismo ritmo de imagen"]
+}

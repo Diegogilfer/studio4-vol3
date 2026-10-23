@@ -2575,3 +2575,11 @@ def test_mientras_se_monta_el_portatil_no_entra_en_espera(monkeypatch):
     montaje._despierto(True)
     montaje._despierto(False)
     assert pedidos == [0x80000003, 0x80000000]   # sistema y pantalla mientras trabaja; nada al acabar
+
+
+def test_plantilla_de_detalles_completa():
+    """El desmontaje del vídeo de referencia se guarda como plantilla para sacar cortos: todas las medidas presentes."""
+    d = json.loads((config.RAIZ / "studio4" / "plantillas" / "detalles.json").read_text(encoding="utf-8"))
+    for clave in ("unidad", "ritmo", "congelados", "zoom", "senalar", "voz", "sonido", "subtitulos"):
+        assert clave in d, clave
+    assert 20 <= d["unidad"]["segundos_detalle_contado"][0] < d["unidad"]["segundos_detalle_contado"][1] <= 60

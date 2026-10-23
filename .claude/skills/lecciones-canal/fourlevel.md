@@ -88,3 +88,20 @@ gratis). Logo difuminado arriba a la derecha.
   guion de 8 min pedía ~1.740 créditos.
 - **Evidencia**: captura de la herramienta del autor con «Pendiente: ~1740 cr».
 - **Confianza**: alta
+
+## Formato de referencia
+
+### 2026-10-22 · Vídeo largo de «detalles» y cómo salen sus cortos (estudio de un vídeo de referencia)
+- **Señal**: vídeos de detalles/curiosidades de un tráiler o gameplay oficial, y sus Shorts.
+- **Lección**: el gancho (0-40 s) cuantifica el esfuerzo («revisé N fotogramas, encontré N detalles») y promete
+  exclusividad («si lo ves una vez te pierdes casi todo»). El cuerpo sigue el orden del material oficial,
+  escena a escena, con 6-12 cortes por minuto y numeración en pantalla (#1, #2…) más el nombre de la canción que
+  suena. Cada detalle bueno se cuenta como una unidad cerrada de 30-45 s: qué se ve → dónde mirar → por qué
+  importa (referencia a un juego anterior, mecánica nueva o algo gracioso) → remate. Esas unidades son los
+  Shorts: no se cortan al azar, se escriben para que funcionen solas. Los mejores tipos: mecánica nueva (tres
+  colores de impacto), referencia a un GTA anterior (marca de GTA V en GTA VI), física nunca vista, detalle
+  gracioso y referencia latina. Punto flojo: 64 min sin capítulos ni cambios de ritmo cansa; en FourLevel,
+  8-12 min con bloques y paneles.
+- **Evidencia**: vídeo de referencia de 64 min, 289 000 vistas en 6 semanas; estudiado por Diego para aprender
+  (no se usa ni su material ni su texto).
+- **Confianza**: media (un solo vídeo)
