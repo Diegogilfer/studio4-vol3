@@ -131,6 +131,43 @@ def srt(palabras: list[dict[str, Any]], destino: Path, max_linea: int = 42) -> P
     return destino
 
 
+# --- Subtítulos en varios idiomas (pistas .srt para subir a YouTube) -----------------------------------------------
+# Códigos de archivo → nombre del idioma para el traductor. El español es el original (no se traduce).
+IDIOMAS = {"en": "inglés", "zh": "chino mandarín simplificado", "ja": "japonés"}
+
+
+def _leer_srt(texto: str) -> list[tuple[str, str]]:
+    """Un .srt → [(cabecera «n\\ntiempos», texto)]: separa el tiempo (que no se toca) del texto (que se traduce)."""
+    cues = []
+    for bloque in re.split(r"\n\s*\n", texto.strip()):
+        lineas = bloque.splitlines()
+        if len(lineas) >= 2 and "-->" in lineas[1]:
+            cues.append(("\n".join(lineas[:2]), "\n".join(lineas[2:])))
+    return cues
+
+
+def traducir_srt(texto: str, idioma: str, generar) -> str:
+    """Traduce SOLO el texto de cada subtítulo a `idioma` y reconstruye el .srt con los mismos números y tiempos.
+    `generar(prompt)` devuelve el texto del modelo (Gemini/DeepSeek). Si falla o descuadra, devuelve el original."""
+    import json
+    nombre = IDIOMAS.get(idioma, idioma)
+    cues = _leer_srt(texto)
+    if not cues:
+        return texto
+    originales = [c[1].replace("\n", " ") for c in cues]
+    sistema = (f"Eres subtitulador profesional. Traduce al {nombre} cada línea de esta lista de subtítulos, "
+               "una traducción por entrada, en el MISMO orden y la misma cantidad. Mantén el sentido, natural y "
+               "breve para que quepa en pantalla. No numeres, no añadas comillas. Devuelve solo JSON: "
+               '{"t": ["traducción 1", "traducción 2", ...]}')
+    crudo = generar(sistema + "\n\nLÍNEAS:\n" + json.dumps(originales, ensure_ascii=False))
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    traducidas = json.loads(m.group(0) if m else crudo).get("t", []) if m or crudo.strip().startswith("{") else []
+    if len(traducidas) != len(cues):   # el modelo descuadró: mejor el original que un .srt roto
+        raise ValueError(f"El traductor devolvió {len(traducidas)} líneas de {len(cues)}")
+    partes = [f"{cab}\n{str(t).strip()}" for (cab, _orig), t in zip(cues, traducidas)]
+    return "\n\n".join(partes) + "\n"
+
+
 def construir(palabras: list[dict[str, Any]], destino: Path, ancho: int, alto: int,
               ajustes: dict[str, Any] | None = None, gancho: str = "", segundos_gancho: float = 3.0,
               sonidos: list[dict[str, Any]] | None = None, inicio_gancho: float = 0.0) -> Path:
