@@ -47,7 +47,7 @@ logger = logging.getLogger("studio4.servidor")
 HOSTS = {f"127.0.0.1:{config.PUERTO}", f"localhost:{config.PUERTO}"}
 ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
 # «/» es el panel nuevo (un vídeo, 5 pasos); el de antes sigue entero en «/clasico» (ideas, Desde URL, biblioteca…).
-PAGINAS = {"/legal": "legal.html", "/": "montaje.html", "/clasico": "index.html", "/flow/emparejar": "emparejar.html",
+PAGINAS = {"/legal": "legal.html", "/": "montaje.html", "/flow/emparejar": "emparejar.html",
            "/lateral": "lateral.html", "/youtube": "youtube.html"}
 # Un <video> pide «bytes=0-» y solo lee lo que necesita: si se le mandaba el archivo entero (232 MB de un final) la
 # conexión se quedaba abierta y atascada. El navegador solo abre 6 a la vez con el estudio: con dos o tres vídeos
@@ -241,6 +241,8 @@ class Panel(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _get(self, ruta: str) -> None:
+        if ruta == "/clasico":   # un solo panel: el antiguo lleva al nuevo (el código viejo se conserva, no se borra)
+            return self._redirigir("/")
         if ruta == "/youtube/conectar":
             return self._redirigir(youtube.url_autorizacion())
         if ruta == "/youtube/volver":  # Google vuelve aquí tras tu clic en «Permitir»
