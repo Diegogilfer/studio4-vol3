@@ -357,3 +357,13 @@ body.soltando::after { content: "Suelta el vídeo para traerlo"; position: fixed
   place-items: center; border-radius: var(--r); border: 2px dashed var(--cian); background: rgba(7,7,12,.82);
   font: 600 22px var(--sans); color: var(--texto); pointer-events: none; }
 .subir-material { display: inline-flex; margin-top: 10px; }
+
+/* --- Crea con IA --- */
+.ia-caja { display: grid; gap: 12px; margin-bottom: 22px; padding: 22px 24px; border-radius: var(--r); background: var(--caja);
+  border: 1px solid color-mix(in srgb, var(--rosa) 35%, var(--borde)); }
+.ia-caja textarea { min-height: 84px; }
+.ia-opciones { display: grid; gap: 10px; }
+.chips-ia { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-ia { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--borde); background: var(--caja-2); cursor: pointer; font-size: 14px; }
+.chip-ia.activo { background: var(--grad); color: #fff; border-color: transparent; font-weight: 600; }
+.a-mano summary { cursor: pointer; color: var(--suave); margin: 4px 0 10px; }

@@ -88,6 +88,11 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
     if ruta == "/api/m/desde-biblioteca":   # un guion de la Biblioteca → vídeo nuevo
         return "json", {"ok": True, "id": montaje.desde_biblioteca(str(d.get("item", "")))}
+    if ruta == "/api/m/crear-ia":   # idea + duración/formato/tono → la IA busca material, escribe y pone planos
+        return "json", {"ok": True, "id": montaje.crear_con_ia(str(d.get("tema", "")), d.get("opciones") or {})}
+    if ruta == "/api/m/guion-ia":   # un vídeo con material y sin guion → la IA lo escribe
+        montaje.guion_con_ia(mid, d.get("opciones") or {})
+        return "json", {"ok": True}
     if ruta == "/api/m/desde-url":   # pega un enlace → vídeo nuevo con ese material bajándose
         return "json", {"ok": True, "id": montaje.desde_url(str(d.get("url", "")))}
     if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion

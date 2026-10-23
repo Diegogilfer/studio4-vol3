@@ -33,6 +33,9 @@ Escribes SOLO lo que dirá la voz en off: sin acotaciones, corchetes, títulos, 
 VERDAD Y DETALLE
 - Todo sale del dossier de investigación. Usa cifras, nombres, lugares y fechas concretas.
 - Lo que el dossier marca como dudoso no se afirma. No inventes nada.
+- MONETIZABLE EN YOUTUBE: aporta algo propio (explica, compara, descubre, cuenta una historia), nunca describas sin
+  más lo que se ve; resuelve una duda concreta del jugador (la satisfacción vale más que la duración, sin relleno);
+  en un corto, un gancho en la primera frase y un cierre que invite a ver más.
 - En vídeos de videojuegos el protagonista es EL JUEGO (lo que se ve y se juega), no quienes lo hicieron: a una
   persona real solo se la nombra si es muy conocida por los jugadores o imprescindible, y en una frase.
 

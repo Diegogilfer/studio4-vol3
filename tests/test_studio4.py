@@ -2897,3 +2897,54 @@ def test_leer_y_guardar_el_proyecto_a_la_vez_no_falla(aislado):
     finally:
         parar.set(); h.join()
     assert not errores, errores[:2]
+
+
+def _ia_falsa(monkeypatch, pedido):
+    from studio4 import escenas, guion, investigacion, material
+    monkeypatch.setattr(investigacion, "investigar", lambda *a, **k: {"dossier": "datos verificados"})
+    monkeypatch.setattr(material, "inventario", lambda *a, **k: [])
+    monkeypatch.setattr(escenas, "para_guion", lambda metas: "")
+
+    def escribir(tema, dossier, versiones, **k):
+        pedido.update(versiones=versiones, dossier=dossier, tono=k.get("tono"))
+        v = next(iter(versiones))
+        return {v: {"guion": "Primera frase con seis palabras justas aqui. Segunda frase con seis palabras justas.",
+                    "ganchos": ["Gancho fuerte"]}, "titulo_provisional": "Título IA"}
+    monkeypatch.setattr(guion, "escribir", escribir)
+
+
+def _esperar_mid(mid, s=15):
+    import time as _t
+    from studio4 import montaje
+    fin = _t.time() + s
+    while montaje.cargar(mid)["trabajo"].get("ocupado") and _t.time() < fin:
+        _t.sleep(0.05)
+    return montaje.cargar(mid)
+
+
+def test_crear_con_ia_escribe_guion_y_resumen(aislado, monkeypatch):
+    from studio4 import montaje
+    pedido = {}
+    _ia_falsa(monkeypatch, pedido)
+    mid = montaje.crear_con_ia("Secretos de la Mansión de Boo", {"duracion": 45, "formato": "9:16", "tono": "misterio",
+                                                                   "modo": "inventar"})
+    p = _esperar_mid(mid)
+    assert not p["trabajo"]["error"], p["trabajo"]["error"]
+    assert pedido["versiones"] == {"corto": 30} or pedido["versiones"] == {"corto": 60}   # 45 → duración permitida más cercana
+    assert "MODO HISTORIA" in pedido["dossier"] and pedido["tono"] == "misterio"
+    assert p["frases"] and p["titulo"] == "Título IA" and p["formato_principal"] == "9:16"
+    assert p["resumen_ia"]["gancho"] == "Gancho fuerte" and p["resumen_ia"]["plataforma"] == "YouTube Shorts"
+
+
+def test_guion_con_ia_para_un_video_que_solo_tiene_material(aislado, tmp_path, monkeypatch):
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch, n=4)
+    pedido = {}
+    _ia_falsa(monkeypatch, pedido)
+    mid = montaje.crear("trailer lanzamiento gta vi", "", sin_guion=True)
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.guion_con_ia(mid, {"duracion": 300})
+    p = _esperar_mid(mid)
+    assert not p["trabajo"]["error"], p["trabajo"]["error"]
+    assert pedido["versiones"] == {"largo": 300} and "MATERIAL QUE YA TIENE EL VÍDEO" in pedido["dossier"]
+    assert p["frases"] and all(f.get("clip") for f in p["frases"])   # además pone un plano en cada frase

@@ -92,6 +92,12 @@ async function vistaInicio() {
   $("vista").innerHTML = `
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
+    <section class="ia-caja crear-ia" id="crear-ia">
+      <span class="etiqueta">Crea con IA</span>
+      <textarea class="campo" id="ia-tema" placeholder="Escribe la idea: «los secretos de la Mansión de Boo en Super Mario 64»"></textarea>
+      ${opcionesIA()}
+      <div class="fila"><button class="primario" type="button" id="ia-crear">Generar vídeo</button></div>
+    </section>
     <section class="url-magica">
       <div><span class="etiqueta">Trae tu vídeo</span><h2>Pega un <em>enlace</em> o suelta un <em>archivo</em></h2>
         <p class="meta">Entra como material y lo editas: planos, 3 formatos, subtítulos.</p></div>
@@ -115,6 +121,11 @@ async function vistaInicio() {
       </div>
     </section>`;
   $("archivo-input").onchange = (ev) => ev.target.files[0] && traerArchivo(ev.target.files[0]);
+  $("ia-crear").onclick = async (ev) => {
+    const b = ev.target; b.disabled = true; b.textContent = "Creando…";
+    try { location.hash = `v=${(await api("/api/m/crear-ia", { tema: $("ia-tema").value, opciones: leerOpcionesIA($("crear-ia")) })).id}/1`; }
+    catch (e) { aviso(e); b.disabled = false; b.textContent = "Generar vídeo"; }
+  };
   $("url-form").onsubmit = async (ev) => {
     ev.preventDefault();
     const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Trayendo…";
@@ -476,14 +487,44 @@ function calidadHTML(c) {
     ${c.fallos.map((f) => `<small>✗ ${esc(f)}</small>`).join("")}</div>`;
 }
 
+// Opciones de «Crea con IA»: duración, formato, modo (investigación oficial o historia) y tono
+const DURACIONES_IA = [[15, "15 s"], [30, "30 s"], [60, "1 min"], [180, "3 min"], [300, "5 min"], [600, "10 min"]];
+function opcionesIA(o = {}) {
+  const d = Number(o.duracion || 60), f = o.formato || "16:9", m = o.modo || "buscar";
+  const chip = (grupo, valor, texto, activo) => `<button type="button" class="chip-ia${activo ? " activo" : ""}" data-valor="${esc(valor)}">${texto}</button>`;
+  return `<div class="ia-opciones">
+    <div class="chips-ia" data-grupo="duracion">${DURACIONES_IA.map(([sg, t]) => chip("duracion", sg, t, sg === d)).join("")}</div>
+    <div class="chips-ia" data-grupo="formato">${chip("formato", "16:9", "▭ 16:9", f === "16:9")}${chip("formato", "9:16", "▯ 9:16", f === "9:16")}</div>
+    <div class="chips-ia" data-grupo="modo">${chip("modo", "buscar", "Investigación oficial", m === "buscar")}${chip("modo", "inventar", "Historia inventada", m === "inventar")}</div>
+    <input class="campo" data-tono placeholder="Tono (opcional): misterio, épico, humor…" value="${esc(o.tono || "")}">
+  </div>`;
+}
+function leerOpcionesIA(raiz) {
+  const o = { tono: raiz.querySelector("[data-tono]")?.value || "" };
+  raiz.querySelectorAll(".chips-ia").forEach((g) => { const a = g.querySelector(".activo"); if (a) o[g.dataset.grupo] = a.dataset.valor; });
+  return o;
+}
+document.addEventListener("click", (ev) => {   // un solo chip activo por grupo
+  const c = ev.target.closest(".chip-ia");
+  if (c) c.parentElement.querySelectorAll(".chip-ia").forEach((x) => x.classList.toggle("activo", x === c));
+});
+
 function pasoGuion(v) {
   return `<section class="paso">
     ${pasoCab(1, "Guion", `${v.frases.length} frases en ${new Set(v.frases.map((f) => f.bloque)).size} bloques. Una línea en blanco separa los bloques: ahí entra la rejilla.`)}
     ${resumenHTML(datos.resumen)}
     ${v.avisos?.length ? `<div class="avisos">${v.avisos.map((a) => `<p>${esc(a)}</p>`).join("")}</div>` : ""}
     ${!v.frases.length && v.trabajo?.ocupado ? `<p class="meta">Studio está investigando y escribiendo el guion: aparecerá aquí al terminar.</p>` : ""}
-    <textarea class="campo guion" id="guion">${esc(v.guion)}</textarea>
-    <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button></div>
+    <div class="ia-caja" id="guion-ia">
+      <span class="etiqueta">Generar guion con IA</span>
+      <p class="meta">Investiga el tema en fuentes oficiales, mira el material real y escribe el guion. Después lo revisas abajo.</p>
+      ${opcionesIA(v.ia_opciones)}
+      <div class="fila"><button class="primario" type="button" id="generar-guion" ${v.trabajo?.ocupado ? "disabled" : ""}>${v.frases.length ? "Rehacer el guion con IA" : "Generar guion con IA"}</button></div>
+    </div>
+    <details class="a-mano" ${v.frases.length ? "open" : ""}><summary>${v.frases.length ? "Revisar y editar el guion" : "…o pégalo a mano"}</summary>
+      <textarea class="campo guion" id="guion">${esc(v.guion)}</textarea>
+      <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button></div>
+    </details>
   </section>`;
 }
 
@@ -709,7 +750,13 @@ const enviar = async (ruta, extra = {}) => {
 function enlazarVideo(p) {
   const v = datos.video;
   $("abrir-carpeta").onclick = () => enviar("/api/m/carpeta");
-  if (p === 1) $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });
+  if (p === 1) {
+    $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });
+    $("generar-guion").onclick = () => {
+      if (v.frases.length && !confirm("Esto reemplaza el guion actual por uno nuevo. ¿Seguir?")) return;
+      enviar("/api/m/guion-ia", { opciones: leerOpcionesIA($("guion-ia")) });
+    };
+  }
   if (p === 2) {
     $("material-form").onsubmit = (ev) => {
       ev.preventDefault();

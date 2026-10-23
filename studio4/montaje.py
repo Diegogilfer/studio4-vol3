@@ -466,6 +466,94 @@ def preparar_fuente(url: str, desde: float | None = None, hasta: float | None = 
     return meta
 
 
+# --- Crea con IA: idea → material real → guion → planos (como el creador de CapCut, con nuestro motor) -----------
+OPCIONES_IA = {"duracion": 60, "formato": "16:9", "tono": "", "modo": "buscar"}
+DURACIONES_IA = (15, 30, 60, 180, 300, 600)
+
+
+def crear_con_ia(tema: str, opciones: dict[str, Any] | None = None) -> str:
+    """Escribes la idea y eliges duración, formato y tono: Studio investiga, busca material real (tráilers y gameplay
+    sin comentario), escribe el guion con DeepSeek y pone un plano en cada frase. El vídeo se abre ya; todo llega solo."""
+    tema = (tema or "").strip()
+    if len(tema) < 4:
+        raise ValueError("Escribe la idea del vídeo.")
+    o = _opciones_ia(opciones)
+    mid = crear(tema[:90], "", canales.activo()["id"], sin_guion=True)
+    modificar(mid, lambda p: p.update(ia_opciones=o, formato_principal=o["formato"]))
+    _en_fondo(mid, "Guion", lambda: _fase_ia(mid, tema, o, buscar_material=True))
+    return mid
+
+
+def guion_con_ia(mid: str, opciones: dict[str, Any] | None = None) -> None:
+    """Un vídeo que ya tiene material (subido o por enlace) pero no guion: la IA lo escribe a partir de ese material."""
+    p = cargar(mid)
+    o = _opciones_ia(opciones or p.get("ia_opciones"))
+    tema = p["titulo"] + ("" if not p["fuentes"] else " · " + ", ".join(fuente(f)["titulo"] for f in p["fuentes"]))
+    modificar(mid, lambda q: q.update(ia_opciones=o, formato_principal=o["formato"]))
+    _en_fondo(mid, "Guion", lambda: _fase_ia(mid, tema, o, buscar_material=not p["fuentes"]))
+
+
+def _opciones_ia(opciones: dict[str, Any] | None) -> dict[str, Any]:
+    o = {**OPCIONES_IA, **{k: v for k, v in (opciones or {}).items() if v not in (None, "")}}
+    o["duracion"] = min(DURACIONES_IA, key=lambda d: abs(d - int(float(o["duracion"]))))
+    o["formato"] = "9:16" if str(o["formato"]) == "9:16" else "16:9"
+    o["modo"] = "inventar" if o["modo"] == "inventar" else "buscar"
+    o["tono"] = str(o["tono"])[:80]
+    return o
+
+
+def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> None:
+    from . import escenas, investigacion
+    from . import guion as guionista
+    from . import material as materiales
+    _avisar(mid, "Investigando el tema", 8)
+    dossier = investigacion.investigar(tema, produccion=mid).get("dossier", "")
+    metas = [fuente(f) for f in cargar(mid)["fuentes"]]
+    if metas:
+        dossier = "MATERIAL QUE YA TIENE EL VÍDEO (escribe sobre lo que se ve en él): " + "; ".join(
+            m["titulo"] for m in metas) + "\n\n" + dossier
+    inv: list[dict[str, Any]] = []
+    if buscar_material:
+        _avisar(mid, "Buscando material real del tema", 30)
+        inv = materiales.inventario(tema, dossier, produccion=mid)
+        modificar(mid, lambda q: q.update(material_sugerido=inv))
+        if hay := materiales.para_guion(inv):
+            dossier = f"{hay}\n\n{dossier}"
+    if indice := escenas.para_guion(metas + [{"url": v["url"], "nombre": v["titulo"]} for e in inv for v in e["videos"]]):
+        dossier = f"{indice}\n\n{dossier}"
+    if o["modo"] == "inventar":
+        dossier = ("MODO HISTORIA: puedes contar una historia inventada (dilo: «imaginen…»), pero sobre juegos, lugares y "
+                   "momentos de los que hay material real arriba.\n\n" + dossier)
+    seg = int(o["duracion"])
+    version = "corto" if seg <= 60 else "largo"
+    _avisar(mid, "Escribiendo el guion", 55)
+    cid = cargar(mid)["canal"]
+    escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=o.get("tono", ""),
+                                 identidad=guionista.identidad_del_canal(canales.obtener(cid)))
+    cambiar_guion(mid, escrito[version]["guion"])
+    ganchos = escrito[version].get("ganchos") or []
+    if buscar_material and inv:
+        _avisar(mid, "Bajando el mejor material", 72)
+        candidatos = sorted((v for e in inv for v in e["videos"] if 20 <= (v.get("duracion") or 0) <= 15 * 60),
+                            key=lambda v: -materiales.puntos(v))[:2]
+        for v in candidatos:
+            try:
+                meta = preparar_fuente(v["url"], nombre=v["titulo"][:60], avisar=lambda f, n: _avisar(mid, f, n))
+                modificar(mid, lambda q, i=meta["id"]: q["fuentes"].append(i) if i not in q["fuentes"] else None)
+            except Exception as e:  # noqa: BLE001 - un vídeo que no baja no frena el resto
+                logger.warning("Material automático (%s): %s", v.get("url"), e)
+    if cargar(mid)["fuentes"]:
+        _avisar(mid, "Poniendo un plano en cada frase", 92)
+        proponer(mid)
+    p = cargar(mid)
+    modificar(mid, lambda q: q.update(
+        titulo=escrito.get("titulo_provisional") or q["titulo"],
+        resumen_ia={"tema": tema[:200], "gancho": ganchos[0] if ganchos else "", "duracion": seg, "formato": o["formato"],
+                    "tono": o.get("tono") or "el del canal", "modo": o["modo"], "voz": p.get("voz_nombre", ""),
+                    "musica": p.get("musica") or "automática", "subtitulos": "karaoke",
+                    "material": len(p["fuentes"]), "plataforma": "YouTube Shorts" if seg <= 60 else "YouTube"}))
+
+
 VIDEO_PERMITIDO = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
 
 
