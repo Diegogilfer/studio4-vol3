@@ -2761,3 +2761,21 @@ def test_render_basico_aplica_lo_esencial_y_pide_los_3_formatos(aislado, tmp_pat
     assert p["formatos"]["cuadrado"] is True and p["voz_original"] is True
     assert all(f.get("clip") for f in p["frases"])   # rellenó los planos que faltaban
     assert llamado["mid"] == mid   # lanzó el "hacerlo todo"
+
+
+def test_editor_reordenar_y_quitar_clip(aislado, tmp_path, monkeypatch):
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch, n=4)
+    mid = montaje.crear("P", "Primera frase con seis palabras justas aqui. Segunda frase con seis palabras justas.")
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.proponer(mid)
+    antes = [f["n"] for f in montaje.cargar(mid)["frases"]]
+    montaje.mover_frase(mid, antes[0], +1)   # baja la primera
+    despues = [f["n"] for f in montaje.cargar(mid)["frases"]]
+    assert despues == [antes[1], antes[0]] and montaje.cargar(mid)["final"] is None
+    montaje.mover_frase(mid, antes[0], -1)   # sube la que bajamos, vuelve al orden original
+    assert [f["n"] for f in montaje.cargar(mid)["frases"]] == antes
+    assert montaje.cargar(mid)["frases"][0].get("clip")
+    montaje.quitar_clip(mid, antes[0])
+    f0 = next(f for f in montaje.cargar(mid)["frases"] if f["n"] == antes[0])
+    assert "clip" not in f0 and "texto" in f0   # sin clip, pero la frase y su texto siguen

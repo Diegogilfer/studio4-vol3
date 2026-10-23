@@ -135,6 +135,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
                                                        str(d.get("nombre", ""))),
         "/api/m/usar-fuente": lambda: montaje.usar_fuente(mid, str(d.get("fuente", ""))),
         "/api/m/material/buscar": lambda: montaje.buscar_material(mid),
+        "/api/m/mover": lambda: montaje.mover_frase(mid, int(d.get("n", 0)), int(d.get("direccion", 0))),
+        "/api/m/quitar-clip": lambda: montaje.quitar_clip(mid, int(d.get("n", 0))),
         "/api/m/asignar": lambda: montaje.asignar(mid, int(d.get("n", 0)), str(d.get("fuente", "")), int(d.get("plano", 0) or 0),
                                                   d.get("rotulo"), d.get("panel"), list(d.get("mas") or [])),
         "/api/m/previa": lambda: montaje.previa(mid),

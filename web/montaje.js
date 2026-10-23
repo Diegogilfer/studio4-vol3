@@ -491,6 +491,9 @@ function pasoMontaje(v, conClip) {
           <input class="campo rotulo" data-rotulo="${f.n}" value="${esc(f.rotulo || "")}" placeholder="Rótulo (opcional): THE WARRIORS · 2005">
           <button class="boton" type="button" data-panel="${f.n}">${f.panel ? "Editar panel" : "Panel de texto"}</button>
           <button class="boton" type="button" data-imagen="${f.n}">${f.imagen ? "Cambiar imagen" : "Imagen"}</button>
+          <button class="boton icono" type="button" data-subir="${f.n}" title="Subir esta escena">▲</button>
+          <button class="boton icono" type="button" data-bajar="${f.n}" title="Bajar esta escena">▼</button>
+          ${f.clip ? `<button class="boton icono" type="button" data-quitar-clip="${f.n}" title="Quitar el clip (la frase se queda sin plano)">✕</button>` : ""}
         </div>
         <div class="panel-txt" data-imagen-form="${f.n}" hidden>
           <span class="etiqueta">Imagen para esta frase (arte oficial, captura, producto…)</span>
@@ -746,6 +749,9 @@ $("vista").addEventListener("click", (ev) => {
   if (el.dataset.nuevo !== undefined) return abrirNuevo();
   if (el.dataset.abrir) { ev.preventDefault(); location.hash = `v=${el.dataset.abrir}`; return; }
   if (el.dataset.elegir) return abrirSelector(Number(el.dataset.elegir));
+  if (el.dataset.subir) return enviar("/api/m/mover", { n: Number(el.dataset.subir), direccion: -1 });
+  if (el.dataset.bajar) return enviar("/api/m/mover", { n: Number(el.dataset.bajar), direccion: 1 });
+  if (el.dataset.quitarClip) return enviar("/api/m/quitar-clip", { n: Number(el.dataset.quitarClip) });
   if (el.dataset.usar) return enviar("/api/m/usar-fuente", { fuente: el.dataset.usar });
   if (el.dataset.copiar !== undefined) {
     navigator.clipboard.writeText(el.dataset.copiar).then(() => { el.textContent = "Copiado"; setTimeout(() => { el.textContent = "Copiar"; }, 1500); });

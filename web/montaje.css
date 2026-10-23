@@ -328,3 +328,5 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 .cambiar-panel { padding: 8px 14px; border-radius: 999px; background: var(--caja); color: var(--texto); text-decoration: none;
   font-size: 14px; white-space: nowrap; }
 .cambiar-panel:hover { background: color-mix(in srgb, var(--rosa) 16%, var(--caja)); }
+
+.boton.icono { padding: 7px 10px; min-width: 36px; font-size: 13px; line-height: 1; }

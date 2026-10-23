@@ -520,6 +520,34 @@ def usar_fuente(mid: str, fid: str) -> None:
 
 
 # --- 3 · Montaje --------------------------------------------------------------------------------------------------
+# --- Editor de línea de tiempo (básico): reordenar escenas y quitar clips -----------------------------------------
+def mover_frase(mid: str, n: int, direccion: int) -> None:
+    """Mueve una escena (frase) una posición arriba (-1) o abajo (+1) en la línea de tiempo. Reordena también su
+    narración, así que invalida la previa y el final (hay que volver a montar)."""
+    def cambio(p):
+        frases = p["frases"]
+        i = next((k for k, f in enumerate(frases) if f["n"] == n), None)
+        if i is None:
+            raise ValueError("Esa escena no existe.")
+        j = i + (1 if direccion > 0 else -1)
+        if not 0 <= j < len(frases):
+            return   # ya está en un extremo
+        frases[i], frases[j] = frases[j], frases[i]
+        p.update(previa="", final=None, short=None)
+    modificar(mid, cambio)
+
+
+def quitar_clip(mid: str, n: int) -> None:
+    """Deja la escena sin clip (vuelve a «elegir plano»). No borra la frase ni su texto."""
+    def cambio(p):
+        f = next((x for x in p["frases"] if x["n"] == n), None)
+        if not f:
+            raise ValueError("Esa escena no existe.")
+        f.pop("clip", None)
+        p.update(previa="", final=None, short=None)
+    modificar(mid, cambio)
+
+
 def asignar(mid: str, n: int, fid: str = "", plano: int = 0, rotulo: str | None = None,
             panel: dict[str, Any] | None = None, mas: list[int] | None = None) -> None:
     """El plano de una frase (o un panel de texto en su lugar) y su rótulo. `mas`: otros planos de la misma fuente
