@@ -147,7 +147,9 @@ class Panel(BaseHTTPRequestHandler):
         if n > 25_000_000:   # una imagen de tu PC llega dentro del JSON (base64); el servidor solo escucha en tu PC
             raise Error(413, "Demasiado grande")
         try:
-            return json.loads(self.rfile.read(n) or b"{}")
+            cuerpo = self.rfile.read(n)
+            self._por_leer = 0   # ya consumido: no hay que vaciarlo al final
+            return json.loads(cuerpo or b"{}")
         except ValueError as e:
             raise Error(400, "JSON no válido") from e
 
@@ -166,10 +168,14 @@ class Panel(BaseHTTPRequestHandler):
                     break
                 f.write(bloque)
                 n -= len(bloque)
+        self._por_leer = 0   # ya consumido: no hay que vaciarlo al final
         return tmp
 
     # --- rutas ------------------------------------------------------------------------------
     def _atender(self, metodo: str) -> None:
+        # con keep-alive (HTTP/1.1), un POST cuyo cuerpo no se lea deja esos bytes en el socket y corrompen la
+        # siguiente petición de la misma conexión (p. ej. «{}GET…» → 501). Se vacía siempre al terminar.
+        self._por_leer = int(self.headers.get("Content-Length") or 0) if metodo == "POST" else 0
         try:
             self._comprobar_host()
             url = urllib.parse.urlparse(self.path)
@@ -192,6 +198,14 @@ class Panel(BaseHTTPRequestHandler):
                 self._json({"error": f"Error interno: {e}"}, 500)
             except OSError:
                 pass
+        finally:
+            if getattr(self, "_por_leer", 0) > 0 and not self.close_connection:
+                try:
+                    pendiente = self._por_leer
+                    while pendiente > 0 and self.rfile.read(min(1 << 20, pendiente)):
+                        pendiente -= min(1 << 20, pendiente)
+                except OSError:
+                    self.close_connection = True
 
     def do_GET(self):  # noqa: N802
         self._atender("GET")

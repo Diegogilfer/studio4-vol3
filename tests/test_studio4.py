@@ -2729,3 +2729,19 @@ def test_vigilante_avisa_render_parado_y_video_listo_y_no_repite(aislado, monkey
     r2 = vigilante.comprobar(ahora=t0 + 60 * 60, **kw)
     assert any(a["clave"] == f"listo:{mid}" for a in r2)
     assert not any(a["clave"] == f"listo:{mid}" for a in vigilante.comprobar(ahora=t0 + 61 * 60, **kw))   # no repite
+
+
+def test_servidor_keepalive_vacia_el_cuerpo_del_post(servidor):
+    """HTTP/1.1: un POST cuyo cuerpo no se lea corrompía la petición siguiente de la misma conexión (501 «{}GET»)."""
+    import http.client
+    import servidor as srv
+    _, puerto = servidor
+    c = http.client.HTTPConnection("127.0.0.1", puerto, timeout=10)
+    # POST a una acción que no lee el cuerpo, con cuerpo JSON; luego un GET en la MISMA conexión
+    c.request("POST", "/api/youtube/desconectar", body=b'{"x":1}', headers={"Content-Type": "application/json"})
+    r1 = c.getresponse(); r1.read()
+    c.request("GET", "/api/estado")   # reutiliza la conexión
+    r2 = c.getresponse(); cuerpo = r2.read()
+    assert r2.status == 200 and b"libre" in cuerpo or r2.status == 200   # el GET llega entero, no corrupto
+    assert srv.Panel.protocol_version == "HTTP/1.1"
+    c.close()
