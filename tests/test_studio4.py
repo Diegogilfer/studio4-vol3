@@ -2676,3 +2676,46 @@ def test_planos_por_escenas_y_credito(aislado, tmp_path, monkeypatch):
     base.mkdir()
     montaje._creditos(base, p, [])
     assert "GTA Wiki" in (base / "Fuentes y créditos.txt").read_text(encoding="utf-8")
+
+
+RSS_PRUEBA = """<rss><channel><title>Feed X</title>
+<item><title>GTA 6 gets a new trailer and fans love it</title></item>
+<item><title>Call of Duty Modern Warfare 4 release date leaked</title></item>
+<item><title>Mass Effect 5 is in development at BioWare</title></item>
+</channel></rss>"""
+
+
+def test_radar_detecta_juegos_en_varias_fuentes_sin_partir_nombres(monkeypatch):
+    from studio4 import radar
+    feeds = {"a": RSS_PRUEBA, "b": RSS_PRUEBA.replace("Feed X", "Feed Y"),
+             "c": "<rss><channel><title>Z</title><item><title>GTA 6 is the biggest game ever</title></item></channel></rss>"}
+    cfg = {**radar.POR_DEFECTO, "rss": [{"id": k, "nombre": k, "url": k} for k in feeds], "wiki_api": ""}
+    monkeypatch.setattr(radar, "_titulares_rss", lambda f, m: radar.re.findall(r"<title>(.*?)</title>", feeds[f["id"]])[1:])
+    monkeypatch.setattr(radar, "_titulos_wiki", lambda c: [])
+    s = radar.escanear(cfg)
+    temas = [x["tema"] for x in s]
+    assert "GTA 6" == s[0]["tema"] and s[0]["caliente"] and s[0]["n_fuentes"] == 3   # en las 3 fuentes y es caliente
+    assert "Call of Duty Modern Warfare 4" in temas and "Mass Effect 5" in temas   # nombre entero, no «Call»/«Duty»
+    assert "Warfare" not in temas and "Duty" not in temas   # sin fragmentos sueltos
+
+
+def test_vigilante_avisa_render_parado_y_video_listo_y_no_repite(aislado, monkeypatch, tmp_path):
+    import time as _t
+    from studio4 import montaje, vigilante
+    monkeypatch.setattr(vigilante, "ESTADO", tmp_path / "_vig.json")
+    avisos = []
+    kw = dict(avisar=lambda tit, txt: avisos.append(tit) or True, vivo=lambda: True, arrancar=lambda: True)
+    mid = montaje.crear("Mi vídeo", "Una frase con seis palabras justas aquí.")
+    montaje.modificar(mid, lambda p: p["trabajo"].update(ocupado=True, fase="Plano 5 de 10", progreso=40))
+    t0 = _t.time()
+    assert vigilante.comprobar(ahora=t0, **kw) == []                       # primera vez: solo anota el progreso
+    assert vigilante.comprobar(ahora=t0 + 10 * 60, **kw) == []             # 10 min igual: aún no
+    r = vigilante.comprobar(ahora=t0 + 21 * 60, **kw)                      # 21 min sin avanzar: avisa
+    assert any(a["clave"].startswith("parado:") for a in r)
+    assert vigilante.comprobar(ahora=t0 + 22 * 60, **kw) == []             # no repite antes de 30 min
+    # ahora termina con un final listo
+    (montaje.carpeta(mid) / "final_16x9.mp4").write_bytes(b"x")
+    montaje.modificar(mid, lambda p: (p["trabajo"].update(ocupado=False, fase="Automático: listo"), p.update(final={"hecho": "x"})))
+    r2 = vigilante.comprobar(ahora=t0 + 60 * 60, **kw)
+    assert any(a["clave"] == f"listo:{mid}" for a in r2)
+    assert not any(a["clave"] == f"listo:{mid}" for a in vigilante.comprobar(ahora=t0 + 61 * 60, **kw))   # no repite

@@ -7,9 +7,12 @@ $python = (Get-Command pythonw.exe -ErrorAction SilentlyContinue).Source
 if (-not $python) { $python = Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\pythonw.exe" }
 $ajustes = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopIfGoingOnBatteries -AllowStartIfOnBatteries `
     -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+$cada5 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
 $tareas = @(
     @{ Nombre = "STUDIO4 Ideas del dia"; Orden = "ideas"; Disparador = New-ScheduledTaskTrigger -Daily -At 08:00 },
-    @{ Nombre = "STUDIO4 Resumen semanal"; Orden = "semana"; Disparador = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 09:00 }
+    @{ Nombre = "STUDIO4 Resumen semanal"; Orden = "semana"; Disparador = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 09:00 },
+    @{ Nombre = "STUDIO4 Radar tendencias"; Orden = "radar"; Disparador = New-ScheduledTaskTrigger -Daily -At 07:30 },
+    @{ Nombre = "STUDIO4 Vigilante"; Orden = "vigilar"; Disparador = $cada5 }
 )
 foreach ($t in $tareas) {
     $accion = New-ScheduledTaskAction -Execute $python -Argument "`"$raiz\scripts\tareas.py`" $($t.Orden)" -WorkingDirectory $raiz

@@ -19,7 +19,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 
-from studio4 import canales, carpetas, config, ideas, youtube  # noqa: E402
+from studio4 import canales, carpetas, config, ideas, radar, vigilante, youtube  # noqa: E402
 
 INFORMES = config.PRODUCCIONES / "_informes"
 logger = logging.getLogger("studio4.tareas")
@@ -72,12 +72,24 @@ def tarea_semana() -> str:
     return f"{datos['nombre']}: resumen en {destino}"
 
 
+def tarea_radar() -> str:
+    """Guarda las señales de tendencia del día (juegos que se mueven en varias webs); no gasta IA."""
+    s = radar.señales(n=10, guardar=True)
+    return "radar: " + (", ".join(f"{x['tema']} ({x['n_fuentes']})" for x in s[:6]) if s else "sin señales fuertes hoy")
+
+
+def tarea_vigilar() -> str:
+    """Una ronda del vigilante: servidor caído, render parado, vídeo listo, poco disco."""
+    avisos = vigilante.comprobar()
+    return "vigilante: " + ("; ".join(a["clave"] for a in avisos) if avisos else "todo en orden")
+
+
 def main() -> int:
     INFORMES.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(filename=INFORMES / "tareas.log", level=logging.INFO, encoding="utf-8",
                         format="%(asctime)s %(levelname)s %(message)s")
     orden = sys.argv[1] if len(sys.argv) > 1 else ""
-    tareas = {"ideas": tarea_ideas, "semana": tarea_semana}
+    tareas = {"ideas": tarea_ideas, "semana": tarea_semana, "radar": tarea_radar, "vigilar": tarea_vigilar}
     if orden not in tareas:
         print(__doc__)
         return 2

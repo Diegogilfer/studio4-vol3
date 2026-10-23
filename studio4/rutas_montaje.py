@@ -15,7 +15,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from . import canales, escaleta, escenas, extractor, linea, montaje, musica
+from . import canales, escaleta, escenas, extractor, linea, montaje, musica, radar
 
 MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
 
@@ -40,6 +40,8 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "archivo", f
     if ruta == "/api/m/flow":   # el enlace de tu herramienta de Google Flow
         return "json", {"enlace": escaleta.herramienta()}
+    if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
+        return "json", {"senales": radar.señales(n=12)}
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador

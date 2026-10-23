@@ -320,3 +320,7 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 .resultado-img { padding: 0; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; background: var(--caja-2); cursor: pointer; aspect-ratio: 16 / 9; }
 .resultado-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .resultado-img:hover { border-color: var(--rosa); }
+
+.chip-radar { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; background: var(--caja); font-size: 14px; }
+.chip-radar b { color: var(--suave); font-weight: 600; }
+.chip-radar.caliente { background: color-mix(in srgb, var(--rosa) 16%, var(--caja)); }

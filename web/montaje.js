@@ -49,6 +49,7 @@ async function vistaInicio() {
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
     <div id="i-ideas"></div>
+    <div id="i-radar"></div>
     <section class="bloque-inicio">
       <div class="seccion-cab fila-entre"><h2>Sigue con <em>tus vídeos</em></h2><a class="boton" href="#videos">Ver todos</a></div>
       <div class="videos">
@@ -57,6 +58,7 @@ async function vistaInicio() {
       </div>
     </section>`;
   seguro("/api/ideas/diarias").then((d) => { if ($("i-ideas")) { $("i-ideas").innerHTML = pintarIdeas(d); enlazarIdeas(); } });
+  seguro("/api/m/radar").then((r) => { if ($("i-radar")) $("i-radar").innerHTML = pintarRadar(r); });
   seguro("/api/panel").then((panel) => {
     if (!$("i-canal")) return;
     const activo = panel?.canales.find((c) => c.canal.id === panel.activo) || null;
@@ -90,6 +92,15 @@ function enlazarCanal() {
     if (!ev.target.value) return;
     try { await api("/api/canales/activar", { id: ev.target.value }); ir(); } catch (e) { aviso(e); }
   };
+}
+
+function pintarRadar(r) {
+  const s = r?.senales || [];
+  if (!s.length) return "";
+  return `<section class="bloque-inicio">
+    <div class="seccion-cab"><h2>En <em>tendencia</em> ahora</h2><p class="meta">Juegos y temas que suenan en varias webs de videojuegos a la vez, antes de ser tendencia en vídeo.</p></div>
+    <div class="chips">${s.map((x) => `<span class="chip-radar${x.caliente ? " caliente" : ""}" title="${esc((x.titulares || []).join(" · "))}">${esc(x.tema)} <b>${x.n_fuentes}</b></span>`).join("")}</div>
+  </section>`;
 }
 
 function pintarIdeas(d) {
