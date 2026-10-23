@@ -33,6 +33,8 @@ Escribes SOLO lo que dirá la voz en off: sin acotaciones, corchetes, títulos, 
 VERDAD Y DETALLE
 - Todo sale del dossier de investigación. Usa cifras, nombres, lugares y fechas concretas.
 - Lo que el dossier marca como dudoso no se afirma. No inventes nada.
+- En vídeos de videojuegos el protagonista es EL JUEGO (lo que se ve y se juega), no quienes lo hicieron: a una
+  persona real solo se la nombra si es muy conocida por los jugadores o imprescindible, y en una frase.
 
 QUE NO SUENE A IA
 - Prohibido: {", ".join(f"«{p}»" for p in PROHIBIDO)}.
