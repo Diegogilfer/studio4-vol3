@@ -2948,3 +2948,28 @@ def test_guion_con_ia_para_un_video_que_solo_tiene_material(aislado, tmp_path, m
     assert not p["trabajo"]["error"], p["trabajo"]["error"]
     assert pedido["versiones"] == {"largo": 300} and "MATERIAL QUE YA TIENE EL VÍDEO" in pedido["dossier"]
     assert p["frases"] and all(f.get("clip") for f in p["frases"])   # además pone un plano en cada frase
+
+
+def test_investigacion_web_de_deepseek_filtra_autoridad_y_cita(monkeypatch):
+    """Búsqueda web (solo si se activa): se queda con fuentes de autoridad, lee las mejores y arma el dossier."""
+    from studio4 import investigacion
+    monkeypatch.setattr(investigacion.config, "BUSQUEDA_WEB", True)
+    monkeypatch.setattr(investigacion.config, "DEEPSEEK_API_KEY", "x")
+    llamadas = []
+
+    def tool(nombre, cuerpo, produccion):
+        llamadas.append(nombre)
+        if nombre == "search":
+            return {"results": [{"url": "https://www.rockstargames.com/a", "title": "Oficial", "authority": 4, "rerank_score": 2.5, "content": "c" * 2000},
+                                {"url": "https://spam.example/b", "title": "Spam", "authority": 0, "rerank_score": 0.2, "content": "x"}]}
+        return {"content": "artículo completo"}
+    monkeypatch.setattr(investigacion, "_deepseek_tool", tool)
+    textos = []
+
+    def gen(prompt, **k):
+        textos.append(prompt)
+        return '{"consultas": ["gta vi trailer"]}' if "búsquedas web" in prompt else "HECHOS [F1]"
+    monkeypatch.setattr(investigacion.gemini, "generar", gen)
+    r = investigacion.investigar("GTA VI tráiler")
+    assert r["metodo"] == "DeepSeek (web)" and [f["url"] for f in r["fuentes"]] == ["https://www.rockstargames.com/a"]
+    assert "spam.example" not in textos[-1] and r["dossier"] == "HECHOS [F1]"

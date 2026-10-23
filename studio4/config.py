@@ -50,6 +50,7 @@ FAL_KEY = (os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY") or "").strip()
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")   # V4.1-Flash (ve imágenes); o deepseek-v4-pro, más caro
 DEEPSEEK_URL = os.getenv("DEEPSEEK_URL", "https://api.deepseek.com").rstrip("/")
+BUSQUEDA_WEB = os.getenv("STUDIO4_BUSQUEDA_WEB", "") == "1"   # búsqueda web de DeepSeek: de pago, se activa a mano
 
 # --- Xiaomi MiMo (API compatible con OpenAI en api.xiaomimimo.com/v1): guionista y voz TTS --------
 XIAOMIMIMO_API_KEY = os.getenv("XIAOMIMIMO_API_KEY", "").strip()

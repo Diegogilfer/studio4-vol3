@@ -106,7 +106,60 @@ def _con_wikipedia(idea: str, produccion: str) -> dict[str, Any]:
             "metodo": "Wikipedia"}
 
 
+# --- Búsqueda web de DeepSeek (Search & Fetch). De pago (~0,75 $ / 1.000 llamadas): solo con STUDIO4_BUSQUEDA_WEB=1 ---
+DEEPSEEK_TOOLS = "https://api.deepseek.com/v1/tools"
+MIN_AUTORIDAD, MIN_RELEVANCIA = 2, 1.5
+
+
+def _deepseek_tool(nombre: str, cuerpo: dict[str, Any], produccion: str) -> dict[str, Any]:
+    r = requests.post(f"{DEEPSEEK_TOOLS}/{nombre}", json=cuerpo, timeout=45,
+                      headers={"Authorization": f"Bearer {config.DEEPSEEK_API_KEY}"})
+    r.raise_for_status()
+    registro.apuntar("DeepSeek (búsqueda web)", f"{nombre}", cantidad=1, unidad="llamadas", produccion=produccion)
+    return r.json()
+
+
+def _con_deepseek_web(idea: str, produccion: str) -> dict[str, Any]:
+    """Busca en toda la web con la API de DeepSeek, se queda con las fuentes de autoridad, lee las mejores enteras y
+    arma el dossier SOLO con ellas (citando [F1]…), como con Wikipedia."""
+    crudo = gemini.generar(
+        f"Tema de un vídeo de videojuegos: {idea}\n\nDame 3 búsquedas web para encontrar datos oficiales y verificables "
+        "(webs oficiales, wikis del juego, prensa de videojuegos). Responde solo JSON: {\"consultas\": [\"...\", \"...\", \"...\"]}",
+        temperatura=0.2, detalle="consultas web", produccion=produccion)
+    m = re.search(r"\{.*\}", crudo, re.DOTALL)
+    consultas = (json.loads(m.group(0) if m else crudo).get("consultas") or [idea])[:3]
+    fuentes: list[dict[str, Any]] = []
+    for q in consultas:
+        res = _deepseek_tool("search", {"query": str(q)[:128], "count": 8, "need_content": True}, produccion)
+        for x in res.get("results") or []:
+            if (float(x.get("rerank_score") or 0) >= MIN_RELEVANCIA and int(x.get("authority") or 0) >= MIN_AUTORIDAD
+                    and x.get("url") and all(f["url"] != x["url"] for f in fuentes)):
+                fuentes.append(x)
+    fuentes.sort(key=lambda x: (-int(x.get("authority") or 0), -float(x.get("rerank_score") or 0)))
+    fuentes = fuentes[:6]
+    for f in fuentes[:2]:   # las dos mejores, enteras
+        if len(f.get("content") or "") < 1500:
+            try:
+                f["content"] = _deepseek_tool("fetch", {"url": f["url"]}, produccion).get("content") or f.get("content", "")
+            except requests.RequestException as e:
+                logger.warning("Fetch %s: %s", f["url"], e)
+    if not fuentes:
+        raise RuntimeError("La búsqueda web no devolvió fuentes con autoridad suficiente.")
+    fuentes_txt = "\n\n".join(f"### FUENTE {i}: {f.get('title', '')} ({f['url']})\n{(f.get('content') or f.get('summary') or '')[:MAX_CARACTERES_ARTICULO]}"
+                              for i, f in enumerate(fuentes, 1))
+    dossier = gemini.generar(
+        f"Tema: {idea}\n\nArma el dossier usando SOLO estas fuentes; al final de cada hecho indica [F1], [F2]...\n\n{fuentes_txt}",
+        sistema=SISTEMA, temperatura=0.3, detalle="dossier de investigación (web)", produccion=produccion)
+    return {"dossier": dossier.strip(), "fuentes": [{"titulo": f.get("title", ""), "url": f["url"]} for f in fuentes],
+            "metodo": "DeepSeek (web)"}
+
+
 def investigar(idea: str, produccion: str = "") -> dict[str, Any]:
+    if config.BUSQUEDA_WEB and config.DEEPSEEK_API_KEY:   # toda la web, fuentes con autoridad (de pago, activado a mano)
+        try:
+            return _con_deepseek_web(idea, produccion)
+        except Exception as e:  # noqa: BLE001 - sin saldo, red, sin resultados: sigue lo gratis
+            logger.info("Búsqueda web de DeepSeek no disponible (%s): sigo con Google/Wikipedia.", str(e)[:120])
     if gemini.bloqueado() or not config.GEMINI_API_KEY:   # Gemini en pausa: directo a Wikipedia (con la reserva)
         return _con_wikipedia(idea, produccion)
     try:
