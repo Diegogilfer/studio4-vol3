@@ -838,8 +838,37 @@ function pintarTrabajo(t) {
 }
 
 // ============================================================ Rutas
+// Planes de suscripción (producto). Precios de ejemplo: Diego los ajusta. Aún sin cobro real (eso llega con el hosting).
+const PLANES = [
+  { id: "gratis", nombre: "Gratis", precio: "0 €", gancho: "Para probar", puntos: ["1 canal", "3 vídeos al mes", "Marca de agua Studio 4", "Voz de Google"] },
+  { id: "pro", nombre: "Pro", precio: "19 €/mes", gancho: "El más elegido", destacado: true, puntos: ["Canales ilimitados", "Vídeos ilimitados", "Sin marca de agua", "Los 3 formatos", "Radar de tendencias"] },
+  { id: "studio", nombre: "Studio", precio: "49 €/mes", gancho: "Para equipos", puntos: ["Todo lo de Pro", "Voz premium (ElevenLabs)", "Subtítulos multiidioma", "Upscaler HD", "Soporte prioritario"] },
+];
+async function vistaPlanes() {
+  $("vista").innerHTML = `
+    ${cabecera("<em>Planes</em>", "Elige el que te cuadre. Cambias o cancelas cuando quieras.")}
+    <div class="planes">
+      ${PLANES.map((p) => `
+        <article class="plan${p.destacado ? " destacado" : ""}">
+          ${p.destacado ? `<span class="plan-cinta">${esc(p.gancho)}</span>` : `<small class="meta">${esc(p.gancho)}</small>`}
+          <h2>${esc(p.nombre)}</h2>
+          <div class="plan-precio">${esc(p.precio)}</div>
+          <ul>${p.puntos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+          <button class="${p.destacado ? "primario" : "boton"}" type="button" data-plan="${esc(p.id)}">Elegir ${esc(p.nombre)}</button>
+        </article>`).join("")}
+    </div>
+    <section class="mantenimiento">
+      <span class="etiqueta">Más información · contacto</span>
+      <p class="meta">¿Dudas o quieres una demo? Escríbenos.</p>
+      <div class="fila"><a class="boton" href="mailto:hola@studio4.app">Escribir un correo</a></div>
+    </section>`;
+  document.querySelectorAll("[data-plan]").forEach((b) => {
+    b.onclick = () => aviso("Los pagos se activan con la versión en internet. De momento esto es una vista previa.");
+  });
+}
+
 const VISTAS = { inicio: vistaInicio, videos: vistaVideos, biblioteca: vistaBiblioteca, tendencias: vistaTendencias,
-  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas };
+  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas, planes: vistaPlanes };
 async function ir() {
   $("trabajo").hidden = true;
   $("selector").hidden = true;

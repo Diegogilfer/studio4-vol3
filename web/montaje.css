@@ -336,3 +336,15 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 .url-magica h2 { margin-top: 4px; }
 .url-magica .fila { gap: 10px; }
 .url-magica .campo { flex: 1; }
+
+/* --- planes (producto) --- */
+.planes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-bottom: 26px; }
+.plan { position: relative; display: grid; gap: 12px; align-content: start; padding: 26px 24px; border-radius: var(--r);
+  background: var(--caja); border: 1px solid var(--borde); }
+.plan.destacado { border-color: color-mix(in srgb, var(--rosa) 55%, var(--borde)); box-shadow: 0 16px 40px -18px rgba(255,62,165,.5); }
+.plan h2 { font-size: 26px; }
+.plan-precio { font-size: 30px; font-weight: 700; font-family: var(--sans); }
+.plan ul { margin: 4px 0 8px; padding-left: 18px; display: grid; gap: 6px; color: var(--suave); font-size: 14px; }
+.plan .primario, .plan .boton { width: 100%; justify-content: center; text-align: center; }
+.plan-cinta { position: absolute; top: -11px; left: 24px; padding: 4px 12px; border-radius: 999px; font-size: 12px;
+  font-weight: 700; color: #0b0b10; background: var(--grad); }

@@ -2791,3 +2791,11 @@ def test_desde_url_crea_video_y_baja_el_material(aislado, monkeypatch):
     import pytest
     with pytest.raises(ValueError):
         montaje.desde_url("no-es-un-enlace")
+
+
+def test_panel_tiene_pestana_planes_producto():
+    """La cáscara de producto: pestaña Planes con tarjetas (gratis/pro/studio)."""
+    js = (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
+    html = (config.RAIZ / "web" / "montaje.html").read_text(encoding="utf-8")
+    assert "planes: vistaPlanes" in js and '"gratis"' in js and '"pro"' in js and '"studio"' in js
+    assert 'data-vista="planes"' in html
