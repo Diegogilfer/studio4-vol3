@@ -88,6 +88,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
     if ruta == "/api/m/desde-biblioteca":   # un guion de la Biblioteca → vídeo nuevo
         return "json", {"ok": True, "id": montaje.desde_biblioteca(str(d.get("item", "")))}
+    if ruta == "/api/m/desde-url":   # pega un enlace → vídeo nuevo con ese material bajándose
+        return "json", {"ok": True, "id": montaje.desde_url(str(d.get("url", "")))}
     if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion
         return "json", {"ok": True, "id": montaje.desde_idea(int(d.get("n", -1)))}
     if ruta == "/api/m/liberar":

@@ -48,6 +48,14 @@ async function vistaInicio() {
   $("vista").innerHTML = `
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
+    <section class="url-magica">
+      <div><span class="etiqueta">Desde una URL</span><h2>Pega un <em>enlace de vídeo</em> y edítalo</h2>
+        <p class="meta">Se baja como material y abres el vídeo para elegir planos o montar los 3 formatos.</p></div>
+      <form class="fila" id="url-form">
+        <input class="campo" id="url-input" placeholder="https://…  (enlace de un vídeo)" required>
+        <button class="primario" type="submit">Traer vídeo</button>
+      </form>
+    </section>
     <div id="i-ideas"></div>
     <div id="i-radar"></div>
     <section class="bloque-inicio">
@@ -57,6 +65,12 @@ async function vistaInicio() {
         ${m.videos.slice(0, 5).map(tarjetaVideo).join("")}
       </div>
     </section>`;
+  $("url-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Trayendo…";
+    try { location.hash = `v=${(await api("/api/m/desde-url", { url: $("url-input").value })).id}/2`; }
+    catch (e) { aviso(e); b.disabled = false; b.textContent = "Traer vídeo"; }
+  };
   seguro("/api/ideas/diarias").then((d) => { if ($("i-ideas")) { $("i-ideas").innerHTML = pintarIdeas(d); enlazarIdeas(); } });
   seguro("/api/m/radar").then((r) => { if ($("i-radar")) $("i-radar").innerHTML = pintarRadar(r); });
   seguro("/api/panel").then((panel) => {
@@ -255,12 +269,11 @@ async function vistaCanal() {
 // ============================================================ Herramientas
 async function vistaHerramientas() {
   $("vista").innerHTML = `
-    ${cabecera("<em>Herramientas</em>", "Lo que todavía vive en el panel clásico y el mantenimiento del estudio.")}
+    ${cabecera("<em>Herramientas</em>", "Accesos rápidos y el mantenimiento del estudio.")}
     <div class="herramientas">
-      <a class="herramienta" href="/clasico#url"><svg><use href="#i-enlace"/></svg><b>Desde URL</b><small>Un vídeo tuyo por enlace → editado en los 3 formatos</small></a>
+      <a class="herramienta" href="#inicio"><svg><use href="#i-enlace"/></svg><b>Desde URL</b><small>Pega un enlace en el inicio → vídeo listo para editar</small></a>
       <a class="herramienta" href="/youtube" target="_blank"><svg><use href="#i-yt"/></svg><b>Vista YouTube</b><small>Tus vídeos y miniaturas como se verán publicados</small></a>
-      <a class="herramienta" href="/clasico#crear"><svg><use href="#i-crear"/></svg><b>Pegar guiones de Agron</b><small>Biblioteca y plan del mes (panel clásico)</small></a>
-      <a class="herramienta" href="/clasico"><svg><use href="#i-render"/></svg><b>Panel clásico</b><small>Todo lo de antes, tal cual</small></a>
+      <a class="herramienta" data-nuevo><svg><use href="#i-crear"/></svg><b>Pegar un guion</b><small>Vídeo nuevo pegando el texto de la voz</small></a>
     </div>
     <section class="mantenimiento"><span class="etiqueta">Tu herramienta de Google Flow</span>
       <p class="meta">Pega aquí el enlace de compartir de tu herramienta «Studio 4 · Guion a vídeo»: así la abres con un clic

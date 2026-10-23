@@ -330,3 +330,9 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 .cambiar-panel:hover { background: color-mix(in srgb, var(--rosa) 16%, var(--caja)); }
 
 .boton.icono { padding: 7px 10px; min-width: 36px; font-size: 13px; line-height: 1; }
+
+.url-magica { display: grid; gap: 14px; margin-bottom: 26px; padding: 24px 26px; border-radius: var(--r);
+  background: var(--caja); border: 1px solid var(--borde); }
+.url-magica h2 { margin-top: 4px; }
+.url-magica .fila { gap: 10px; }
+.url-magica .campo { flex: 1; }

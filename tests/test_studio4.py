@@ -2779,3 +2779,15 @@ def test_editor_reordenar_y_quitar_clip(aislado, tmp_path, monkeypatch):
     montaje.quitar_clip(mid, antes[0])
     f0 = next(f for f in montaje.cargar(mid)["frases"] if f["n"] == antes[0])
     assert "clip" not in f0 and "texto" in f0   # sin clip, pero la frase y su texto siguen
+
+
+def test_desde_url_crea_video_y_baja_el_material(aislado, monkeypatch):
+    from studio4 import montaje
+    bajado = {}
+    monkeypatch.setattr(montaje, "anadir_fuente", lambda mid, url, *a, **k: bajado.update(mid=mid, url=url))
+    mid = montaje.desde_url("https://www.youtube.com/watch?v=abc")
+    p = montaje.cargar(mid)
+    assert p["id"] == mid and bajado["mid"] == mid and "abc" in bajado["url"]
+    import pytest
+    with pytest.raises(ValueError):
+        montaje.desde_url("no-es-un-enlace")

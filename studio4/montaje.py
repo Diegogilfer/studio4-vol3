@@ -500,6 +500,17 @@ def anadir_fuente(mid: str, url: str, desde: float | None = None, hasta: float |
     _en_fondo(mid, "Material", fase)
 
 
+def desde_url(url: str, cid: str = "") -> str:
+    """Pega un enlace de vídeo → vídeo nuevo con ese material ya bajándose. Para editar directamente desde él
+    (la «magia de la URL»): se abre el vídeo y, cuando el material está, eliges planos o montas los 3 formatos."""
+    url = url.strip()
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("Pega un enlace de vídeo (https://…).")
+    mid = crear("Vídeo desde URL", "", cid or canales.activo()["id"], sin_guion=True)
+    anadir_fuente(mid, url)   # se descarga en segundo plano como material del vídeo
+    return mid
+
+
 def buscar_material(mid: str) -> None:
     """El material real que existe para el tema del vídeo (tráilers oficiales y gameplay sin comentario), para
     añadirlo con un clic. Mira el título y el guion: así se ve también si el guion pide algo que no hay."""
