@@ -399,3 +399,6 @@ main:has(.lienzo) { max-width: 1480px; }
 .gg-mini span { font-size: 12px; color: var(--suave); }
 @media (max-width: 1100px) { .lienzo { grid-template-columns: 1fr; } .chat-lado { position: static; height: 520px; } }
 @media (max-width: 640px) { .gg-fila { grid-template-columns: 44px 1fr; } .gg-mini { grid-column: 1 / -1; } .gg-mini img { width: 100%; } }
+
+/* título del vídeo más contenido dentro del lienzo */
+.lienzo .cabeza h1 { font-size: clamp(30px, 3.4vw, 44px); line-height: 1.05; }
