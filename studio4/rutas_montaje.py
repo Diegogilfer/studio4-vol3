@@ -15,7 +15,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Any
 
-from . import canales, escaleta, extractor, linea, montaje, musica
+from . import canales, escaleta, escenas, extractor, linea, montaje, musica
 
 MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
 
@@ -51,7 +51,9 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
     if ruta == "/api/m/ver":
         p = montaje.cargar(q("id"))
         elegida = musica.elegir(p)
+        idx = escenas.indice(red=False)
         return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
+                        "escenas": {fid: len(escenas.de_fuente(montaje.fuente(fid), idx)) for fid in p["fuentes"]},
                         "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p), "resumen": montaje.resumen(p),
                         "musica": {"modo": p.get("musica") or musica.AUTO, "elegida": elegida["titulo"] if elegida else "",
                                    "pistas": [{"archivo": x["archivo"], "titulo": x["titulo"], "artista": x["artista"],
@@ -92,6 +94,9 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         return "json", {"ok": True, "version": extractor.actualizar_descargador()}
     if ruta == "/api/m/nuevo":
         return "json", {"ok": True, "id": montaje.crear(str(d.get("titulo", "")), str(d.get("guion", "")))}
+    if ruta == "/api/m/planos-escenas":   # el plano del tráiler donde ocurre lo que dice cada frase (GTA Wiki)
+        montaje.planos_por_escenas(mid, bool(d.get("todas")))
+        return "json", {"ok": True}
     if ruta == "/api/m/proponer":
         return "json", {"ok": True, "propuestas": montaje.proponer(mid)}
     if ruta == "/api/m/musica/etiquetar":

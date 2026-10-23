@@ -442,7 +442,7 @@ function pasoMaterial(v) {
     </div>
     <div class="fuentes">${v.fuentes.map((fid) => { const f = datos.fuentes[fid]; return `
       <div class="fuente"><img src="/fv/${esc(fid)}/${pad3((f.planos.find((x) => !x.pobre) || f.planos[0]).n)}.jpg" alt="" loading="lazy"><div><b>${esc(f.nombre)}</b>
-        <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}</small></div></div>`; }).join("")}</div>
+        <small class="meta">${f.planos.length} planos · ${esc(f.canal || "")}${datos.escenas?.[fid] ? ` · ${datos.escenas[fid]} escenas (GTA Wiki)` : ""}</small></div></div>`; }).join("")}</div>
     <div id="banco"></div>
   </section>`;
 }
@@ -504,6 +504,9 @@ function pasoMontaje(v, conClip) {
   return `<section class="paso">
     ${pasoCab(3, "Montaje", `${conClip} de ${v.frases.length} frases con imagen. Toca un clip de la línea de tiempo o una imagen para cambiar el plano.`)}
     <div class="fila"><button class="primario" type="button" id="proponer" ${v.fuentes.length ? "" : "disabled"}>Proponer planos para las frases vacías</button>
+      ${Object.values(datos.escenas || {}).some((n) => n) ? `<button class="boton" type="button" id="planos-escenas"
+        title="Cada frase con el plano del tráiler donde ocurre lo que dice (índice de escenas de GTA Wiki)">Planos por escenas</button>
+        <label class="meta"><input type="checkbox" id="escenas-todas"> también las que ya tienen plano</label>` : ""}
       <button class="boton" type="button" id="ver-storyboard" ${conClip ? "" : "disabled"}>Ver storyboard</button>
       <button class="boton" type="button" id="automatico" ${conClip === v.frases.length && v.frases.length ? "" : "disabled"}
         title="Vídeo final con voz, subtítulos y música, Short, textos, miniatura y revisión, sin pararse">Hacerlo todo</button></div>
@@ -602,7 +605,9 @@ async function pintarLinea() {
           const izq = (c.start / total) * 100, ancho = Math.max(0.6, ((c.end - c.start) / total) * 100);
           if (t.type === "video") {
             const [fid, pl] = c.source.split("#");
-            return `<button class="clip clip-video ${c.transitionIn ? "con-entrada" : ""}" style="left:${izq}%;width:${ancho}%;background-image:url('/fv/${esc(fid)}/${pad3(pl)}.jpg')"
+            // las frases con imagen van como «imagen:<archivo>»: su miniatura es la propia imagen, no un plano
+            const fondo = fid.startsWith("imagen:") ? `/m/${esc(datos.video.id)}/imagenes/${esc(fid.slice(7))}` : `/fv/${esc(fid)}/${pad3(pl)}.jpg`;
+            return `<button class="clip clip-video ${c.transitionIn ? "con-entrada" : ""}" style="left:${izq}%;width:${ancho}%;background-image:url('${fondo}')"
               data-elegir="${c.id.split("-")[1]}" title="${esc(c.label)} · ${c.in}–${c.out} s"></button>`;
           }
           return `<span class="clip clip-${t.type}" style="left:${izq}%;width:${ancho}%" title="${esc(c.content || c.source || "")}">${esc(c.content || "")}</span>`;
@@ -665,6 +670,7 @@ function enlazarVideo(p) {
   }
   if (p === 3) {
     $("proponer").onclick = () => enviar("/api/m/proponer");
+    if ($("planos-escenas")) $("planos-escenas").onclick = () => enviar("/api/m/planos-escenas", { todas: $("escenas-todas").checked });
     $("ver-storyboard").onclick = async () => {
       const w = window.open("about:blank", "_blank");
       try { const r = await api("/api/m/storyboard", { id: datos.video.id }); w.location = `${r.url}?v=${Date.now()}`; }

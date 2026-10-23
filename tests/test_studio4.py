@@ -2583,3 +2583,96 @@ def test_plantilla_de_detalles_completa():
     for clave in ("unidad", "ritmo", "congelados", "zoom", "senalar", "voz", "sonido", "subtitulos"):
         assert clave in d, clave
     assert 20 <= d["unidad"]["segundos_detalle_contado"][0] < d["unidad"]["segundos_detalle_contado"][1] <= 60
+
+
+def test_servidor_manda_los_videos_por_trozos(servidor):
+    """Un <video> pide «bytes=0-»: mandar el archivo entero atascaba la conexión y el panel se quedaba a medio cargar."""
+    import servidor as srv
+    from studio4 import montaje
+    pedir, _ = servidor
+    mid = montaje.crear("P", "Una frase con seis palabras justas aquí.")
+    (montaje.carpeta(mid) / "previa.mp4").write_bytes(b"\0" * (srv.TROZO * 2 + 10))
+    estado, cuerpo = pedir("GET", f"/m/{mid}/previa.mp4", {"Range": "bytes=0-"})
+    assert estado == 206 and len(cuerpo) == srv.TROZO
+    estado, cuerpo = pedir("GET", f"/m/{mid}/previa.mp4", {"Range": f"bytes={srv.TROZO * 2}-"})
+    assert estado == 206 and len(cuerpo) == 10   # el último trozo, completo
+
+
+def test_linea_de_tiempo_no_pide_planos_de_las_frases_con_imagen():
+    """Las frases con imagen pedían /fv/imagen:…/undefined.jpg (404 en cada carga del paso Previa)."""
+    js = (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
+    assert 'fid.startsWith("imagen:")' in js
+
+
+WIKI_PRUEBA = """{{Title|Trailers}}
+==Trailer 9==
+The song used in the trailer is "[[Cancion X]]" by [[Alguien]].
+{{YouTube|AAAAAAAAAAA|align=center}}
+===Transcript===
+{{Scriptbox
+|
+{{Line
+|time       = 0:00
+|background = The [[Rockstar Games]] logo appears.
+|image      = [[File:X.png|thumb|center|270px]]
+|name       =
+|dialogue   =
+}}
+{{Line
+|time       = 0:03
+|background = A [[Sandking XT]] tows a [[Seashark (second generation)|Seashark]] into [[Key Lento]].
+|name       = [[Jason Duval|Jason]]
+|dialogue   = I got in some ''trouble''.
+}}
+{{Line
+|time       = 0:05
+|background = Lucia in [[Leonida Penitentiary]]<br>looking out.
+|name       = Lucia
+|dialogue   =
+}}
+}}
+==See Also==
+"""
+
+
+def test_escenas_de_la_wiki_por_segundo_y_plano(monkeypatch):
+    """La transcripción de la wiki → escenas con su segundo, texto limpio y el plano de la fuente que las enseña."""
+    from studio4 import escenas
+    d = escenas.parsear(WIKI_PRUEBA)
+    tr = d["AAAAAAAAAAA"]
+    assert tr["cancion"] == "Cancion X" and [e["t"] for e in tr["escenas"]] == [0, 3, 5]
+    e = tr["escenas"][1]
+    assert e["que"] == "A Sandking XT tows a Seashark into Key Lento." and e["quien"] == "Jason" and e["dice"] == "I got in some trouble."
+    assert e["fin"] == 5 and tr["escenas"][2]["que"] == "Lucia in Leonida Penitentiary looking out."
+    planos = [{"n": 1, "ini": 0, "fin": 2.5, "pobre": True}, {"n": 2, "ini": 2.5, "fin": 4.0}, {"n": 3, "ini": 4.0, "fin": 9.0}]
+    meta = {"url": "https://www.youtube.com/watch?v=AAAAAAAAAAA", "desde": 0, "hasta": 9, "planos": planos}
+    assert [x["plano"] for x in escenas.de_fuente(meta, d)] == [2, 2, 3]   # el logo (pobre) salta al primer plano bueno
+    tramo = {**meta, "desde": 3.0, "planos": [{"n": 1, "ini": 0, "fin": 1.5}, {"n": 2, "ini": 1.5, "fin": 6}]}
+    assert [(x["t"], x["plano"]) for x in escenas.de_fuente(tramo, d)] == [(0, 1), (2, 2)]   # un tramo empieza en 0
+    monkeypatch.setattr(escenas, "indice", lambda red=True: d)
+    texto = escenas.para_guion([{**meta, "nombre": "Tráiler 9"}])
+    assert "[0:03] A Sandking XT" in texto and "Jason: «I got in some trouble.»" in texto and "nunca copies" in texto
+
+
+def test_planos_por_escenas_y_credito(aislado, tmp_path, monkeypatch):
+    import time as _t
+    from studio4 import escenas, extractor, gemini, montaje
+    _banco_falso(tmp_path, monkeypatch, n=6)
+    meta = json.loads((extractor.CACHE / "fuenteA.banco.json").read_text(encoding="utf-8"))
+    meta["url"] = "https://www.youtube.com/watch?v=AAAAAAAAAAA"
+    (extractor.CACHE / "fuenteA.banco.json").write_text(json.dumps(meta), encoding="utf-8")
+    monkeypatch.setattr(escenas, "indice", lambda red=True: escenas.parsear(WIKI_PRUEBA))
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: '{"asignaciones": [{"n": 1, "escena": "E3"}, {"n": 2, "escena": "E2"}]}')
+    mid = montaje.crear("P", "Lucía mira por la ventana de la cárcel. Jason llega remolcando una moto de agua.")
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.planos_por_escenas(mid)
+    fin = _t.time() + 10
+    while montaje.cargar(mid)["trabajo"].get("ocupado") and _t.time() < fin:
+        _t.sleep(0.05)
+    p = montaje.cargar(mid)
+    assert not p["trabajo"]["error"], p["trabajo"]["error"]
+    assert [f["clip"]["plano"] for f in p["frases"]] == [3, 2] and p["escenas_wiki"]   # escena 0:05 → plano 3; 0:03 → 2
+    base = tmp_path / "c"
+    base.mkdir()
+    montaje._creditos(base, p, [])
+    assert "GTA Wiki" in (base / "Fuentes y créditos.txt").read_text(encoding="utf-8")

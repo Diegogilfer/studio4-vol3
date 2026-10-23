@@ -49,6 +49,10 @@ ORIGENES_PANEL = {f"http://{h}" for h in HOSTS}
 # «/» es el panel nuevo (un vídeo, 5 pasos); el de antes sigue entero en «/clasico» (ideas, Desde URL, biblioteca…).
 PAGINAS = {"/legal": "legal.html", "/": "montaje.html", "/clasico": "index.html", "/flow/emparejar": "emparejar.html",
            "/lateral": "lateral.html", "/youtube": "youtube.html"}
+# Un <video> pide «bytes=0-» y solo lee lo que necesita: si se le mandaba el archivo entero (232 MB de un final) la
+# conexión se quedaba abierta y atascada. El navegador solo abre 6 a la vez con el estudio: con dos o tres vídeos
+# en pantalla, imágenes y datos se quedaban esperando y el panel «cargaba hasta ciertas imágenes y se quedaba».
+TROZO = 4 << 20
 MEDIOS_PERMITIDOS = re.compile(r"^(tomas/[\w.-]+|ref/[\w.-]+|voz\.wav|final\.mp4|muestras/[\w.-]+\.wav|entregas/[\w.-]+\.(mp4|jpg)|miniaturas/(candidatos/|fuentes/)?[\w.-]+\.jpg)$")
 
 
@@ -87,7 +91,7 @@ class Panel(BaseHTTPRequestHandler):
         if rango and tam:  # los <video> del navegador piden trozos para poder adelantar
             a, b = rango.groups()
             ini, fin = (int(a), int(b) if b else tam - 1) if a else (max(0, tam - int(b)), tam - 1)
-            fin = min(fin, tam - 1)
+            fin = min(fin, tam - 1, ini + TROZO - 1)   # nunca el vídeo entero de una vez (ver TROZO)
             if ini > fin:
                 raise Error(416, "Rango no válido")
             codigo = 206

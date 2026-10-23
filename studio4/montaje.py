@@ -340,6 +340,9 @@ def desde_idea(n: int) -> str:
         modificar(mid, lambda p: p.update(material_sugerido=inv))
         if hay := materiales.para_guion(inv):
             dossier["dossier"] = f"{hay}\n\n" + dossier.get("dossier", "")
+        from . import escenas
+        if indice := escenas.para_guion([{"url": v["url"], "nombre": v["titulo"]} for e in inv for v in e["videos"]]):
+            dossier["dossier"] = f"{indice}\n\n" + dossier.get("dossier", "")
         _avisar(mid, "Escribiendo el guion", 60)
         escrito = guionista.escribir(idea["idea"], dossier.get("dossier", ""), {"largo": 300}, produccion=mid,
                                      referencias=idea.get("texto", ""), identidad=guionista.identidad_del_canal(canales.obtener(cid)))
@@ -665,6 +668,54 @@ def proponer(mid: str) -> int:
         q.update(previa="", final=None, short=None)
     modificar(mid, cambio)
     return hechas
+
+
+ESCENAS_SISTEMA = """Eres montador de vídeo. Te doy las frases de un guion (en español) y las escenas de los tráilers
+oficiales que hay como material, cada una con su id, qué se ve y qué se dice (en inglés). Para cada frase elige la
+escena que MEJOR enseña lo que dice la frase (mismo personaje, lugar, coche, acción o diálogo). Si ninguna encaja, no
+la pongas. No repitas la misma escena en dos frases seguidas. Solo JSON: {"asignaciones": [{"n": 1, "escena": "E12"}]}"""
+
+
+def planos_por_escenas(mid: str, todas: bool = False) -> None:
+    """Cada frase recibe el plano del tráiler oficial donde ocurre lo que dice, con el índice de escenas de GTA Wiki.
+    `todas`: también las que ya tienen plano (las de imagen o panel nunca se tocan)."""
+    from . import escenas, gemini
+    p = cargar(mid)
+    idx = escenas.indice()
+    lista = [{**e, "fuente": fid, "id": ""} for fid in p["fuentes"] for e in escenas.de_fuente(fuente(fid), idx) if e["plano"]]
+    if not lista:
+        raise ValueError("Ninguna fuente de este vídeo es un tráiler con escenas en GTA Wiki (Tráiler 1, 2 o de lanzamiento).")
+    for k, e in enumerate(lista, 1):
+        e["id"] = f"E{k}"
+    frases = [f for f in p["frases"] if not con_imagen(f) and not f.get("panel") and (todas or not f.get("clip"))]
+    if not frases:
+        raise ValueError("No hay frases sin plano (marca «también las que ya tienen» para rehacerlas).")
+
+    def fase():
+        _avisar(mid, "Leyendo las escenas de los tráileres", 20)
+        texto = ("FRASES:\n" + "\n".join(f"{f['n']}. {f['texto']}" for f in frases) + "\n\nESCENAS:\n"
+                 + "\n".join(f"{e['id']} [{fuente(e['fuente'])['nombre']} {int(e['t']) // 60}:{int(e['t']) % 60:02d}] {e['que']}"
+                              + (f" | {e['quien']}: {e['dice']}" if e["dice"] else "") for e in lista)
+                 + "\n\nResponde solo con el JSON.")
+        crudo = gemini.generar(texto, sistema=ESCENAS_SISTEMA, temperatura=0.2, detalle="planos por escenas", produccion=mid)
+        m = re.search(r"\{.*\}", crudo, re.DOTALL)
+        elegidas = {int(a["n"]): a["escena"] for a in json.loads(m.group(0) if m else crudo).get("asignaciones", [])
+                    if isinstance(a, dict) and str(a.get("n", "")).isdigit()}
+        por_id = {e["id"]: e for e in lista}
+        _avisar(mid, "Poniendo cada plano en su frase", 80)
+
+        def cambio(q):
+            previo = None
+            for f in q["frases"]:
+                e = por_id.get(elegidas.get(f["n"], ""))
+                if e and any(x["n"] == f["n"] for x in frases) and (e["fuente"], e["plano"]) != previo:
+                    f["clip"] = {"fuente": e["fuente"], "plano": e["plano"]}
+                    f.pop("imagen", None)
+                if f.get("clip"):
+                    previo = (f["clip"]["fuente"], f["clip"]["plano"])
+            q.update(previa="", final=None, short=None, escenas_wiki=True)
+        modificar(mid, cambio)
+    _en_fondo(mid, "Planos por escenas", fase)
 
 
 # --- Trabajo en segundo plano ---------------------------------------------------------------------------------------
@@ -1178,6 +1229,9 @@ def _creditos(base: Path, p: dict[str, Any], usados: list[dict[str, Any]], pista
     credito_musica = musica.credito(pista) if pista else ""
     if credito_musica:
         lineas += ["", credito_musica]
+    if p.get("escenas_wiki"):
+        from . import escenas
+        lineas += ["", escenas.CREDITO]
     (base / "Fuentes y créditos.txt").write_text("\n".join(lineas) + "\n", encoding="utf-8")
     modificar(p["id"], lambda q: q.update(creditos=usados, musica_credito=credito_musica))
 
