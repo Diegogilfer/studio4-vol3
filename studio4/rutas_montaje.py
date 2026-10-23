@@ -17,7 +17,7 @@ from typing import Any
 
 from . import canales, escaleta, escenas, extractor, linea, montaje, musica, radar
 
-MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
 
 
 class NoExiste(Exception):
@@ -142,6 +142,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         "/api/m/musica/elegir": lambda: montaje.elegir_musica(mid, str(d.get("musica", ""))),
         "/api/m/final": lambda: montaje.montar_final(mid),
         "/api/m/automatico": lambda: montaje.automatico(mid, bool(d.get("pago_ok"))),
+        "/api/m/render-basico": lambda: montaje.render_basico(mid, d.get("opciones") or {}),
+        "/api/m/cuadrado": lambda: montaje.montar_cuadrado(mid, float(d.get("desde", 0)), float(d.get("hasta", 0))),
         "/api/m/short": lambda: montaje.montar_short(mid, float(d.get("desde", 0)), float(d.get("hasta", 0))),
         "/api/m/miniatura": lambda: montaje.miniatura(mid, str(d.get("texto", ""))[:40], list(d.get("fotos") or [])),
         "/api/m/carpeta": lambda: os.startfile(str(montaje.carpeta(mid))),  # noqa: S606 - el Explorador en tu PC

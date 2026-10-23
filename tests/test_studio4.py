@@ -2745,3 +2745,19 @@ def test_servidor_keepalive_vacia_el_cuerpo_del_post(servidor):
     assert r2.status == 200 and b"libre" in cuerpo or r2.status == 200   # el GET llega entero, no corrupto
     assert srv.Panel.protocol_version == "HTTP/1.1"
     c.close()
+
+
+def test_render_basico_aplica_lo_esencial_y_pide_los_3_formatos(aislado, tmp_path, monkeypatch):
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch, n=4)
+    mid = montaje.crear("P", "Primera frase con seis palabras justas aqui. Segunda frase con seis palabras justas.")
+    montaje.usar_fuente(mid, "fuenteA")
+    llamado = {}
+    monkeypatch.setattr(montaje, "automatico", lambda m, pago_ok=False: llamado.update(mid=m, pago=pago_ok))
+    montaje.render_basico(mid, {"musica": montaje.musica.NADA, "subtitulos": {"activos": False, "estilo": "cine"},
+                                "cuadrado": True, "voz_original": True, "pago_ok": False})
+    p = montaje.cargar(mid)
+    assert p["subtitulos"]["activos"] is False and p["subtitulos"]["estilo"] == "cine"
+    assert p["formatos"]["cuadrado"] is True and p["voz_original"] is True
+    assert all(f.get("clip") for f in p["frases"])   # rellenó los planos que faltaban
+    assert llamado["mid"] == mid   # lanzó el "hacerlo todo"

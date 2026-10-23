@@ -1190,8 +1190,10 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         filtros.append(f"[2:v]scale={lado}:{lado},format=rgba,colorchannelmixer=aa=0.55[logo];"
                        f"{mezcla_v}[logo]overlay=W-w-{int(40 * escala)}:{int(36 * escala)}:shortest=1[v1]")
         mezcla_v = "[v1]"
-    if final:
-        ass = subtitulos.construir(palabras, trabajo / "subs.ass", ancho, alto, {"posicion": "abajo"})
+    subs = {**SUBS_POR_DEFECTO, **(p.get("subtitulos") or {})}
+    if final and subs.get("activos", True):
+        ass = subtitulos.construir(palabras, trabajo / "subs.ass", ancho, alto,
+                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
         filtros.append(f"{mezcla_v}ass={ass.name},{cierre_v}[v]")
     else:
         filtros.append(f"{mezcla_v}{cierre_v}[v]")
@@ -1325,17 +1327,61 @@ def _hacer_short(mid: str, desde: float, hasta: float) -> None:
     palabras = [{**w, "ini": w["ini"] - desde, "fin": w["fin"] - desde}
                 for w in (q["voz"].get("pausas") or q["voz"])["palabras"]
                 if desde <= w["ini"] < hasta]
-    ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920, {"posicion": "abajo"})
+    subs = {**SUBS_POR_DEFECTO, **(q.get("subtitulos") or {})}
+    puestos = ""
+    if subs.get("activos", True):
+        ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920,
+                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
+        puestos = f",ass={ass.name}"
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
                   "-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / q["final"]["archivo"]),
                   "-filter_complex",
                   "[0:v]split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
                   "gblur=sigma=30,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
-                  f"[fondo][centro]overlay=0:(H-h)/2-120,ass={ass.name}[v]",
+                  f"[fondo][centro]overlay=0:(H-h)/2-120{puestos}[v]",
                   "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                   str(base / "short_9x16.mp4"), cwd=trabajo)
     modificar(mid, lambda r: r.update(short={"archivo": "short_9x16.mp4", "desde": desde, "hasta": hasta}))
+
+
+def montar_cuadrado(mid: str, desde: float, hasta: float) -> None:
+    """Un tramo del vídeo final (≤ 60 s) en 1:1 para el feed de Instagram/Facebook."""
+    p = cargar(mid)
+    if not p.get("final"):
+        raise ValueError("Primero monta el vídeo final.")
+    if not 5 <= hasta - desde <= 60:
+        raise ValueError("Un clip de feed dura entre 5 y 60 segundos.")
+    _en_fondo(mid, "Cuadrado", lambda: _hacer_cuadrado(mid, desde, hasta))
+
+
+def _hacer_cuadrado(mid: str, desde: float, hasta: float) -> None:
+    """1:1 (1080x1080): el 16:9 centrado sobre su versión desenfocada, con subtítulos propios. Mismo método que el Short."""
+    q = cargar(mid)
+    base = carpeta(mid)
+    trabajo = base / "render_cuadrado"
+    shutil.rmtree(trabajo, ignore_errors=True)
+    trabajo.mkdir()
+    _avisar(mid, "Encuadrando en 1:1", 20)
+    palabras = [{**w, "ini": w["ini"] - desde, "fin": w["fin"] - desde}
+                for w in (q["voz"].get("pausas") or q["voz"])["palabras"]
+                if desde <= w["ini"] < hasta]
+    subs = {**SUBS_POR_DEFECTO, **(q.get("subtitulos") or {})}
+    puestos = ""
+    if subs.get("activos", True):
+        ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1080,
+                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
+        puestos = f",ass={ass.name}"
+    medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
+                  "-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / q["final"]["archivo"]),
+                  "-filter_complex",
+                  "[0:v]split=2[a][b];[a]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,"
+                  "gblur=sigma=28,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
+                  f"[fondo][centro]overlay=0:(H-h)/2{puestos}[v]",
+                  "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                  "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+                  str(base / "cuadrado_1x1.mp4"), cwd=trabajo)
+    modificar(mid, lambda r: r.update(cuadrado={"archivo": "cuadrado_1x1.mp4", "desde": desde, "hasta": hasta}))
 
 
 def tramo_short(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
@@ -1360,8 +1406,11 @@ def automatico(mid: str, pago_ok: bool = False) -> None:
         _hacer_final(mid)
         q = cargar(mid)
         desde, hasta = tramo_short(q)
-        _avisar(mid, "Short vertical", 99)
+        _avisar(mid, "Short vertical", 98)
         _hacer_short(mid, desde, hasta)
+        if q.get("formatos", {}).get("cuadrado", True):   # el 1:1 para el feed (por defecto sí; el render básico lo decide)
+            _avisar(mid, "Clip 1:1 para el feed", 99)
+            _hacer_cuadrado(mid, desde, hasta)
         con_imagen = [f["clip"] for f in q["frases"] if f.get("clip")]
         if con_imagen:
             _avisar(mid, "Miniatura", 99)
@@ -1372,6 +1421,26 @@ def automatico(mid: str, pago_ok: bool = False) -> None:
             except Exception as e:  # noqa: BLE001 - el vídeo y el Short ya están; la miniatura se rehace a mano
                 logger.warning("Miniatura automática: %s", e)
     _en_fondo(mid, "Automático", fase)
+
+
+SUBS_POR_DEFECTO = {"activos": True, "estilo": "viral", "posicion": "abajo", "tamano": "normal"}
+
+
+def render_basico(mid: str, opciones: dict[str, Any] | None = None) -> None:
+    """Un solo paso: aplica lo esencial (voz, subtítulos, música, qué formatos, sonido original del vídeo) y entrega
+    el 16:9, el 9:16, el 1:1 y la miniatura, sin más opciones. Rellena los planos que falten para no pararse."""
+    o = opciones or {}
+    if o.get("voz_proveedor") and o.get("voz_nombre"):
+        elegir_voz(mid, str(o["voz_proveedor"]), str(o["voz_nombre"]))
+    if o.get("musica"):
+        elegir_musica(mid, str(o["musica"]))
+    subs = {**SUBS_POR_DEFECTO, **(o.get("subtitulos") or {})}
+    modificar(mid, lambda p: p.update(subtitulos=subs, formatos={"cuadrado": bool(o.get("cuadrado", True))},
+                                      voz_original=bool(o.get("voz_original", False))))
+    p = cargar(mid)
+    if p["fuentes"] and any(not con_imagen(f) and not f.get("panel") for f in p["frases"]):
+        proponer(mid)   # cada frase vacía recibe un plano, para poder hacerlo todo
+    automatico(mid, pago_ok=bool(o.get("pago_ok")))
 
 
 # --- Textos para publicar y miniatura -------------------------------------------------------------------------------
