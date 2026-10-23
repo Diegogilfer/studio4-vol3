@@ -324,3 +324,7 @@ textarea.guion { min-height: 420px; font-size: 16px; }
 .chip-radar { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; background: var(--caja); font-size: 14px; }
 .chip-radar b { color: var(--suave); font-weight: 600; }
 .chip-radar.caliente { background: color-mix(in srgb, var(--rosa) 16%, var(--caja)); }
+
+.cambiar-panel { padding: 8px 14px; border-radius: 999px; background: var(--caja); color: var(--texto); text-decoration: none;
+  font-size: 14px; white-space: nowrap; }
+.cambiar-panel:hover { background: color-mix(in srgb, var(--rosa) 16%, var(--caja)); }
