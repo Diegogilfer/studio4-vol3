@@ -2699,6 +2699,16 @@ def test_radar_detecta_juegos_en_varias_fuentes_sin_partir_nombres(monkeypatch):
     assert "Warfare" not in temas and "Duty" not in temas   # sin fragmentos sueltos
 
 
+def test_radar_guardadas_lee_lo_ultimo_sin_red(monkeypatch, tmp_path):
+    from studio4 import radar
+    monkeypatch.setattr(radar, "SENALES", tmp_path / "_radar.jsonl")
+    assert radar.guardadas() == []
+    monkeypatch.setattr(radar, "escanear", lambda cfg=None: [{"tema": "GTA 6", "fuerza": 30, "n_fuentes": 4, "caliente": True, "fuentes": [], "titulares": []}])
+    radar.señales(n=5, guardar=True)   # día de hoy
+    g = radar.guardadas()
+    assert len(g) == 1 and g[0]["tema"] == "GTA 6" and g[0]["dia"]
+
+
 def test_vigilante_avisa_render_parado_y_video_listo_y_no_repite(aislado, monkeypatch, tmp_path):
     import time as _t
     from studio4 import montaje, vigilante

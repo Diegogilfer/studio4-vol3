@@ -41,7 +41,7 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
     if ruta == "/api/m/flow":   # el enlace de tu herramienta de Google Flow
         return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
-        return "json", {"senales": radar.señales(n=12)}
+        return "json", {"senales": radar.guardadas(12)}
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador

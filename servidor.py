@@ -64,6 +64,11 @@ class Error(Exception):
 
 class Panel(BaseHTTPRequestHandler):
     server_version = "STUDIO4"
+    # El panel pide decenas de imágenes por página. Con HTTP/1.0 abría una conexión nueva por cada una y las dejaba
+    # en TIME_WAIT: con muchas a la vez el puerto se saturaba y rechazaba las nuevas (parecía caído, «no carga»).
+    # HTTP/1.1 reutiliza la misma conexión; el timeout cierra las que quedan sin uso para no acumular hilos.
+    protocol_version = "HTTP/1.1"
+    timeout = 20
 
     def log_message(self, fmt, *args):  # noqa: D401 - el panel sondea cada 2 s: solo con STUDIO4_LOG_PETICIONES=1
         if os.getenv("STUDIO4_LOG_PETICIONES"):
@@ -178,11 +183,15 @@ class Panel(BaseHTTPRequestHandler):
         except (ValueError, RuntimeError, FileNotFoundError, KeyError, IndexError) as e:
             logger.warning("Rechazado %s: %s", ruta, e)   # queda en servidor.log para saber por qué no se hizo
             self._json({"error": str(e)}, 400)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError):
+            self.close_connection = True   # el navegador cerró o caducó: no respondemos a un socket muerto
         except Exception as e:  # noqa: BLE001
             logger.exception("Error inesperado en %s", self.path)
-            self._json({"error": f"Error interno: {e}"}, 500)
+            self.close_connection = True
+            try:
+                self._json({"error": f"Error interno: {e}"}, 500)
+            except OSError:
+                pass
 
     def do_GET(self):  # noqa: N802
         self._atender("GET")
@@ -193,6 +202,7 @@ class Panel(BaseHTTPRequestHandler):
     def _redirigir(self, destino: str) -> None:
         self.send_response(302)
         self.send_header("Location", destino)
+        self.send_header("Content-Length", "0")   # HTTP/1.1: sin tamaño el navegador se queda esperando
         self.end_headers()
 
     def _get(self, ruta: str) -> None:

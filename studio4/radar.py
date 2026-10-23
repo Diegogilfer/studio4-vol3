@@ -150,11 +150,26 @@ def _guardar(senales: list[dict[str, Any]]) -> None:
 
 
 def señales(n: int = 10, guardar: bool = False) -> list[dict[str, Any]]:
-    """Las n señales más fuertes de ahora. `guardar`: deja constancia en _radar.jsonl (para la tarea diaria)."""
+    """Las n señales más fuertes de ahora. `guardar`: deja constancia en _radar.jsonl (para la tarea diaria).
+    Hace 6 descargas en vivo: lento. El panel usa `guardadas()`, no esto."""
     s = escanear()[:n]
     if guardar and s:
         _guardar(s)
     return s
+
+
+def guardadas(n: int = 12) -> list[dict[str, Any]]:
+    """Las señales del último escaneo guardado (rápido, sin red). Para el panel: no espera a 6 webs en cada carga."""
+    if not SENALES.is_file():
+        return []
+    try:
+        lineas = [json.loads(l) for l in SENALES.read_text(encoding="utf-8").splitlines() if l.strip()]
+    except (OSError, ValueError):
+        return []
+    if not lineas:
+        return []
+    ultimo = lineas[-1].get("dia")
+    return [s for s in lineas if s.get("dia") == ultimo][:n]
 
 
 def para_ideas(cid: str, n: int = 3, avisar=lambda _f: None) -> list[dict[str, Any]]:
