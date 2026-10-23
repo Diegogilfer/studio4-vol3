@@ -2973,3 +2973,37 @@ def test_investigacion_web_de_deepseek_filtra_autoridad_y_cita(monkeypatch):
     r = investigacion.investigar("GTA VI tráiler")
     assert r["metodo"] == "DeepSeek (web)" and [f["url"] for f in r["fuentes"]] == ["https://www.rockstargames.com/a"]
     assert "spam.example" not in textos[-1] and r["dossier"] == "HECHOS [F1]"
+
+
+def test_chat_ejecuta_acciones_reales_y_rechaza_inventadas(aislado, tmp_path, monkeypatch):
+    from studio4 import chat, montaje
+    _banco_falso(tmp_path, monkeypatch, n=4)
+    mid = montaje.crear("P", "Primera frase con seis palabras justas aqui.\n\nSegunda frase con seis palabras justas aqui.")
+    montaje.usar_fuente(mid, "fuenteA")
+    n1 = montaje.cargar(mid)["frases"][0]["n"]
+    respuesta = {"respuesta": "Listo: planos, voz y subtítulos.", "acciones": [
+        {"accion": "proponer_planos", "args": {}},
+        {"accion": "cambiar_voz", "args": {"nombre": "Charon"}},
+        {"accion": "subtitulos", "args": {"estilo": "cine", "posicion": "arriba"}},
+        {"accion": "mover_escena", "args": {"n": n1, "direccion": 1}},
+        {"accion": "borrar_disco", "args": {}}]}
+    r = chat.responder(mid, "pon planos, voz Charon, subtítulos cine arriba y baja la primera escena", pensar=lambda *a: respuesta)
+    p = montaje.cargar(mid)
+    assert len(r["hechas"]) == 4 and any("borrar_disco" in e for e in r["errores"])
+    assert all(f.get("clip") for f in p["frases"]) and p["voz_nombre"] == "Charon"
+    assert p["subtitulos"]["estilo"] == "cine" and p["subtitulos"]["posicion"] == "arriba"
+    assert p["frases"][1]["n"] == n1   # la escena bajó
+    assert [m["quien"] for m in p["chat"][-2:]] == ["tú", "IA"]
+    # voz inexistente / de pago: error, no se cambia
+    r2 = chat.responder(mid, "pon la voz de pago", pensar=lambda *a: {"respuesta": "ok", "acciones": [{"accion": "cambiar_voz", "args": {"nombre": "Rachel"}}]})
+    assert r2["errores"] and montaje.cargar(mid)["voz_nombre"] == "Charon"
+
+
+def test_chat_solo_un_trabajo_en_segundo_plano_por_mensaje(aislado, monkeypatch):
+    from studio4 import chat, montaje
+    mid = montaje.crear("P", "Una frase con seis palabras justas aqui.")
+    lanzados = []
+    monkeypatch.setitem(chat.ACCIONES, "hacer_previa", {**chat.ACCIONES["hacer_previa"], "fn": lambda m, a: lanzados.append("previa") or "previa"})
+    monkeypatch.setitem(chat.ACCIONES, "buscar_material", {**chat.ACCIONES["buscar_material"], "fn": lambda m, a: lanzados.append("material") or "material"})
+    r = chat.responder(mid, "todo", pensar=lambda *a: {"respuesta": "", "acciones": [{"accion": "hacer_previa"}, {"accion": "buscar_material"}]})
+    assert lanzados == ["previa"] and r["errores"]

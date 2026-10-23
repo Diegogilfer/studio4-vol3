@@ -451,12 +451,68 @@ function miniaturaDe(f) {
 }
 
 const NOMBRES = ["Guion", "Material", "Montaje", "Previa", "Final"];
+// ============================================================ Chat del vídeo (DeepSeek ejecuta acciones del estudio)
+const SUGERENCIAS = ["Escribe el guion con IA", "Pon un plano en cada frase", "Subtítulos estilo cine arriba",
+  "Cambia la voz a Charon", "Haz la previa", "Hazlo todo: los 3 formatos"];
+function chatHTML(v) {
+  const msgs = v.chat || [];
+  return `<aside class="chat-lado"><div class="chat-cab"><b>Chat</b><small class="meta">Pídele cambios: los hace</small></div>
+    <div class="chat-msgs" id="chat-msgs">${msgs.length ? msgs.map((m) => `
+      <div class="msg ${m.quien === "tú" ? "mio" : "ia"}"><p>${esc(m.texto)}</p>
+        ${(m.hechas || []).map((h) => `<small class="hecho">✓ ${esc(h)}</small>`).join("")}
+        ${(m.errores || []).map((h) => `<small class="fallo">✕ ${esc(h)}</small>`).join("")}</div>`).join("")
+      : `<p class="meta">Escribe lo que quieres: «hazlo más dinámico», «pon subtítulos estilo cine», «escribe un guion de 1 minuto»…</p>`}</div>
+    <div class="chips-ia sugerencias">${SUGERENCIAS.map((t) => `<button type="button" class="chip-ia" data-sugerencia="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+    <form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Escribe un cambio para este vídeo…"></textarea>
+      <button class="primario" type="submit">Enviar</button></form></aside>`;
+}
+function enlazarChat(v) {
+  const caja = $("chat-msgs");
+  if (caja) caja.scrollTop = caja.scrollHeight;
+  const enviarChat = async (texto) => {
+    if (!texto.trim()) return;
+    const b = $("chat-form").querySelector("button");
+    b.disabled = true; b.textContent = "Pensando…";
+    try { await api("/api/m/chat", { id: v.id, mensaje: texto }); $("chat-texto").value = ""; }
+    catch (e) { aviso(e); }
+    finally { b.disabled = false; b.textContent = "Enviar"; firma = ""; await cargarVideo(v.id); }
+  };
+  $("chat-form").onsubmit = (ev) => { ev.preventDefault(); enviarChat($("chat-texto").value); };
+  $("chat-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); enviarChat(ev.target.value); } };
+  document.querySelectorAll("[data-sugerencia]").forEach((b) => { b.onclick = () => enviarChat(b.dataset.sugerencia); });
+}
+
+// Tarjeta «Resumen» y guion gráfico (escenas con su tiempo y su plano), como el lienzo de CapCut
+function resumenIAHTML(v) {
+  const r = v.resumen_ia;
+  if (!r) return "";
+  const fila = (k, val) => (val ? `<div><small class="meta">${k}</small><b>${esc(String(val))}</b></div>` : "");
+  return `<section class="resumen-ia"><span class="etiqueta">Resumen del vídeo</span>
+    ${r.gancho ? `<p class="gancho">«${esc(r.gancho)}»</p>` : ""}
+    <div class="resumen-rejilla">${fila("Duración", reloj(r.duracion))}${fila("Formato", r.formato)}${fila("Tono", r.tono)}
+      ${fila("Modo", r.modo === "inventar" ? "Historia" : "Investigación oficial")}${fila("Voz", v.voz_nombre)}${fila("Música", r.musica)}
+      ${fila("Subtítulos", (v.subtitulos?.estilo || "viral") + " · " + (v.subtitulos?.posicion || "abajo"))}${fila("Material", `${v.fuentes.length} vídeo(s)`)}${fila("Plataforma", r.plataforma)}</div></section>`;
+}
+function guionGraficoHTML(v) {
+  if (!v.frases.length) return "";
+  const tiempos = v.voz?.tiempos;
+  let t = 0;
+  const filas = v.frases.map((f, k) => {
+    const ini = tiempos?.[k] ? tiempos[k][0] : t;
+    t += f.texto.split(/\s+/).length / 2.25;
+    return `<div class="gg-fila"><small class="gg-t">${reloj(ini)}</small><p>${esc(f.texto)}</p>
+      <button class="gg-mini" type="button" data-elegir="${f.n}" title="Elegir el plano">${miniaturaDe(f)}</button></div>`;
+  }).join("");
+  return `<section class="guion-grafico"><span class="etiqueta">Guion gráfico · ${v.frases.length} escenas</span>${filas}</section>`;
+}
+
 function pintarVideo() {
   const v = datos.video, paso = datos.paso;
   const p = pasoVisto || paso;
   const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
   const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen).length;
   $("vista").innerHTML = `
+    <div class="lienzo"><div class="lienzo-main">
     <a class="volver" href="#videos">← Tus vídeos</a>
     <div class="cabeza"><h1>${esc(v.titulo)}</h1>
       <button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button></div>
@@ -466,8 +522,10 @@ function pintarVideo() {
     <div class="navegar">
       ${p > 1 ? `<a class="boton" href="#v=${esc(v.id)}/${p - 1}">← ${NOMBRES[p - 2]}</a>` : "<span></span>"}
       ${p < 5 ? `<a class="primario" href="#v=${esc(v.id)}/${p + 1}">${NOMBRES[p]} →</a>` : ""}
-    </div>`;
+    </div>
+    </div>${chatHTML(v)}</div>`;
   enlazarVideo(p);
+  enlazarChat(v);
 }
 
 const pasoCab = (n, titulo, texto) => `<div class="paso-cab"><span class="num">${n}</span><div><h2>${titulo}</h2><p>${texto}</p></div></div>`;
@@ -512,7 +570,9 @@ document.addEventListener("click", (ev) => {   // un solo chip activo por grupo
 function pasoGuion(v) {
   return `<section class="paso">
     ${pasoCab(1, "Guion", `${v.frases.length} frases en ${new Set(v.frases.map((f) => f.bloque)).size} bloques. Una línea en blanco separa los bloques: ahí entra la rejilla.`)}
+    ${resumenIAHTML(v)}
     ${resumenHTML(datos.resumen)}
+    ${guionGraficoHTML(v)}
     ${v.avisos?.length ? `<div class="avisos">${v.avisos.map((a) => `<p>${esc(a)}</p>`).join("")}</div>` : ""}
     ${!v.frases.length && v.trabajo?.ocupado ? `<p class="meta">Studio está investigando y escribiendo el guion: aparecerá aquí al terminar.</p>` : ""}
     <div class="ia-caja" id="guion-ia">
