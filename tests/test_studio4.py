@@ -2875,3 +2875,25 @@ def test_subir_video_de_tu_pc_crea_material_en_alta(servidor, tmp_path, monkeypa
     r2 = c.getresponse(); r2.read()
     assert r2.status == 400
     c.close()
+
+
+def test_leer_y_guardar_el_proyecto_a_la_vez_no_falla(aislado):
+    """Panel leyendo mientras un trabajo reescribe proyecto.json: en Windows daba PermissionError."""
+    import threading as _th
+    from studio4 import montaje
+    mid = montaje.crear("P", "Una frase con seis palabras justas aqui.")
+    errores, parar = [], _th.Event()
+
+    def escribir():
+        while not parar.is_set():
+            montaje.modificar(mid, lambda p: p["trabajo"].update(progreso=(p["trabajo"].get("progreso") or 0) + 1))
+    h = _th.Thread(target=escribir); h.start()
+    try:
+        for _ in range(400):
+            try:
+                montaje.cargar(mid)
+            except Exception as e:  # noqa: BLE001
+                errores.append(e)
+    finally:
+        parar.set(); h.join()
+    assert not errores, errores[:2]

@@ -60,11 +60,23 @@ def carpeta(mid: str) -> Path:
     return raiz() / mid
 
 
+def _reintentar(fn: Callable[[], Any], veces: int = 20) -> Any:
+    """En Windows, leer proyecto.json justo cuando otro hilo lo reemplaza (o reemplazarlo mientras se lee) da
+    PermissionError: el panel consulta el vídeo cada 1,5 s mientras un trabajo lo reescribe. Se reintenta un instante."""
+    for k in range(veces):
+        try:
+            return fn()
+        except PermissionError:
+            if k == veces - 1:
+                raise
+            time.sleep(0.02 * (k + 1))
+
+
 def cargar(mid: str) -> dict[str, Any]:
     ruta = carpeta(mid) / "proyecto.json"
     if not ruta.exists():
         raise ValueError("Ese vídeo ya no existe.")
-    return json.loads(ruta.read_text(encoding="utf-8"))
+    return _reintentar(lambda: json.loads(ruta.read_text(encoding="utf-8")))
 
 
 def guardar(p: dict[str, Any]) -> None:
@@ -73,7 +85,7 @@ def guardar(p: dict[str, Any]) -> None:
     p["actualizado"] = time.strftime("%Y-%m-%d %H:%M:%S")
     tmp = ruta.with_suffix(".tmp")
     tmp.write_text(json.dumps(p, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(ruta)
+    _reintentar(lambda: tmp.replace(ruta))
 
 
 def modificar(mid: str, cambio: Callable[[dict[str, Any]], Any]) -> dict[str, Any]:
