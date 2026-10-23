@@ -213,6 +213,27 @@ class Panel(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         self._atender("POST")
 
+    def _pagina(self, ruta: Path) -> None:
+        """Sirve una página HTML marcando cada /web/*.js|css|ico con la fecha del archivo (?v=mtime). Así, cuando
+        cambio el panel, la URL cambia y el navegador coge SIEMPRE lo último (antes se quedaba con la copia vieja)."""
+        if not ruta.is_file():
+            raise Error(404, "No existe")
+        html = ruta.read_text(encoding="utf-8")
+
+        def versionar(m: re.Match) -> str:
+            rel = m.group(1)
+            f = (config.WEB / rel[len("/web/"):])
+            v = int(f.stat().st_mtime) if f.is_file() else 0
+            return f'"{rel}?v={v}"'
+        html = re.sub(r'"(/web/[\w./-]+\.(?:js|css|ico|png|svg))"', versionar, html)
+        cuerpo = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(cuerpo)))
+        self.send_header("Cache-Control", "no-store")   # la página en sí nunca se cachea
+        self.end_headers()
+        self.wfile.write(cuerpo)
+
     def _redirigir(self, destino: str) -> None:
         self.send_response(302)
         self.send_header("Location", destino)
@@ -238,7 +259,7 @@ class Panel(BaseHTTPRequestHandler):
                 # Con la clave sin canal, la búsqueda de temas funciona igual: solo falta saber tu canal.
                 return self._json({"conectado": True, "modo": modo, "sin_canal": True, "error": str(e)})
         if ruta in PAGINAS:
-            return self._archivo(config.WEB / PAGINAS[ruta])
+            return self._pagina(config.WEB / PAGINAS[ruta])
         if ruta.startswith("/web/"):
             destino = (config.WEB / ruta[5:]).resolve()
             if config.WEB.resolve() not in destino.parents:
