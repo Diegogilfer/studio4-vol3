@@ -175,7 +175,7 @@ async function vistaBiblioteca() {
   guiones.forEach((g) => { if (!temas.has(g.codigo)) temas.set(g.codigo, []); temas.get(g.codigo).push(g); });
   $("vista").innerHTML = `
     ${cabecera("Biblioteca de <em>guiones</em>", `${temas.size} temas · ${guiones.length} guiones. El largo se monta en 16:9 y de él salen los Shorts.`)}
-    ${!temas.size ? `<p class="meta">Aún no hay guiones: pégalos en el panel clásico › Crear › Biblioteca.</p>` : ""}
+    ${!temas.size ? `<p class="meta">Aún no hay guiones en la Biblioteca. Crea un vídeo desde una idea, una URL o pegando un guion.</p>` : ""}
     <div class="temas">${[...temas].map(([codigo, gs]) => {
       const largo = gs.find((g) => g.tipo === "largo") || gs[0];
       const cortos = gs.filter((g) => g !== largo);
@@ -184,7 +184,7 @@ async function vistaBiblioteca() {
         <summary class="tema">
           <span class="tema-cod">${esc(codigo)}</span>
           <div><b>${esc(largo.titulo || largo.guion.slice(0, 70))}</b>
-            <small>${largo.palabras} palabras · ${cortos.length} cortos${largo.producido && !mios.has(largo.producido) ? " · empezado en el panel clásico" : ""}${repe ? ` · <span class="repe">algún corto se parece a otro tema</span>` : ""}</small></div>
+            <small>${largo.palabras} palabras · ${cortos.length} cortos${largo.producido && !mios.has(largo.producido) ? " · ya empezado" : ""}${repe ? ` · <span class="repe">algún corto se parece a otro tema</span>` : ""}</small></div>
           ${mios.has(largo.producido) ? `<button class="boton" type="button" data-abrir="${esc(largo.producido)}">Abrir</button>`
             : `<button class="primario" type="button" data-bib="${esc(largo.id)}">Crear en 16:9</button>`}
         </summary>
@@ -239,7 +239,7 @@ async function vistaCanal() {
   const panel = await seguro("/api/panel");
   const canales = panel?.canales || [];
   $("vista").innerHTML = `
-    ${cabecera("Tus <em>canales</em>", "Estadísticas públicas de YouTube y lo hecho en Studio. Los ajustes (redes, fuentes, voz) siguen en el panel clásico.")}
+    ${cabecera("Tus <em>canales</em>", "Estadísticas públicas de YouTube y lo hecho en Studio.")}
     ${canales.map((c) => {
       const yt = c.youtube || {};
       const lista = (t, vs) => vs?.length ? `<div class="tend-col"><span class="etiqueta">${t}</span>${vs.slice(0, 5).map((v) =>
@@ -259,8 +259,7 @@ async function vistaCanal() {
         </div>
         ${c.error ? `<p class="meta">YouTube: ${esc(c.error)}</p>` : ""}
         <div class="tendencias">${lista("Lo más visto", yt.mas_vistos)}${lista("Lo más reciente", yt.recientes)}</div>
-      </section>`; }).join("")}
-    <a class="boton" href="/clasico#canales">Ajustes de canales (panel clásico)</a>`;
+      </section>`; }).join("")}`;
   document.querySelectorAll("[data-activar]").forEach((b) => { b.onclick = async () => {
     try { await api("/api/canales/activar", { id: b.dataset.activar }); ir(); } catch (e) { aviso(e); }
   }; });
@@ -303,7 +302,7 @@ async function vistaHerramientas() {
   try {
     const m = await api("/api/m/mantenimiento");
     $("mantenimiento").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Mantenimiento</span>
-      <div class="fila"><span class="meta">Vídeos ${mb(m.espacio.montajes)} · banco de clips ${mb(m.espacio.banco)}${m.espacio.papelera ? ` · papelera del panel clásico ${mb(m.espacio.papelera)}` : ""}</span>
+      <div class="fila"><span class="meta">Vídeos ${mb(m.espacio.montajes)} · banco de clips ${mb(m.espacio.banco)}${m.espacio.papelera ? ` · papelera ${mb(m.espacio.papelera)}` : ""}</span>
         ${m.espacio.liberable > 50e6 ? `<button class="boton" id="liberar">Liberar ${mb(m.espacio.liberable)} de temporales</button>` : ""}</div>
       <div class="fila"><span class="meta">Descargador ${esc(m.descargador.version)}${m.descargador.viejo ? ` · tiene ${m.descargador.dias} días: conviene actualizarlo` : " · al día"}</span>
         ${m.descargador.viejo ? `<button class="boton" id="actualizar-dl">Actualizar descargador</button>` : ""}</div></section>`;

@@ -2799,3 +2799,41 @@ def test_panel_tiene_pestana_planes_producto():
     html = (config.RAIZ / "web" / "montaje.html").read_text(encoding="utf-8")
     assert "planes: vistaPlanes" in js and '"gratis"' in js and '"pro"' in js and '"studio"' in js
     assert 'data-vista="planes"' in html
+
+
+def test_desde_idea_respeta_corto_y_sus_segundos(aislado, monkeypatch):
+    """Una idea «corto de 70 segundos» pedía 5 minutos de guion: ahora pide la versión corta con sus segundos."""
+    import time as _t
+    from studio4 import canales, escenas, guion, ideas, investigacion, material, montaje
+    idea = {"idea": "Un corto de 70 segundos sobre el piano de Mario 64", "formato": "corto", "texto": ""}
+    monkeypatch.setattr(ideas, "diarias", lambda cid: {"ideas": [idea]})
+    monkeypatch.setattr(investigacion, "investigar", lambda *a, **k: {"dossier": "datos"})
+    monkeypatch.setattr(material, "inventario", lambda *a, **k: [])
+    monkeypatch.setattr(escenas, "para_guion", lambda metas: "")
+    pedido = {}
+
+    def escribir(idea_txt, dossier, versiones, **k):
+        pedido.update(versiones)
+        v = next(iter(versiones))
+        return {v: {"guion": "Una frase con seis palabras justas aqui."}, "titulo_provisional": "Piano"}
+    monkeypatch.setattr(guion, "escribir", escribir)
+    real = canales.obtener
+    monkeypatch.setattr(canales, "obtener", lambda cid: {**real(cid), "fuentes": []})
+    mid = montaje.desde_idea(0)
+    fin = _t.time() + 10
+    while montaje.cargar(mid)["trabajo"].get("ocupado") and _t.time() < fin:
+        _t.sleep(0.05)
+    assert pedido == {"corto": 70}, pedido
+    assert montaje.cargar(mid)["frases"]
+
+
+def test_mover_escena_entre_bloques_no_desordena_transiciones(aislado, tmp_path, monkeypatch):
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch, n=4)
+    mid = montaje.crear("P", "Primera frase con seis palabras justas aqui.\n\nSegunda frase con seis palabras justas aqui.")
+    antes = [(f["n"], f["bloque"]) for f in montaje.cargar(mid)["frases"]]
+    assert [b for _, b in antes] == [0, 1]
+    montaje.mover_frase(mid, antes[0][0], +1)
+    despues = montaje.cargar(mid)["frases"]
+    assert [f["n"] for f in despues] == [antes[1][0], antes[0][0]]
+    assert [f["bloque"] for f in despues] == [0, 1]   # los bloques siguen en su sitio: una sola transición

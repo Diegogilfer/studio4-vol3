@@ -344,9 +344,13 @@ def desde_idea(n: int) -> str:
         if indice := escenas.para_guion([{"url": v["url"], "nombre": v["titulo"]} for e in inv for v in e["videos"]]):
             dossier["dossier"] = f"{indice}\n\n" + dossier.get("dossier", "")
         _avisar(mid, "Escribiendo el guion", 60)
-        escrito = guionista.escribir(idea["idea"], dossier.get("dossier", ""), {"largo": 300}, produccion=mid,
+        # la duración la marca la idea: «corto» (Shorts, ~60 s o los segundos que diga) o largo (~5 min)
+        version, segundos = ("corto", 60) if idea.get("formato") == "corto" else ("largo", 300)
+        if version == "corto" and (m := re.search(r"(\d{2,3})\s*segundos", idea["idea"])) and 20 <= int(m.group(1)) <= 180:
+            segundos = int(m.group(1))
+        escrito = guionista.escribir(idea["idea"], dossier.get("dossier", ""), {version: segundos}, produccion=mid,
                                      referencias=idea.get("texto", ""), identidad=guionista.identidad_del_canal(canales.obtener(cid)))
-        cambiar_guion(mid, escrito["largo"]["guion"])
+        cambiar_guion(mid, escrito[version]["guion"])
         modificar(mid, lambda p: p.update(titulo=escrito.get("titulo_provisional") or p["titulo"]))
     _en_fondo(mid, "Guion", fase)
     return mid
@@ -543,6 +547,8 @@ def mover_frase(mid: str, n: int, direccion: int) -> None:
         j = i + (1 if direccion > 0 else -1)
         if not 0 <= j < len(frases):
             return   # ya está en un extremo
+        # se intercambian también los bloques: la estructura (dónde entra cada transición) se queda en su sitio
+        frases[i]["bloque"], frases[j]["bloque"] = frases[j]["bloque"], frases[i]["bloque"]
         frases[i], frases[j] = frases[j], frases[i]
         p.update(previa="", final=None, short=None)
     modificar(mid, cambio)
