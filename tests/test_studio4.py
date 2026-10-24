@@ -3022,6 +3022,10 @@ def test_formatos_diarios_recorta_negro_y_saca_los_3(tmp_path):
     assert abs(fd.fin_de_imagen(v) - 4.0) < 0.2   # el negro del final no cuenta
     hechos = fd.hacer(v)
     nombres = sorted(h.name for h in hechos)
-    assert nombres == ["conteo dia 1 - 1x1.mp4", "conteo dia 1 - 9x16 zoom.mp4", "conteo dia 1 - 9x16.mp4"]
-    for h in hechos:
+    assert nombres == ["conteo dia 1 - 1x1.mp4", "conteo dia 1 - 9x16 zoom.mp4", "conteo dia 1 - 9x16.mp4",
+                       "conteo dia 1 - textos YouTube.txt"]
+    for h in hechos[:-1]:
         assert abs(fd.duracion(h) - 4.0) < 0.3
+    textos = hechos[-1].read_text(encoding="utf-8")
+    assert "GTA 6: falta 1 DÍA para el lanzamiento" in textos and "¡Solo 1 día para GTA 6!" in textos and "ETIQUETAS" in textos
+    assert "faltan 25 DÍAS" in fd.textos(Path("conteo dia 25.mp4"))

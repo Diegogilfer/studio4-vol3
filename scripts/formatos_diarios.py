@@ -4,6 +4,7 @@
     <nombre> - 9x16.mp4        vertical con el cuadro entero sobre su imagen desenfocada
     <nombre> - 9x16 zoom.mp4   vertical que en la escena central se acerca al texto («26 DÍAS…») para leerlo grande
     <nombre> - 1x1.mp4         cuadrado para el feed
+    <nombre> - textos YouTube.txt   título (16:9 y Short), descripción y etiquetas, con el día sacado del nombre
 
 Si el vídeo trae negro al final (la pista de audio más larga que la imagen al exportar), se recorta solo.
 La escena central se detecta por los cortes de plano (logo → cuenta atrás → redes).
@@ -69,6 +70,32 @@ def render(v: Path, filtro: str, destino: Path, fin: float) -> None:
         "-af", f"afade=t=out:st={max(0, fin - 0.45):.3f}:d=0.4", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(destino))
 
 
+LANZAMIENTO = "19 de noviembre de 2026"
+HASHTAGS = "#GTA6 #GTAVI #GrandTheftAuto6 #ViceCity #CuentaAtras #FourLevel #Rockstar"
+ETIQUETAS = ("gta 6, gta vi, grand theft auto 6, gta 6 cuenta atras, cuanto falta para gta 6, gta 6 lanzamiento, "
+             "gta 6 fecha de salida, vice city, rockstar games, gta 6 noticias, gta 6 español, fourlevel")
+
+
+def textos(v: Path) -> str:
+    """Título, descripción y etiquetas listos para pegar en YouTube. El día sale del nombre («conteo dia 26»)."""
+    m = re.search(r"d[ií]a\s*(\d+)", v.stem, re.IGNORECASE)
+    if m:
+        n = int(m.group(1))
+        dias = "1 DÍA" if n == 1 else f"{n} DÍAS"
+        largo = f"GTA 6: {'falta' if n == 1 else 'faltan'} {dias} para el lanzamiento 🔥 | Cuenta atrás FourLevel"
+        corto = f"¡Solo {dias.lower()} para GTA 6! ⏳ #Shorts"
+        gancho = f"⏳ {'Falta' if n == 1 else 'Faltan'} {dias.lower()} para el lanzamiento de Grand Theft Auto VI ({LANZAMIENTO})."
+    else:
+        largo = f"{v.stem} | FourLevel"
+        corto = f"{v.stem} #Shorts"
+        gancho = f"{v.stem}."
+    descripcion = (f"{gancho}\nCada día, una nueva cuenta atrás hasta que vuelvas a Vice City. ¿Lo vas a jugar el primer día? "
+                   "Te leo en los comentarios 👇\n\n🔔 Suscríbete y activa la campana para no perderte ningún día del conteo.\n\n"
+                   "📲 Sígueme en todas mis redes: @FourLevel\nYouTube · Twitch · TikTok · Instagram · X · Discord\n\n" + HASHTAGS)
+    return (f"TÍTULO (vídeo 16:9)\n{largo}\n\nTÍTULO (Short / Reel 9:16)\n{corto}\n\nDESCRIPCIÓN\n{descripcion}\n\n"
+            f"ETIQUETAS\n{ETIQUETAS}\n\nCONSEJO: mete el vídeo en la lista «Cuenta atrás GTA 6».\n")
+
+
 def hacer(v: Path) -> list[Path]:
     fin = fin_de_imagen(v)
     base = v.with_suffix("")
@@ -85,6 +112,9 @@ def hacer(v: Path) -> list[Path]:
                   f"[s1][s2][s3]concat=n=3:v=1:a=0[v]")
         render(v, filtro, Path(f"{base} - 9x16 zoom.mp4"), fin)
         hechos.append(Path(f"{base} - 9x16 zoom.mp4"))
+    txt = Path(f"{base} - textos YouTube.txt")
+    txt.write_text(textos(v), encoding="utf-8")
+    hechos.append(txt)
     return hechos
 
 
