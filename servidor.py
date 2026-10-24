@@ -433,6 +433,16 @@ class Panel(BaseHTTPRequestHandler):
             tmp = self._cuerpo_a_temporal(maximo=config.MAX_BYTES_VIDEO)
             self._por_leer = 0
             return self._json({"ok": True, "id": montaje.subir_video(tmp, nombre, (query.get("id") or [""])[0])})
+        if ruta in ("/api/m/subir-voz", "/api/m/subir-musica"):   # tu locución o tu canción, con «Examinar»
+            from studio4 import montaje
+            nombre = urllib.parse.unquote(self.headers.get("X-Nombre", "")) or "audio.mp3"
+            tmp = self._cuerpo_a_temporal(maximo=500 * 1024 * 1024)
+            self._por_leer = 0
+            mid = (query.get("id") or [""])[0]
+            if ruta == "/api/m/subir-voz":
+                montaje.subir_voz(mid, tmp, nombre)
+                return self._json({"ok": True})
+            return self._json({"ok": True, "archivo": montaje.subir_musica(tmp, nombre, mid)})
         if ruta.startswith("/api/m/"):   # panel nuevo: sus rutas viven en studio4/rutas_montaje.py
             self._panel_nuevo(rutas_montaje.post, ruta, self._cuerpo_json())
             return

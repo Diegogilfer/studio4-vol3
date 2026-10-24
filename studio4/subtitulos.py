@@ -133,7 +133,7 @@ def srt(palabras: list[dict[str, Any]], destino: Path, max_linea: int = 42) -> P
 
 # --- Subtítulos en varios idiomas (pistas .srt para subir a YouTube) -----------------------------------------------
 # Códigos de archivo → nombre del idioma para el traductor. El español es el original (no se traduce).
-IDIOMAS = {"en": "inglés", "zh": "chino mandarín simplificado", "ja": "japonés"}
+IDIOMAS = {"es": "español latino neutro", "en": "inglés", "zh": "chino mandarín simplificado", "ja": "japonés"}
 
 
 def _leer_srt(texto: str) -> list[tuple[str, str]]:

@@ -402,3 +402,16 @@ main:has(.lienzo) { max-width: 1480px; }
 
 /* título del vídeo más contenido dentro del lienzo */
 .lienzo .cabeza h1 { font-size: clamp(30px, 3.4vw, 44px); line-height: 1.05; }
+
+/* voz y música: escuchar antes de elegir */
+.rejilla-audio { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.op-audio { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--caja-2); border: 1px solid var(--borde); min-width: 0; }
+.op-audio.activa { border-color: var(--rosa); background: color-mix(in srgb, var(--rosa) 12%, var(--caja-2)); }
+.op-texto { display: grid; flex: 1; min-width: 0; }
+.op-texto b, .op-texto small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-texto small { color: var(--tenue); font-size: 12px; }
+.oir { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--cian); color: #000; border: 0; font-size: 15px; cursor: pointer; }
+.oir.sonando { background: var(--rosa); color: #fff; }
+.oir.mudo { background: transparent; color: var(--tenue); cursor: default; }
+.examinar { justify-self: start; cursor: pointer; }
+.chips-vel { gap: 6px; align-items: center; }

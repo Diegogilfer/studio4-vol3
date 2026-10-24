@@ -3029,3 +3029,80 @@ def test_formatos_diarios_recorta_negro_y_saca_los_3(tmp_path):
     textos = hechos[-1].read_text(encoding="utf-8")
     assert "GTA 6: falta 1 DÍA para el lanzamiento" in textos and "¡Solo 1 día para GTA 6!" in textos and "ETIQUETAS" in textos
     assert "faltan 25 DÍAS" in fd.textos(Path("conteo dia 25.mp4"))
+
+
+def test_tu_voz_se_alinea_con_el_guion_aunque_whisper_oiga_algo_distinto():
+    """Tu locución subida: los tiempos salen de lo que oyó Whisper y el texto, del guion (sin faltas de oído)."""
+    from studio4 import montaje
+    oidas = [{"palabra": w, "ini": i * 0.5, "fin": i * 0.5 + 0.4}
+             for i, w in enumerate("Faltan veintiséis días para GTA seis. Lucía es la protagonista.".split())]
+    t = montaje.alinear_voz(["Faltan 26 días para GTA 6.", "Lucia es la protagonista."], oidas, 6.0)
+    assert [w["palabra"] for w in t["palabras"]][:3] == ["Faltan", "26", "días"]
+    assert t["escenas"][0]["ini"] == 0.0 and t["escenas"][1]["ini"] == 3.0   # «Lucia» casa con «Lucía»
+    assert all(a["fin"] <= b["ini"] + 1e-6 for a, b in zip(t["escenas"], t["escenas"][1:]))
+    assert t["palabras"][1]["ini"] >= t["palabras"][0]["ini"]   # «26» (oído «veintiséis») cae en su sitio
+    with pytest.raises(ValueError):
+        montaje.alinear_voz(["Hola."], [], 1.0)
+
+
+def test_subir_tu_voz_y_tu_musica_y_escuchar_las_muestras(servidor, tmp_path, monkeypatch):
+    """«Examinar»: tu voz queda elegida (y se puede oír); tu canción entra en tu música y queda elegida; el fondo
+    suave del Studio se puede escuchar antes de elegirlo."""
+    import http.client
+    from studio4 import medios, montaje, musica
+    monkeypatch.setattr(musica, "carpeta", lambda: (tmp_path / "musica").mkdir(exist_ok=True) or tmp_path / "musica")
+    pedir, puerto = servidor
+    mid = montaje.crear("Voz propia", "Una frase con seis palabras justas aqui.")
+    audio = tmp_path / "mi voz.wav"
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=frequency=300:duration=2", str(audio))
+    c = http.client.HTTPConnection("127.0.0.1", puerto, timeout=30)
+    c.request("POST", f"/api/m/subir-voz?id={mid}", body=audio.read_bytes(), headers={"X-Nombre": "mi%20voz.wav"})
+    r = c.getresponse(); d = json.loads(r.read())
+    assert r.status == 200, d
+    p = montaje.cargar(mid)
+    assert p["voz_proveedor"] == "propia" and p["voz_propia"]["archivo"] == "mi voz.wav" and montaje.coste_voz(p) == 0
+    estado, cuerpo = pedir("GET", f"/m/{mid}/voz_propia.wav")
+    assert estado == 200 and cuerpo[:4] == b"RIFF"
+    c.request("POST", f"/api/m/subir-musica?id={mid}", body=audio.read_bytes(), headers={"X-Nombre": "Mi%20cancion.wav"})
+    r = c.getresponse(); d = json.loads(r.read())
+    assert r.status == 200 and d["archivo"] == "Mi cancion.wav", d
+    assert montaje.cargar(mid)["musica"] == "Mi cancion.wav" and (tmp_path / "musica" / "Mi cancion.wav").exists()
+    c.request("POST", f"/api/m/subir-voz?id={mid}", body=b"hola", headers={"X-Nombre": "notas.txt"})
+    r = c.getresponse(); r.read()
+    assert r.status == 400
+    c.close()
+    estado, cuerpo = pedir("GET", "/api/m/musica/cama")
+    assert estado == 200 and cuerpo[:4] == b"RIFF"
+
+
+def test_la_voz_subida_queda_guardada_para_otros_videos_y_la_velocidad_se_elige(servidor, tmp_path):
+    """Tu voz subida entra en la biblioteca (una sola vez aunque la subas dos veces) y otro vídeo la puede usar;
+    la velocidad solo admite los valores del panel."""
+    import http.client
+    from studio4 import medios, montaje
+    pedir, puerto = servidor
+    a = montaje.crear("Uno", "Una frase con seis palabras justas aqui.")
+    b = montaje.crear("Dos", "Otra frase distinta para el segundo video.")
+    audio = tmp_path / "Diego narrador.wav"
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=frequency=300:duration=2", str(audio))
+    c = http.client.HTTPConnection("127.0.0.1", puerto, timeout=30)
+    for _ in range(2):
+        c.request("POST", f"/api/m/subir-voz?id={a}", body=audio.read_bytes(), headers={"X-Nombre": "Diego%20narrador.wav"})
+        r = c.getresponse(); r.read()
+        assert r.status == 200
+    c.close()
+    guardadas = montaje.voces_guardadas()
+    assert len(guardadas) == 1 and guardadas[0]["nombre"] == "Diego narrador"
+    vid = guardadas[0]["id"]
+    estado, cuerpo = pedir("GET", f"/api/m/voces-guardadas/{vid}.wav")
+    assert estado == 200 and cuerpo[:4] == b"RIFF"
+    montaje.usar_voz_guardada(b, vid)
+    p = montaje.cargar(b)
+    assert p["voz_proveedor"] == "propia" and p["voz_propia"]["huella"] == vid
+    assert (montaje.carpeta(b) / montaje.VOZ_PROPIA).exists()
+    montaje.elegir_velocidad(b, 1.2)
+    assert montaje.cargar(b)["voz_velocidad"] == 1.2
+    with pytest.raises(ValueError):
+        montaje.elegir_velocidad(b, 3)
+    with pytest.raises(ValueError):
+        montaje.usar_voz_guardada(b, "../../secreto")

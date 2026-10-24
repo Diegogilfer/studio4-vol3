@@ -368,7 +368,10 @@ def desde_idea(n: int) -> str:
     return mid
 
 
-PROVEEDORES_VOZ = ("gemini", "fal")
+PROVEEDORES_VOZ = ("gemini", "fal", "propia")   # «propia»: tu locución subida (voz_propia.wav)
+VOZ_PROPIA = "voz_propia.wav"
+AUDIO_PERMITIDO = (".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac")
+VELOCIDADES = (0.9, 1.0, 1.1, 1.2, 1.3)   # velocidad de la voz (sin cambiar el tono)
 
 
 def opciones_voz() -> dict[str, Any]:
@@ -386,10 +389,155 @@ def coste_voz(p: dict[str, Any]) -> float:
 def elegir_voz(mid: str, proveedor: str, nombre: str) -> None:
     if proveedor not in PROVEEDORES_VOZ:
         raise ValueError("Voz desconocida.")
+    if proveedor == "propia":
+        if not (carpeta(mid) / VOZ_PROPIA).exists():
+            raise ValueError("Primero sube tu voz con «Examinar».")
+        modificar(mid, lambda p: p.update(voz_proveedor="propia", voz_nombre="Tu voz", final=None, short=None))
+        return
     voces = config.VOCES_GEMINI if proveedor == "gemini" else voz.VOCES_FAL
     if nombre not in voces:
         raise ValueError(f"La voz «{nombre}» no existe.")
     modificar(mid, lambda p: p.update(voz_proveedor=proveedor, voz_nombre=nombre, final=None, short=None))
+
+
+def subir_voz(mid: str, tmp: Path, nombre: str) -> None:
+    """Tu locución (grabada por ti) en vez de una voz de IA: se guarda en WAV y queda elegida. Al montar, Whisper la
+    escucha en tu PC (gratis) para saber en qué segundo empieza cada frase del guion."""
+    try:
+        if Path(nombre).suffix.lower() not in AUDIO_PERMITIDO:
+            raise ValueError(f"Sube un audio ({', '.join(AUDIO_PERMITIDO)}).")
+        cargar(mid)
+        medios.ffmpeg("-i", str(tmp), "-vn", "-ac", "1", "-ar", "24000", str(carpeta(mid) / VOZ_PROPIA))
+        huella = hashlib.sha1((carpeta(mid) / VOZ_PROPIA).read_bytes()).hexdigest()[:16]
+    finally:
+        tmp.unlink(missing_ok=True)
+    _guardar_en_biblioteca(carpeta(mid) / VOZ_PROPIA, huella, Path(nombre).stem[:60])
+    modificar(mid, lambda p: p.update(voz_proveedor="propia", voz_nombre="Tu voz", final=None, short=None,
+                                      voz_propia={"archivo": Path(nombre).name[:80], "huella": huella}))
+
+
+def _biblioteca_voces() -> Path:
+    c = config.PRODUCCIONES / "_voces" / "propias"
+    c.mkdir(parents=True, exist_ok=True)
+    return c
+
+
+def _guardar_en_biblioteca(wav: Path, huella: str, nombre: str) -> None:
+    """Cada voz subida queda guardada para los demás vídeos (la misma voz dos veces es una sola)."""
+    c = _biblioteca_voces()
+    if not (c / f"{huella}.wav").exists():
+        shutil.copyfile(wav, c / f"{huella}.wav")
+    indice = c / "voces.json"
+    voces = json.loads(indice.read_text(encoding="utf-8")) if indice.exists() else []
+    if not any(x["id"] == huella for x in voces):
+        voces.append({"id": huella, "nombre": nombre or "Mi voz", "duracion": round(medios.duracion(wav), 1),
+                      "fecha": time.strftime("%Y-%m-%d")})
+        indice.write_text(json.dumps(voces, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def voces_guardadas() -> list[dict[str, Any]]:
+    indice = _biblioteca_voces() / "voces.json"
+    voces = json.loads(indice.read_text(encoding="utf-8")) if indice.exists() else []
+    return [x for x in voces if (_biblioteca_voces() / f"{x['id']}.wav").exists()]
+
+
+def archivo_voz_guardada(vid: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{16}", vid or "") or not (f := _biblioteca_voces() / f"{vid}.wav").exists():
+        raise ValueError("Esa voz guardada no existe.")
+    return f
+
+
+def usar_voz_guardada(mid: str, vid: str) -> None:
+    """Una voz de tu biblioteca en este vídeo."""
+    origen = archivo_voz_guardada(vid)
+    nombre = next((x["nombre"] for x in voces_guardadas() if x["id"] == vid), "Mi voz")
+    cargar(mid)
+    shutil.copyfile(origen, carpeta(mid) / VOZ_PROPIA)
+    modificar(mid, lambda p: p.update(voz_proveedor="propia", voz_nombre="Tu voz", final=None, short=None,
+                                      voz_propia={"archivo": nombre, "huella": vid}))
+
+
+def elegir_velocidad(mid: str, velocidad: float) -> None:
+    velocidad = round(float(velocidad), 2)
+    if velocidad not in VELOCIDADES:
+        raise ValueError(f"Velocidad: {', '.join(str(v) for v in VELOCIDADES)}.")
+    modificar(mid, lambda p: p.update(voz_velocidad=velocidad, final=None, short=None))
+
+
+def _normal(palabra: str) -> str:
+    import unicodedata
+    p = unicodedata.normalize("NFD", palabra.lower())
+    return re.sub(r"[^a-z0-9]", "", "".join(c for c in p if unicodedata.category(c) != "Mn"))
+
+
+def alinear_voz(segmentos: list[str], oidas: list[dict[str, Any]], duracion: float) -> dict[str, Any]:
+    """Las palabras del guion con los tiempos de lo que Whisper oyó en tu locución (aunque oiga alguna palabra
+    distinta): las que coinciden fijan el tiempo y las demás se reparten entre sus vecinas. Mismo formato que
+    voz.locutar, y los subtítulos salen con el texto del guion, sin faltas de oído."""
+    import difflib
+    guion = [(k, w) for k, seg in enumerate(segmentos) for w in seg.split()]
+    if not oidas or not guion:
+        raise ValueError("No se oye voz en tu audio.")
+    a, b = [_normal(w) for _, w in guion], [_normal(w["palabra"]) for w in oidas]
+    fijo: dict[int, tuple[float, float]] = {}
+    for blq in difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks():
+        for j in range(blq.size):
+            fijo[blq.a + j] = (oidas[blq.b + j]["ini"], oidas[blq.b + j]["fin"])
+    if not fijo:   # nada coincide (otro idioma u otro texto): lo oído se reparte en proporción
+        n, m = len(guion), len(oidas)
+        fijo = {i: (oidas[min(m - 1, i * m // n)]["ini"], oidas[min(m - 1, i * m // n)]["fin"]) for i in range(n)}
+    claves = sorted(fijo)
+    palabras = []
+    for i, (_k, w) in enumerate(guion):
+        if i in fijo:
+            ini, fin = fijo[i]
+        else:   # entre la coincidencia anterior y la siguiente, a partes iguales
+            ant = max((c for c in claves if c < i), default=None)
+            sig = min((c for c in claves if c > i), default=None)
+            t0 = fijo[ant][1] if ant is not None else 0.0
+            t1 = fijo[sig][0] if sig is not None else duracion
+            ia, ib = (ant if ant is not None else -1), (sig if sig is not None else len(guion))
+            paso = max(0.0, t1 - t0) / (ib - ia)
+            ini, fin = t0 + paso * (i - ia - 1), t0 + paso * (i - ia)
+        palabras.append({"palabra": w, "ini": round(ini, 3), "fin": round(max(fin, ini + 0.05), 3)})
+    escenas: list[dict[str, float]] = []
+    for k in range(len(segmentos)):
+        suyas = [pw for (kk, _w), pw in zip(guion, palabras) if kk == k]
+        previo = escenas[-1]["fin"] if escenas else 0.0
+        escenas.append({"ini": suyas[0]["ini"], "fin": suyas[-1]["fin"]} if suyas else {"ini": previo, "fin": previo})
+    return {"duracion": duracion, "escenas": escenas, "palabras": palabras}
+
+
+def _locutar_propia(mid: str, segmentos: list[str], wav: Path, trabajo: Path) -> dict[str, Any]:
+    from . import entrega
+    shutil.copyfile(carpeta(mid) / VOZ_PROPIA, wav)
+    oidas, _idioma = entrega._transcribir(wav, trabajo)
+    return alinear_voz(segmentos, oidas, medios.duracion(wav))
+
+
+def subir_musica(tmp: Path, nombre: str, mid: str = "") -> str:
+    """Una canción tuya (con «Examinar») a tu carpeta de música; con `mid`, queda elegida para ese vídeo."""
+    try:
+        nombre = re.sub(r"[^\w .()-]", "", Path(nombre or "").name)[:90].strip()
+        if Path(nombre).suffix.lower() not in AUDIO_PERMITIDO:
+            raise ValueError(f"Sube un audio ({', '.join(AUDIO_PERMITIDO)}).")
+        shutil.copyfile(tmp, musica.carpeta() / nombre)
+    finally:
+        tmp.unlink(missing_ok=True)
+    musica.catalogo()
+    if mid:
+        elegir_musica(mid, nombre)
+    return nombre
+
+
+def muestra_cama() -> Path:
+    """20 s del fondo suave del Studio, para escucharlo antes de elegirlo (se hace una vez)."""
+    from . import sonido
+    destino = config.PRODUCCIONES / "_voces" / "cama_muestra.wav"
+    if not destino.exists():
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        sonido.cama(20.0, destino)
+    return destino
 
 
 def conexiones() -> list[dict[str, Any]]:
@@ -1171,15 +1319,23 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         segmentos = [f["texto"] for f in p["frases"]]
         wav = base / "voz.wav"
         proveedor = p.get("voz_proveedor", "gemini")
-        firma_voz = hashlib.sha1(json.dumps([segmentos, proveedor, p["voz_nombre"], ESTILO_VOZ]).encode("utf-8")).hexdigest()
+        firma_voz = hashlib.sha1(json.dumps([segmentos, proveedor, p["voz_nombre"], ESTILO_VOZ,
+                                             (p.get("voz_propia") or {}).get("huella", "") if proveedor == "propia" else "",
+                                             p.get("voz_velocidad", 1.0)]
+                                            ).encode("utf-8")).hexdigest()
         previa_voz = p.get("voz") or {}
         if previa_voz.get("firma") == firma_voz and wav.exists():   # mismo texto y misma voz: no se regraba
             avisar("Voz ya grabada (mismo guion)", 10)
             tiempos, palabras = [tuple(x) for x in previa_voz["tiempos"]], previa_voz["palabras"]
         else:
-            avisar("Grabando la voz", 5)
-            t = voz.locutar(segmentos, wav, proveedor, produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ,
+            avisar("Escuchando tu voz para sincronizarla" if proveedor == "propia" else "Grabando la voz", 5)
+            vel = float(p.get("voz_velocidad", 1.0))
+            t = _locutar_propia(mid, segmentos, wav, trabajo) if proveedor == "propia" else voz.locutar(segmentos, wav, proveedor, produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ,
                             voice_id=p["voz_nombre"] if proveedor == "fal" else None)
+            if abs(vel - 1.0) > 0.01:
+                voz.acelerar(wav, vel)
+                t = {"duracion": t["duracion"] / vel, "escenas": [{"ini": e["ini"] / vel, "fin": e["fin"] / vel} for e in t["escenas"]],
+                     "palabras": [{**w, "ini": w["ini"] / vel, "fin": w["fin"] / vel} for w in t["palabras"]]}
             tiempos = [(e["ini"] + ENTRADA, e["fin"] + ENTRADA) for e in t["escenas"]]
             palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in t["palabras"]]
             modificar(mid, lambda q: q.update(voz={"archivo": "voz.wav", "duracion": t["duracion"], "palabras": palabras,

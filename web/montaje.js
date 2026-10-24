@@ -14,10 +14,10 @@ async function api(ruta, datos) {
 const seguro = async (ruta) => { try { return await api(ruta); } catch (_) { return null; } };
 
 // ============================================================ Subir vídeos de tu PC (Examinar o arrastrar)
-function subirVideo(archivo, id, alAvanzar) {
+function subirVideo(archivo, id, alAvanzar, ruta = "/api/m/subir") {
   return new Promise((ok, mal) => {
     const x = new XMLHttpRequest();   // XHR y no fetch: da el progreso de la subida (vídeos de varios GB)
-    x.open("POST", "/api/m/subir" + (id ? `?id=${encodeURIComponent(id)}` : ""));
+    x.open("POST", ruta + (id ? `?id=${encodeURIComponent(id)}` : ""));
     x.setRequestHeader("X-Nombre", encodeURIComponent(archivo.name));
     x.upload.onprogress = (e) => { if (e.lengthComputable && alAvanzar) alAvanzar(Math.round((100 * e.loaded) / e.total)); };
     x.onload = () => {
@@ -704,36 +704,77 @@ function pasoPrevia(v, conClip) {
   </section>`;
 }
 
+// una tarjeta de sonido: ▶ para escucharlo antes de elegir, su nombre y «Usar»
+function tarjetaSonido({ oir = "", pago = false, nombre, detalle = "", usar, elegida }) {
+  return `<div class="op-audio${elegida ? " activa" : ""}">
+    ${oir ? `<button class="oir" type="button" data-oir="${esc(oir)}" ${pago ? 'data-pago="1"' : ""} aria-label="Escuchar ${esc(nombre)}">▶</button>` : `<span class="oir mudo">·</span>`}
+    <div class="op-texto"><b>${esc(nombre)}</b>${detalle ? `<small>${esc(detalle)}</small>` : ""}</div>
+    <button class="chip${elegida ? " activo" : ""}" type="button" ${usar}>${elegida ? "Elegida" : "Usar"}</button>
+  </div>`;
+}
+
+function vozMusicaHTML(v) {
+  const prov = v.voz_proveedor || "gemini";
+  const voces = Object.entries(datos.voces).filter(([, o]) => o.disponible).flatMap(([pv, o]) => Object.entries(o.voces).map(([n, d]) =>
+    tarjetaSonido({ oir: `/api/voz/oir?voz=${pv === "fal" ? "fal:" : ""}${encodeURIComponent(n)}`, pago: pv === "fal", nombre: n,
+      detalle: pv === "fal" ? `${d} · de pago` : d, usar: `data-usar-voz="${esc(pv)}|${esc(n)}"`, elegida: prov === pv && n === v.voz_nombre })));
+  // tus voces subidas, guardadas para todos los vídeos
+  const guardadas = (datos.voces_guardadas || []).map((x) => tarjetaSonido({ oir: `/api/m/voces-guardadas/${x.id}.wav`, nombre: x.nombre,
+    detalle: `Tu voz · ${Math.round(x.duracion)} s`, usar: `data-voz-guardada="${esc(x.id)}"`,
+    elegida: prov === "propia" && v.voz_propia?.huella === x.id }));
+  const vel = v.voz_velocidad || 1;
+  const velocidades = [0.9, 1, 1.1, 1.2, 1.3].map((x) =>
+    `<button class="chip${Math.abs(x - vel) < 0.01 ? " activo" : ""}" type="button" data-velocidad="${x}">${String(x).replace(".", ",")}×</button>`).join("");
+  const m = datos.musica;
+  const musicas = [
+    tarjetaSonido({ nombre: "Automática", detalle: m.modo === "auto" && m.elegida ? `ahora: ${m.elegida}` : "por el ánimo del guion", usar: 'data-usar-musica="auto"', elegida: m.modo === "auto" }),
+    tarjetaSonido({ oir: "/api/m/musica/cama", nombre: "Fondo suave", detalle: "del Studio, sin canción", usar: 'data-usar-musica="cama"', elegida: m.modo === "cama" }),
+    tarjetaSonido({ nombre: "Sin fondo", detalle: "la pongo después", usar: 'data-usar-musica="nada"', elegida: m.modo === "nada" }),
+    ...m.pistas.map((x) => tarjetaSonido({ oir: `/musica/${encodeURIComponent(x.archivo)}`, nombre: x.titulo, detalle: x.animo.join(", ") || x.artista || "",
+      usar: `data-usar-musica="${esc(x.archivo)}"`, elegida: m.modo === x.archivo })),
+  ];
+  return `<div class="voz-elegir">
+      <div class="fila"><span class="etiqueta">Voz</span>
+        <span class="${datos.coste_voz ? "coste" : "voz"}">${datos.coste_voz ? `De pago: ≈${datos.coste_voz.toFixed(2).replace(".", ",")} $ este guion` : "Gratis"}</span></div>
+      <div class="fila chips-vel"><span class="meta">Velocidad</span>${velocidades}</div>
+      <div class="rejilla-audio">${guardadas.join("")}${voces.join("")}</div>
+      <label class="boton examinar">Examinar… subir tu voz<input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" id="subir-voz" hidden></label>
+      <span class="meta" id="estado-voz"></span>
+    </div>
+    <div class="voz-elegir">
+      <div class="fila"><span class="etiqueta">Música</span></div>
+      <div class="rejilla-audio">${musicas.join("")}</div>
+      <label class="boton examinar">Examinar… subir música<input type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" id="subir-musica" hidden></label>
+      <span class="meta" id="estado-musica"></span>
+    </div>`;
+}
+
+// un solo reproductor para todas las muestras: ▶ suena, ■ para; al pulsar otra, cambia
+const sonando = new Audio();
+let botonSonando = null;
+function oir(boton) {
+  const parar = () => { sonando.pause(); if (botonSonando) { botonSonando.textContent = "▶"; botonSonando.classList.remove("sonando"); } botonSonando = null; };
+  if (botonSonando === boton) { parar(); return; }
+  if (boton.dataset.pago && !confirm("Escuchar una voz de pago graba una muestra (≈0,01 $) la primera vez. ¿Seguir?")) return;
+  parar();
+  botonSonando = boton; boton.textContent = "…"; boton.classList.add("sonando");
+  sonando.src = boton.dataset.oir;
+  // las voces se oyen a la velocidad elegida (sin cambiar el tono), igual que en el montaje
+  sonando.playbackRate = boton.closest(".voz-elegir")?.querySelector("[data-velocidad].activo") ? Number(datos.video.voz_velocidad || 1) : 1;
+  sonando.preservesPitch = true;
+  sonando.onplaying = () => { if (botonSonando === boton) boton.textContent = "■"; };
+  sonando.onended = parar;
+  sonando.onerror = () => { parar(); aviso("No se pudo escuchar esa muestra."); };
+  sonando.play().catch(() => {});
+}
+
 function pasoFinal(v) {
   const t = v.textos;
   const fotosMini = v.frases.filter((f) => f.clip);
   const descripcion = t ? [t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", (t.hashtags || []).join(" ")].join("\n") : "";
   return `<section class="paso">
     ${pasoCab(5, "Final", "Voz, planos en alta calidad, subtítulos, logo y música. Luego el Short, los textos y la miniatura.")}
-    <div class="voz-elegir">
-      <span class="etiqueta">Voz</span>
-      <div class="fila">
-        <select class="campo" id="voz-elegida">${Object.entries(datos.voces).filter(([, o]) => o.disponible).map(([prov, o]) => `
-          <optgroup label="${esc(o.nombre)}">${Object.entries(o.voces).map(([n, d]) => `
-            <option value="${esc(prov)}|${esc(n)}" ${prov === (v.voz_proveedor || "gemini") && n === v.voz_nombre ? "selected" : ""}>${esc(n)} · ${esc(d)}</option>`).join("")}</optgroup>`).join("")}
-        </select>
-        <span class="${datos.coste_voz ? "coste" : "voz"}">${datos.coste_voz ? `De pago: ≈${datos.coste_voz.toFixed(2).replace(".", ",")} $ este guion` : "Gratis"}</span>
-      </div>
-    </div>
-    <div class="voz-elegir">
-      <span class="etiqueta">Música</span>
-      <div class="fila">
-        <select class="campo" id="musica-elegida">
-          <option value="auto" ${datos.musica.modo === "auto" ? "selected" : ""}>Automática por el ánimo del guion${datos.musica.modo === "auto" && datos.musica.elegida ? ` (ahora: ${esc(datos.musica.elegida)})` : ""}</option>
-          <option value="cama" ${datos.musica.modo === "cama" ? "selected" : ""}>Fondo suave del Studio (sin canción)</option>
-          <option value="nada" ${datos.musica.modo === "nada" ? "selected" : ""}>Sin fondo (la música la pongo después)</option>
-          ${datos.musica.pistas.length ? `<optgroup label="Tus pistas">${datos.musica.pistas.map((x) => `
-            <option value="${esc(x.archivo)}" ${datos.musica.modo === x.archivo ? "selected" : ""}>${esc(x.titulo)}${x.animo.length ? ` · ${esc(x.animo.join(", "))}` : ""}</option>`).join("")}</optgroup>` : ""}
-        </select>
-        <a class="boton" href="#musica">Tu música</a>
-      </div>
-      ${datos.musica.pistas.length ? "" : `<p class="meta">Aún no tienes pistas de la Biblioteca de audio de YouTube: va el fondo suave del Studio.</p>`}
-    </div>
+    ${vozMusicaHTML(v)}
     <div class="fila">
       <button class="primario" type="button" id="montar-final" ${v.previa ? "" : "disabled"}>${v.final ? "Volver a montar" : "Montar vídeo final"}</button>
       ${!v.previa ? `<span class="meta">Primero haz la previa (paso 4).</span>` : ""}</div>
@@ -871,8 +912,30 @@ function enlazarVideo(p) {
   }
   if (p === 4) $("hacer-previa").onclick = () => enviar("/api/m/previa");
   if (p === 5) {
-    $("voz-elegida").onchange = (ev) => { const [proveedor, nombre] = ev.target.value.split("|"); enviar("/api/m/voz", { proveedor, nombre }); };
-    $("musica-elegida").onchange = (ev) => enviar("/api/m/musica/elegir", { musica: ev.target.value });
+    document.querySelectorAll("[data-oir]").forEach((b) => { b.onclick = () => oir(b); });
+    document.querySelectorAll("[data-usar-voz]").forEach((b) => { b.onclick = () => { const [proveedor, nombre] = b.dataset.usarVoz.split("|"); enviar("/api/m/voz", { proveedor, nombre }); }; });
+    document.querySelectorAll("[data-voz-guardada]").forEach((b) => { b.onclick = () => enviar("/api/m/voz-guardada", { voz: b.dataset.vozGuardada }); });
+    document.querySelectorAll("[data-velocidad]").forEach((b) => { b.onclick = () => {
+      // se oye al instante la voz que suena a la nueva velocidad, y queda guardada para el montaje
+      datos.video.voz_velocidad = Number(b.dataset.velocidad);
+      document.querySelectorAll("[data-velocidad]").forEach((x) => x.classList.toggle("activo", x === b));
+      if (botonSonando?.closest(".voz-elegir")) sonando.playbackRate = datos.video.voz_velocidad;
+      api("/api/m/velocidad", { id: v.id, velocidad: datos.video.voz_velocidad }).catch(aviso);
+    }; });
+    document.querySelectorAll("[data-usar-musica]").forEach((b) => { b.onclick = () => enviar("/api/m/musica/elegir", { musica: b.dataset.usarMusica }); });
+    const subirAudio = (input, ruta, estado) => {
+      input.onchange = async () => {
+        const f = input.files[0];
+        if (!f) return;
+        try {
+          await subirVideo(f, v.id, (pc) => { $(estado).textContent = `Subiendo «${f.name}»… ${pc} %`; }, ruta);
+          $(estado).textContent = "";
+          await cargarVideo(v.id);
+        } catch (e) { $(estado).textContent = ""; aviso(e); }
+      };
+    };
+    subirAudio($("subir-voz"), "/api/m/subir-voz", "estado-voz");
+    subirAudio($("subir-musica"), "/api/m/subir-musica", "estado-musica");
     $("montar-final").onclick = () => {
       // lo de pago, solo con un sí explícito y el importe delante
       if (datos.coste_voz && !confirm(`La voz ${datos.video.voz_nombre} es de pago: ≈${datos.coste_voz.toFixed(2)} $ por este guion. ¿Montar?`)) return;

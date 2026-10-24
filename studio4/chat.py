@@ -70,6 +70,9 @@ ACCIONES: dict[str, dict[str, Any]] = {
                    "fn": _subtitulos},
     "hacer_previa": {"desc": "Monta la previa rápida para revisar", "args": "", "fondo": True,
                      "fn": lambda mid, a: (montaje.previa(mid), "Montando la previa…")[1]},
+    "entregar_formatos": {"desc": "Vídeo traído (sin guion): entrega 16:9, 9:16 y 1:1 con miniatura y, si se pide, subtítulos",
+                          "args": "subtitulos (true|false), idioma (original|es|en|zh|ja)", "fondo": True,
+                          "fn": lambda mid, a: (__import__("studio4.entrega", fromlist=["x"]).entregar(mid, a), "Entregando los 3 formatos…")[1]},
     "hacerlo_todo": {"desc": "Render completo: vídeo 16:9, Short 9:16, clip 1:1 y miniatura", "args": "", "fondo": True,
                      "fn": lambda mid, a: (montaje.render_basico(mid, {}), "Render completo en marcha (los 3 formatos)…")[1]},
 }

@@ -17,7 +17,7 @@ from typing import Any
 
 from . import canales, escaleta, escenas, extractor, linea, montaje, musica, radar
 
-MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura\.jpg|voz\.wav|subtitulos\.srt|storyboard\.jpg)$")
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg)$")
 
 
 class NoExiste(Exception):
@@ -32,6 +32,11 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
                                   for f in montaje.banco()]}
     if ruta == "/api/m/musica":   # tu música de la Biblioteca de audio de YouTube, catalogada
         return "json", {"carpeta": str(musica.carpeta()), "pistas": musica.catalogo(), "animos": list(musica.ANIMOS)}
+    m = re.fullmatch(r"/api/m/voces-guardadas/([0-9a-f]{16})\.wav", ruta)   # escuchar una voz de tu biblioteca
+    if m:
+        return "archivo", montaje.archivo_voz_guardada(m.group(1))
+    if ruta == "/api/m/musica/cama":   # escuchar el fondo suave del Studio antes de elegirlo
+        return "archivo", montaje.muestra_cama()
     m = re.fullmatch(r"/musica/(.+)", ruta)   # escuchar una pista (solo archivos de tu carpeta de música)
     if m:
         f = musica.ruta(urllib.parse.unquote(m.group(1)))
@@ -56,7 +61,7 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         idx = escenas.indice(red=False)
         return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
                         "escenas": {fid: len(escenas.de_fuente(montaje.fuente(fid), idx)) for fid in p["fuentes"]},
-                        "voces": montaje.opciones_voz(), "coste_voz": montaje.coste_voz(p), "resumen": montaje.resumen(p),
+                        "voces": montaje.opciones_voz(), "voces_guardadas": montaje.voces_guardadas(), "coste_voz": montaje.coste_voz(p), "resumen": montaje.resumen(p),
                         "musica": {"modo": p.get("musica") or musica.AUTO, "elegida": elegida["titulo"] if elegida else "",
                                    "pistas": [{"archivo": x["archivo"], "titulo": x["titulo"], "artista": x["artista"],
                                                "animo": x["animo"]} for x in musica.catalogo()]}}
@@ -88,6 +93,10 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     num = lambda k: float(d[k]) if d.get(k) not in (None, "") else None  # noqa: E731
     if ruta == "/api/m/desde-biblioteca":   # un guion de la Biblioteca → vídeo nuevo
         return "json", {"ok": True, "id": montaje.desde_biblioteca(str(d.get("item", "")))}
+    if ruta == "/api/m/entregar":   # vídeo traído → 16:9, 9:16 y 1:1 (+ subtítulos opcionales y miniatura), sin guion
+        from . import entrega
+        entrega.entregar(mid, d.get("opciones") or {})
+        return "json", {"ok": True}
     if ruta == "/api/m/chat":   # el chat del vídeo: DeepSeek elige acciones del estudio y se ejecutan
         from . import chat
         return "json", chat.responder(mid, str(d.get("mensaje", "")))
@@ -152,6 +161,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         "/api/m/previa": lambda: montaje.previa(mid),
         "/api/m/voz": lambda: montaje.elegir_voz(mid, str(d.get("proveedor", "")), str(d.get("nombre", ""))),
         "/api/m/musica/elegir": lambda: montaje.elegir_musica(mid, str(d.get("musica", ""))),
+        "/api/m/voz-guardada": lambda: montaje.usar_voz_guardada(mid, str(d.get("voz", ""))),
+        "/api/m/velocidad": lambda: montaje.elegir_velocidad(mid, float(d.get("velocidad", 1.0))),
         "/api/m/final": lambda: montaje.montar_final(mid),
         "/api/m/automatico": lambda: montaje.automatico(mid, bool(d.get("pago_ok"))),
         "/api/m/render-basico": lambda: montaje.render_basico(mid, d.get("opciones") or {}),
