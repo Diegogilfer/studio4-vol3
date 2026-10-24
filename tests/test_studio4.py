@@ -3007,3 +3007,21 @@ def test_chat_solo_un_trabajo_en_segundo_plano_por_mensaje(aislado, monkeypatch)
     monkeypatch.setitem(chat.ACCIONES, "buscar_material", {**chat.ACCIONES["buscar_material"], "fn": lambda m, a: lanzados.append("material") or "material"})
     r = chat.responder(mid, "todo", pensar=lambda *a: {"respuesta": "", "acciones": [{"accion": "hacer_previa"}, {"accion": "buscar_material"}]})
     assert lanzados == ["previa"] and r["errores"]
+
+
+def test_formatos_diarios_recorta_negro_y_saca_los_3(tmp_path):
+    """Conteo diario: 3 escenas (logo, cuenta atrás, redes) + negro al final → 9x16, 9x16 zoom y 1x1 sin el negro."""
+    import sys as _sys
+    _sys.path.insert(0, str(config.RAIZ / "scripts"))
+    import formatos_diarios as fd
+    v = tmp_path / "conteo dia 1.mp4"
+    medios.ffmpeg("-f", "lavfi", "-i", "color=red:s=640x360:d=1:r=30", "-f", "lavfi", "-i", "color=blue:s=640x360:d=2:r=30",
+                  "-f", "lavfi", "-i", "color=green:s=640x360:d=1:r=30", "-f", "lavfi", "-i", "color=black:s=640x360:d=3:r=30",
+                  "-f", "lavfi", "-i", "sine=frequency=440:duration=7", "-filter_complex",
+                  "[0:v][1:v][2:v][3:v]concat=n=4:v=1[v]", "-map", "[v]", "-map", "4:a", "-pix_fmt", "yuv420p", "-shortest", str(v))
+    assert abs(fd.fin_de_imagen(v) - 4.0) < 0.2   # el negro del final no cuenta
+    hechos = fd.hacer(v)
+    nombres = sorted(h.name for h in hechos)
+    assert nombres == ["conteo dia 1 - 1x1.mp4", "conteo dia 1 - 9x16 zoom.mp4", "conteo dia 1 - 9x16.mp4"]
+    for h in hechos:
+        assert abs(fd.duracion(h) - 4.0) < 0.3
