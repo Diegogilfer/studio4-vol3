@@ -137,3 +137,16 @@
     vídeo), `auditar-repo`. Tareas programadas: `scripts/tareas.py` (ideas 08:00, resumen semanal lunes 09:00).
   · Pendiente: final de The Warriors (4:36) y previa del vídeo de 8 min «Lo que GTA VI heredó de The Warriors»
     (109 frases, guion en `Vídeos\STUDIO 4\Guiones`); botón directo a la herramienta de Flow (falta el enlace del autor).
+
+- 2026-10-24…26 · Claude · rama `studio4-ia`, commits `6345fa3`…`3540bc5` (187 pruebas en verde).
+  · Conteo diario: `scripts/formatos_diarios.py` saca también «textos YouTube.txt» (título, Short, descripción, etiquetas).
+  · Voz y música: ▶ escuchar antes de elegir, las 30 voces gratis de Google, subir tu voz (Whisper la sincroniza con
+    el guion: `alinear_voz`) y tu música, voces guardadas para todos los vídeos (`_voces/propias`), velocidad 0,9–1,3×.
+  · Marca 4L en los 3 formatos (Short arriba a la izquierda) y emoji a color por frase en los Shorts (`_capas_marca`).
+  · Cambios ágiles: `_pasada_imagen` aparte → `rehacer_subtitulos` (estilo, posición o palabra corregida sin volver a
+    montar), vista previa de subtítulos (`/api/m/subs-vista`), miniaturas para elegir viéndolas (`candidatos_miniatura`),
+    chat con adjuntos (imagen → miniatura o frase, vídeo → material, .txt → guion).
+  · `empaque.py`: nota de título + miniatura como pareja, capítulos válidos para YouTube y revisión del gancho.
+  · Auditoría de 11 repos de skills en `C:\Users\Lenovo\auditoria-skills` (nada malicioso; trading descartado por mover
+    dinero real; head-of-content necesita APIs de pago). Skill `~/.claude/skills/fourlevel-empaque` con lo mejor.
+  · Pendiente: clonar la voz propia para guiones nuevos (Chatterbox local, falta el sí de Diego).
