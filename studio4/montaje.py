@@ -1723,7 +1723,7 @@ def candidatos_miniatura(mid: str, texto: str = "") -> None:
         raise ValueError("Este vídeo aún no tiene planos ni imágenes para la miniatura.")
     t = (p.get("textos") or {})
     base_txt = (texto or t.get("texto_miniatura") or p["titulo"]).strip()[:40].upper()
-    alt = " ".join(((t.get("titulos") or [p["titulo"]])[0]).split()[:3]).upper()[:40]
+    alt = f"{base_txt} {emoji_de(base_txt) or '🔥'}"   # la misma idea con su emoji (el navegador lo pinta a color)
     n = len(con_plano)
     variantes = []
     if n:
