@@ -3199,3 +3199,19 @@ def test_chat_adjunta_imagenes_y_las_miniaturas_se_eligen_viendolas(servidor, tm
         montaje.elegir_miniatura(mid, "../proyecto.json")
     with pytest.raises(ValueError):
         montaje.adjunto(mid, "../../.env")
+
+
+def test_empaque_titulo_con_miniatura_capitulos_validos_y_gancho():
+    """Título + miniatura como pareja (sin repetirse, con dato, sin gritar), capítulos que YouTube acepta y gancho."""
+    from studio4 import empaque
+    bueno = empaque.revisar_titulo("GTA 6 a 79,99 $: lo que trae la caja", "SIN DISCO")
+    malo = empaque.revisar_titulo("INCREÍBLE!!! TODO lo que NO SABÍAS de GTA", "TODO LO QUE NO SABÍAS DE GTA")
+    assert bueno["nota"] > malo["nota"] and not bueno["mal"]
+    assert any("repite" in m for m in malo["mal"]) and any("MAYÚSCULAS" in m for m in malo["mal"])
+    assert any("no dice nada" in m for m in malo["mal"]) and any("palabras en la miniatura" in m for m in malo["mal"])
+    caps, aviso = empaque.capitulos_validos(["0:03 Intro", "0:08 Muy pegado", "0:25 Jason", "0:44 Justice"], 61.5)
+    assert caps == ["0:00 Intro", "0:25 Jason", "0:44 Justice"] and not aviso   # empieza en 0:00 y sin tramos de < 10 s
+    assert empaque.capitulos_validos(["0:00 a", "0:05 b"], 20) == ([], "Vídeo demasiado corto para capítulos (YouTube pide 3 o más de 10 s).")
+    g = empaque.revisar_gancho("Faltan 26 días para GTA 6 y llega sin disco.", "GTA 6 llega sin disco")
+    assert g["nota"] >= 90 and not g["mal"]
+    assert empaque.revisar_gancho("hola a todos y bienvenidos otra vez a mi canal de siempre donde hablamos de muchas cosas interesantes cada semana", "GTA 6")["mal"]

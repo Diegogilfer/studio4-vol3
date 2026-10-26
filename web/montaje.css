@@ -429,3 +429,8 @@ main:has(.lienzo) { max-width: 1480px; }
 .minis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
 .mini-op { margin: 0; display: grid; gap: 6px; }
 .mini-op img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; border: 1px solid var(--borde); }
+.nota-titulo { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+.nota-titulo.ok { background: color-mix(in srgb, #2ecc71 25%, transparent); }
+.nota-titulo.medio { background: color-mix(in srgb, #f1c40f 25%, transparent); }
+.nota-titulo.bajo { background: color-mix(in srgb, #e74c3c 25%, transparent); }
+.copiable small.meta { display: block; margin-top: 4px; }

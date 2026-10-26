@@ -848,7 +848,11 @@ function pasoFinal(v) {
       </div>
     </div>
     <div class="textos"><span class="etiqueta">Textos para publicar</span>
-      ${t ? `${t.titulos.map((x) => `<div class="copiable"><p>${esc(x)}</p><button class="boton" data-copiar="${esc(x)}">Copiar</button></div>`).join("")}
+      ${t ? `${t.titulos.map((x, k) => { const r = t.revision?.titulos?.[k]; return `<div class="copiable"><p>${esc(x)}
+          ${r ? `<small class="nota-titulo ${r.nota >= 80 ? "ok" : r.nota >= 60 ? "medio" : "bajo"}">${r.nota}/100${t.revision.mejor === k ? " · el mejor" : ""}</small>${r.mal.length ? `<small class="meta">${r.mal.map(esc).join(" · ")}</small>` : ""}` : ""}</p>
+          <button class="boton" data-copiar="${esc(x)}">Copiar</button></div>`; }).join("")}
+      ${t.revision?.gancho?.mal?.length ? `<p class="meta">Gancho (primera frase): ${t.revision.gancho.mal.map(esc).join(" · ")}</p>` : ""}
+      ${t.revision?.aviso_capitulos ? `<p class="meta">${esc(t.revision.aviso_capitulos)}</p>` : ""}
         <div class="copiable"><p>${esc(descripcion)}</p><button class="boton" data-copiar="${esc(descripcion)}">Copiar</button></div>`
         : `<p class="meta">Se escriben solos al montar el vídeo final.</p>`}
       <div class="fila"><button class="boton" type="button" id="rehacer-textos">${t ? "Rehacer textos" : "Escribir textos"}</button></div>

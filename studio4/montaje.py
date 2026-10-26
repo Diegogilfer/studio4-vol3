@@ -2104,6 +2104,11 @@ def hacer_textos(mid: str) -> dict[str, Any]:
               "creditos": "\n".join(x for x in (
                   "Escenas generadas con IA (Google Flow · Veo), con guion, voz y edición propios." if p.get("ia")
                   else "Imágenes de los juegos con comentario y edición propios.", p.get("musica_credito", "")) if x)}
+    from . import empaque   # título + miniatura como pareja, capítulos que YouTube acepte y el gancho
+    duracion = (p.get("voz") or {}).get("duracion") or 0
+    revision = empaque.revisar(textos, p["frases"][0]["texto"] if p["frases"] else "", duracion or 9999)
+    textos["capitulos"] = revision.pop("capitulos")
+    textos["revision"] = revision
     modificar(mid, lambda q: q.update(textos=textos, fuentes_titulos=creditos))
     return textos
 
