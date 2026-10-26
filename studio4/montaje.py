@@ -1522,7 +1522,6 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         lecho = sonido.silencio(total, trabajo / "silencio.wav")
     else:
         lecho = sonido.cama(total, trabajo / "cama.wav")   # el fondo suave propio: nunca silencio
-    logo = logo_de(p["canal"])
     destino = base / ("final_16x9.mp4" if final else "previa.mp4")
     # En dos pasos: primero el sonido a un archivo y luego la imagen con ese sonido. Todo en una sola orden, FFmpeg se
     # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
@@ -1531,7 +1530,6 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     vol_lecho = config.VOLUMEN_MUSICA * musica.ganancia(pista) if cancion else 1.4
     # el vídeo no se corta en seco: los últimos 0,8 s funden a negro y el sonido se apaga con él
     cierre_a = f"afade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
-    cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     entradas_a = ["-i", str(fx), *(["-stream_loop", "-1"] if cancion else []), "-i", str(lecho)]
     lecho_f = (f"[1:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={vol_lecho},"
                f"afade=t=out:st={max(0, total - 2):.3f}:d=2")
@@ -1551,6 +1549,16 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     medios.ffmpeg(*entradas_a, "-filter_complex", audio, "-map", "[a]", "-t", f"{total:.3f}", "-ar", "48000", str(premezcla))
     sonido.masterizar(premezcla, mezcla, cierre_a)
 
+    _pasada_imagen(p, trabajo, cuerpo, mezcla, destino, palabras if final else [], ancho, alto, escala, total, final)
+    return destino
+
+
+def _pasada_imagen(p: dict[str, Any], trabajo: Path, cuerpo: Path, mezcla: Path, destino: Path,
+                   palabras: list[dict[str, Any]], ancho: int, alto: int, escala: float, total: float, final: bool) -> None:
+    """La última pasada del vídeo: el cuerpo ya montado + el sonido ya mezclado + la marca 4L + los subtítulos. Va
+    aparte para poder rehacerla sola (cambiar o corregir subtítulos en segundos, sin montar todo otra vez)."""
+    logo = logo_de(p["canal"])
+    cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     entradas = ["-i", str(cuerpo), "-i", str(mezcla)]
     filtros, mezcla_v = [], "[0:v]"
     if logo:   # el logo del canal, discreto arriba a la derecha en todo el vídeo
@@ -1569,7 +1577,177 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     medios.ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-map", "[v]", "-map", "1:a", "-t", f"{total:.3f}",
                   "-c:v", "libx264", "-preset", "medium", "-crf", "17" if final else "23", "-pix_fmt", "yuv420p",
                   "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", str(destino), cwd=trabajo)
+
+
+def rehacer_subtitulos(mid: str) -> None:
+    """Subtítulos nuevos (estilo, posición, tamaño o una palabra corregida) en el 16:9, el Short y el cuadrado, sin
+    volver a montar: se reutilizan el cuerpo y la mezcla del último montaje."""
+    p = cargar(mid)
+    trabajo = carpeta(mid) / "render"
+    if not p.get("final") or not (trabajo / "cuerpo.mp4").exists() or not (trabajo / "mezcla.wav").exists():
+        raise ValueError("Primero monta el vídeo final.")
+
+    def fase() -> None:
+        q = cargar(mid)
+        cuerpo = trabajo / "cuerpo.mp4"
+        _avisar(mid, "Subtítulos nuevos en el vídeo", 20)
+        palabras = ((q.get("voz") or {}).get("pausas") or q.get("voz") or {}).get("palabras") or []
+        _pasada_imagen(q, trabajo, cuerpo, trabajo / "mezcla.wav", carpeta(mid) / q["final"]["archivo"], palabras,
+                       ANCHO, ALTO, 1.0, medios.duracion(cuerpo), True)
+        subtitulos.srt(palabras, carpeta(mid) / "subtitulos.srt")
+        if q.get("short"):
+            _avisar(mid, "Subtítulos nuevos en el Short", 60)
+            _hacer_short(mid, q["short"]["desde"], q["short"]["hasta"])
+        if q.get("cuadrado"):
+            _avisar(mid, "Subtítulos nuevos en el cuadrado", 85)
+            _hacer_cuadrado(mid, q["cuadrado"]["desde"], q["cuadrado"]["hasta"])
+        modificar(mid, lambda r: r["final"].update(hecho=time.strftime("%Y-%m-%d %H:%M")))
+    _en_fondo(mid, "Subtítulos", fase)
+
+
+def _validar_subs(cambios: dict[str, Any]) -> dict[str, Any]:
+    c = {k: cambios[k] for k in ("activos", "estilo", "posicion", "tamano") if k in cambios}
+    if "estilo" in c and c["estilo"] not in ("viral", "cine"):
+        raise ValueError("Estilo de subtítulos: viral o cine.")
+    if "posicion" in c and c["posicion"] not in ("abajo", "arriba", "centro"):
+        raise ValueError("Posición: abajo, arriba o centro.")
+    if "tamano" in c and c["tamano"] not in ("pequeno", "normal", "grande"):
+        raise ValueError("Tamaño: pequeño, normal o grande.")
+    if "activos" in c:
+        c["activos"] = bool(c["activos"])
+    return c
+
+
+def subtitulos_rapido(mid: str, cambios: dict[str, Any]) -> None:
+    """Cambia los subtítulos; si el vídeo ya está montado, solo se rehace su última pasada."""
+    c = _validar_subs(cambios)
+    hay_final = bool(cargar(mid).get("final"))
+    modificar(mid, lambda p: p.update(subtitulos={**SUBS_POR_DEFECTO, **(p.get("subtitulos") or {}), **c}, previa=""))
+    if hay_final:
+        rehacer_subtitulos(mid)
+
+
+def corregir_subtitulo(mid: str, de: str, a: str) -> int:
+    """Corrige una palabra en todos los subtítulos («Lucia» → «Lucía»), conservando su puntuación, y los rehace."""
+    de, a = (de or "").strip(), (a or "").strip()
+    if not de or not a or " " in de:
+        raise ValueError("Escribe la palabra que está mal y cómo debe quedar.")
+    patron = re.compile(rf"^(\W*){re.escape(de)}(\W*)$", re.IGNORECASE)
+    cuenta = 0
+
+    def cambio(p: dict[str, Any]) -> None:
+        nonlocal cuenta
+        v = p.get("voz") or {}
+        for lista in (v.get("palabras") or [], (v.get("pausas") or {}).get("palabras") or []):
+            for w in lista:
+                m = patron.match(w["palabra"])
+                if m:
+                    w["palabra"] = f"{m.group(1)}{a}{m.group(2)}"
+                    cuenta += 1
+    modificar(mid, cambio)
+    if not cuenta:
+        raise ValueError(f"«{de}» no aparece en los subtítulos.")
+    if cargar(mid).get("final"):
+        rehacer_subtitulos(mid)
+    return cuenta
+
+
+def vista_subtitulos(mid: str, cambios: dict[str, Any], formato: str = "16x9") -> Path:
+    """Un fotograma del vídeo con los subtítulos como quedarían, para verlos antes de aplicarlos."""
+    p = cargar(mid)
+    c = {**SUBS_POR_DEFECTO, **(p.get("subtitulos") or {}), **_validar_subs(cambios)}
+    trabajo = carpeta(mid) / "render"
+    cuerpo = trabajo / "cuerpo.mp4"
+    if not cuerpo.exists():
+        raise ValueError("Primero monta el vídeo final.")
+    palabras = ((p.get("voz") or {}).get("pausas") or p.get("voz") or {}).get("palabras") or []
+    if not palabras:
+        raise ValueError("Este vídeo aún no tiene voz.")
+    t = palabras[min(len(palabras) - 1, len(palabras) // 3)]["ini"] + 0.05
+    cerca = [{**w, "ini": w["ini"] - t + 2, "fin": w["fin"] - t + 2} for w in palabras if t - 4 < w["ini"] < t + 4]
+    vista = carpeta(mid) / "render_vista"
+    vista.mkdir(exist_ok=True)
+    ancho, alto = (1080, 1920) if formato == "9x16" else (ANCHO, ALTO)
+    ass = subtitulos.construir(cerca, vista / "v.ass", ancho, alto, {k: c[k] for k in ("estilo", "posicion", "tamano")})
+    subs = f",ass={ass.name}" if c.get("activos", True) else ""
+    if formato == "9x16":
+        filtro = ("split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=30,"
+                  f"eq=brightness=-0.12[f];[b]scale=1080:-2[c];[f][c]overlay=0:(H-h)/2-120,setpts=PTS+2/TB{subs}")
+    else:
+        filtro = f"scale={ancho}:{alto},setpts=PTS+2/TB{subs}"
+    destino = vista / f"subs_{formato}.jpg"
+    medios.ffmpeg("-ss", f"{max(0.0, t - 0.0):.3f}", "-i", str(cuerpo), "-frames:v", "1", "-vf", filtro, "-q:v", "3",
+                  str(destino), cwd=vista)
     return destino
+
+
+# --- adjuntos del chat y miniaturas para elegir --------------------------------------------------------------------
+IMAGEN_PERMITIDA = (".jpg", ".jpeg", ".png", ".webp")
+
+
+def adjuntar_imagen(mid: str, tmp: Path, nombre: str) -> str:
+    """Una imagen soltada en el chat: queda en el vídeo (adjuntos/) para la miniatura o para una frase."""
+    from PIL import Image
+    try:
+        if Path(nombre).suffix.lower() not in IMAGEN_PERMITIDA:
+            raise ValueError("Adjunta una imagen JPG, PNG o WEBP (los vídeos van como material y los .txt como guion).")
+        cargar(mid)
+        carpeta_a = carpeta(mid) / "adjuntos"
+        carpeta_a.mkdir(exist_ok=True)
+        archivo = f"{hashlib.sha1(tmp.read_bytes()).hexdigest()[:12]}.jpg"
+        Image.open(tmp).convert("RGB").save(carpeta_a / archivo, quality=92)
+    finally:
+        tmp.unlink(missing_ok=True)
+    modificar(mid, lambda p: p.update(adjuntos=[x for x in (p.get("adjuntos") or []) if x["archivo"] != archivo]
+                                      + [{"archivo": archivo, "nombre": Path(nombre).name[:80]}]))
+    return archivo
+
+
+def adjunto(mid: str, archivo: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{12}\.jpg", archivo or "") or not (f := carpeta(mid) / "adjuntos" / archivo).exists():
+        raise ValueError("Ese adjunto no existe.")
+    return f
+
+
+def imagen_adjunta_en_frase(mid: str, n: int, archivo: str) -> None:
+    import base64
+    poner_imagen(mid, n, datos_b64=base64.b64encode(adjunto(mid, archivo).read_bytes()).decode(), credito="Imagen propia")
+
+
+def candidatos_miniatura(mid: str, texto: str = "") -> None:
+    """3 o 4 miniaturas distintas (planos y textos) para VERLAS y elegir, en segundo plano."""
+    p = cargar(mid)
+    con_plano = [f["clip"] for f in p["frases"] if f.get("clip")]
+    adj = p.get("adjuntos") or []
+    if not con_plano and not adj:
+        raise ValueError("Este vídeo aún no tiene planos ni imágenes para la miniatura.")
+    t = (p.get("textos") or {})
+    base_txt = (texto or t.get("texto_miniatura") or p["titulo"]).strip()[:40].upper()
+    alt = " ".join(((t.get("titulos") or [p["titulo"]])[0]).split()[:3]).upper()[:40]
+    n = len(con_plano)
+    variantes = []
+    if n:
+        variantes.append((base_txt, [con_plano[n // 3], con_plano[(2 * n) // 3]] if n > 1 else con_plano[:1]))
+        variantes.append((base_txt, [con_plano[n // 2]]))
+        variantes.append((alt or base_txt, [con_plano[0], con_plano[-1]] if n > 1 else con_plano[:1]))
+    if adj:
+        variantes.append((base_txt, [{"adjunto": adj[-1]["archivo"]}]))
+
+    def fase() -> None:
+        hechas = []
+        for k, (txt, fotos) in enumerate(variantes[:4], 1):
+            _avisar(mid, f"Miniatura {k} de {len(variantes[:4])}", int(100 * k / (len(variantes[:4]) + 1)))
+            miniatura(mid, txt, fotos, destino_nombre=f"miniatura_c{k}.jpg")
+            hechas.append({"archivo": f"miniatura_c{k}.jpg", "texto": txt})
+        modificar(mid, lambda q: q.update(miniatura_candidatos=hechas))
+    _en_fondo(mid, "Miniaturas", fase)
+
+
+def elegir_miniatura(mid: str, archivo: str) -> None:
+    if not re.fullmatch(r"miniatura_c\d\.jpg", archivo or "") or not (carpeta(mid) / archivo).exists():
+        raise ValueError("Esa miniatura no existe.")
+    shutil.copyfile(carpeta(mid) / archivo, carpeta(mid) / "miniatura.jpg")
+    modificar(mid, lambda q: q.update(miniatura="miniatura.jpg"))
 
 
 def logo_de(canal: str) -> Path | None:
@@ -1930,7 +2108,7 @@ def hacer_textos(mid: str) -> dict[str, Any]:
     return textos
 
 
-def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]]) -> Path:
+def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]], destino_nombre: str = "miniatura.jpg") -> Path:
     """Miniatura 1280×720: una o dos imágenes de los planos (pantalla dividida) y el texto grande, con el logo."""
     from playwright.sync_api import sync_playwright
     p = cargar(mid)
@@ -1940,6 +2118,10 @@ def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]]) -> Path:
     trabajo.mkdir()
     imgs = []
     for k, ft in enumerate(fotos[:2]):
+        if ft.get("adjunto"):   # una imagen tuya soltada en el chat
+            shutil.copyfile(adjunto(mid, str(ft["adjunto"])), trabajo / f"m{k}.jpg")
+            imgs.append(f"m{k}.jpg")
+            continue
         meta = fuente(ft["fuente"])
         pl = meta["planos"][int(ft["plano"]) - 1]
         if meta.get("alta"):   # escenas propias (Google Flow), ya en alta en el banco
@@ -1966,7 +2148,7 @@ h1 {{ position: absolute; left: 0; right: 0; bottom: 36px; margin: 0; text-align
 </style><div class="fotos">{paneles}</div><div class="velo"></div><h1>{texto}</h1>
 {'<img class="logo" src="logo.png">' if logo else ''}"""
     (trabajo / "m.html").write_text(html, encoding="utf-8")
-    destino = base / "miniatura.jpg"
+    destino = base / destino_nombre
     with sync_playwright() as pw:
         nav = pw.chromium.launch(channel="msedge", headless=True)
         pag = nav.new_page(viewport={"width": 1280, "height": 720})
@@ -1974,5 +2156,6 @@ h1 {{ position: absolute; left: 0; right: 0; bottom: 36px; margin: 0; text-align
         pag.wait_for_function("document.fonts.ready.then(() => [...document.images].every(i => i.complete))")
         pag.screenshot(path=str(destino), type="jpeg", quality=92)
         nav.close()
-    modificar(mid, lambda q: q.update(miniatura=destino.name))
+    if destino_nombre == "miniatura.jpg":
+        modificar(mid, lambda q: q.update(miniatura=destino.name))
     return destino

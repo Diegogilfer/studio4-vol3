@@ -17,7 +17,7 @@ from typing import Any
 
 from . import canales, escaleta, escenas, extractor, linea, montaje, musica, radar
 
-MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg)$")
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura(_c\d)?\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg)$")
 
 
 class NoExiste(Exception):
@@ -35,6 +35,14 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
     m = re.fullmatch(r"/api/m/voces-guardadas/([0-9a-f]{16})\.wav", ruta)   # escuchar una voz de tu biblioteca
     if m:
         return "archivo", montaje.archivo_voz_guardada(m.group(1))
+    if ruta == "/api/m/subs-vista":   # un fotograma con los subtítulos como quedarían (antes de aplicarlos)
+        cambios = {k: q(k) for k in ("estilo", "posicion", "tamano") if q(k)}
+        if q("activos"):
+            cambios["activos"] = q("activos") in ("1", "true")
+        return "archivo", montaje.vista_subtitulos(q("id"), cambios, q("formato") or "16x9")
+    m = re.fullmatch(r"/m/([\w-]+)/adjuntos/([0-9a-f]{12}\.jpg)", ruta)   # las imágenes adjuntas en el chat
+    if m:
+        return "archivo", montaje.adjunto(m.group(1), m.group(2))
     if ruta == "/api/m/musica/cama":   # escuchar el fondo suave del Studio antes de elegirlo
         return "archivo", montaje.muestra_cama()
     m = re.fullmatch(r"/musica/(.+)", ruta)   # escuchar una pista (solo archivos de tu carpeta de música)
@@ -162,6 +170,11 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         "/api/m/voz": lambda: montaje.elegir_voz(mid, str(d.get("proveedor", "")), str(d.get("nombre", ""))),
         "/api/m/musica/elegir": lambda: montaje.elegir_musica(mid, str(d.get("musica", ""))),
         "/api/m/voz-guardada": lambda: montaje.usar_voz_guardada(mid, str(d.get("voz", ""))),
+        "/api/m/subtitulos-rapido": lambda: montaje.subtitulos_rapido(mid, d.get("cambios") or {}),
+        "/api/m/corregir-subtitulo": lambda: montaje.corregir_subtitulo(mid, str(d.get("de", "")), str(d.get("a", ""))),
+        "/api/m/miniaturas": lambda: montaje.candidatos_miniatura(mid, str(d.get("texto", ""))),
+        "/api/m/miniatura/elegir": lambda: montaje.elegir_miniatura(mid, str(d.get("archivo", ""))),
+        "/api/m/adjunto/frase": lambda: montaje.imagen_adjunta_en_frase(mid, int(d.get("n", 0)), str(d.get("archivo", ""))),
         "/api/m/velocidad": lambda: montaje.elegir_velocidad(mid, float(d.get("velocidad", 1.0))),
         "/api/m/final": lambda: montaje.montar_final(mid),
         "/api/m/automatico": lambda: montaje.automatico(mid, bool(d.get("pago_ok"))),

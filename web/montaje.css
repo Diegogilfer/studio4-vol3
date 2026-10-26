@@ -415,3 +415,17 @@ main:has(.lienzo) { max-width: 1480px; }
 .oir.mudo { background: transparent; color: var(--tenue); cursor: default; }
 .examinar { justify-self: start; cursor: pointer; }
 .chips-vel { gap: 6px; align-items: center; }
+
+/* chat con adjuntos */
+.chat-form .clip { padding: 10px 14px; cursor: pointer; }
+.adjuntos { display: flex; gap: 6px; flex-wrap: wrap; }
+.adjuntos img { width: 64px; height: 40px; object-fit: cover; border-radius: 8px; border: 1px solid var(--borde); }
+.chat-lado.soltando-chat { outline: 2px dashed var(--cian); outline-offset: -6px; }
+/* subtítulos y miniaturas: se eligen viéndolos */
+.subs-rapidos .fila { gap: 6px; flex-wrap: wrap; }
+.vistas-subs { align-items: start; }
+.vistas-subs img { width: 100%; border-radius: 12px; border: 1px solid var(--borde); background: var(--caja-2); }
+.vistas-subs .vertical-mini { max-width: 180px; }
+.minis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.mini-op { margin: 0; display: grid; gap: 6px; }
+.mini-op img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; border: 1px solid var(--borde); }

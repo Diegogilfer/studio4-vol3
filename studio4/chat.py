@@ -30,14 +30,10 @@ def _voz(mid: str, a: dict[str, Any]) -> str:
 
 
 def _subtitulos(mid: str, a: dict[str, Any]) -> str:
-    cambios = {k: a[k] for k in ("activos", "estilo", "posicion", "tamano") if k in a}
-    if "estilo" in cambios and cambios["estilo"] not in ("viral", "cine"):
-        raise ValueError("Estilo de subtítulos: viral o cine.")
-    if "posicion" in cambios and cambios["posicion"] not in ("abajo", "arriba", "centro"):
-        raise ValueError("Posición: abajo, arriba o centro.")
-    montaje.modificar(mid, lambda p: p.update(subtitulos={**montaje.SUBS_POR_DEFECTO, **(p.get("subtitulos") or {}), **cambios},
-                                              previa="", final=None))
-    return "Subtítulos ajustados."
+    """Si el vídeo ya está montado, solo se rehacen los subtítulos (segundos), no el vídeo entero."""
+    hay_final = bool(montaje.cargar(mid).get("final"))
+    montaje.subtitulos_rapido(mid, a)
+    return "Subtítulos nuevos en los 3 formatos…" if hay_final else "Subtítulos ajustados."
 
 
 def _musica(mid: str, a: dict[str, Any]) -> str:
@@ -68,6 +64,16 @@ ACCIONES: dict[str, dict[str, Any]] = {
     "cambiar_musica": {"desc": "Música: auto, cama (fondo suave) o nada", "args": "modo (auto|cama|nada)", "fn": _musica},
     "subtitulos": {"desc": "Ajusta los subtítulos", "args": "activos (true|false), estilo (viral|cine), posicion (abajo|arriba|centro), tamano (pequeno|normal|grande)",
                    "fn": _subtitulos},
+    "corregir_subtitulo": {"desc": "Corrige una palabra mal escrita en los subtítulos (sin volver a montar)", "args": "de, a", "fondo": True,
+                           "fn": lambda mid, a: f"Corregida en {montaje.corregir_subtitulo(mid, str(a.get('de', '')), str(a.get('a', '')))} sitios."},
+    "miniaturas": {"desc": "Hace 3 o 4 miniaturas distintas para elegir (opcional: texto grande)", "args": "texto", "fondo": True,
+                   "fn": lambda mid, a: (montaje.candidatos_miniatura(mid, str(a.get("texto", ""))), "Haciendo miniaturas para elegir…")[1]},
+    "imagen_en_miniatura": {"desc": "Hace la miniatura con una imagen adjunta en el chat", "args": "archivo (de adjuntos), texto", "fondo": True,
+                            "fn": lambda mid, a: (montaje._en_fondo(mid, "Miniatura", lambda: montaje.miniatura(
+                                mid, str(a.get("texto") or (montaje.cargar(mid).get("textos") or {}).get("texto_miniatura") or "")[:40].upper(),
+                                [{"adjunto": str(a.get("archivo", ""))}])), "Miniatura con tu imagen…")[1]},
+    "imagen_en_frase": {"desc": "Pone una imagen adjunta en el chat como plano de una frase", "args": "n, archivo (de adjuntos)",
+                        "fn": lambda mid, a: (montaje.imagen_adjunta_en_frase(mid, int(a["n"]), str(a.get("archivo", ""))), f"Imagen puesta en la frase {a['n']}.")[1]},
     "hacer_previa": {"desc": "Monta la previa rápida para revisar", "args": "", "fondo": True,
                      "fn": lambda mid, a: (montaje.previa(mid), "Montando la previa…")[1]},
     "entregar_formatos": {"desc": "Vídeo traído (sin guion): entrega 16:9, 9:16 y 1:1 con miniatura y, si se pide, subtítulos",
@@ -95,6 +101,8 @@ def _estado(p: dict[str, Any]) -> str:
         "musica": p.get("musica") or musica.AUTO, "subtitulos": p.get("subtitulos") or montaje.SUBS_POR_DEFECTO,
         "formato": p.get("formato_principal", "16:9"), "trabajando": t.get("fase") if t.get("ocupado") else "",
         "previa": bool(p.get("previa")), "final": bool(p.get("final")),
+        "adjuntos": [{"archivo": x["archivo"], "nombre": x["nombre"]} for x in (p.get("adjuntos") or [])],
+        "miniaturas_para_elegir": [x["archivo"] for x in (p.get("miniatura_candidatos") or [])],
     }, ensure_ascii=False)
 
 

@@ -3121,3 +3121,81 @@ def test_shorts_con_emoji_por_frase_y_la_marca_4l_en_los_formatos(aislado, tmp_p
     entradas, cadena = montaje._capas_marca(q, 0.0, 3.0, 1080, 1920, "[base]", 2, emojis=True)
     assert cadena.endswith("null[v]") and cadena.count("between(") == 1   # el mismo emoji seguido no se repite
     assert "between(t,0.00,1.50)" in cadena   # se queda hasta la frase siguiente
+
+
+def _montado_de_prueba(tmp_path):
+    """Un vídeo «ya montado» mínimo: cuerpo, mezcla, voz con sus palabras y el final hecho."""
+    from studio4 import montaje
+    mid = montaje.crear("Montado", "Lucia llega a Vice City. Faltan pocos días.")
+    trabajo = montaje.carpeta(mid) / "render"
+    trabajo.mkdir(parents=True)
+    medios.ffmpeg("-f", "lavfi", "-i", "color=blue:s=1920x1080:d=4:r=30", "-pix_fmt", "yuv420p", str(trabajo / "cuerpo.mp4"))
+    medios.ffmpeg("-f", "lavfi", "-i", "sine=frequency=220:duration=4", "-ac", "2", str(trabajo / "mezcla.wav"))
+    palabras = [{"palabra": w, "ini": 0.3 + k * 0.4, "fin": 0.6 + k * 0.4}
+                for k, w in enumerate("Lucia llega a Vice City. Faltan pocos días.".split())]
+    montaje.modificar(mid, lambda p: p.update(voz={"palabras": [dict(w) for w in palabras], "tiempos": [(0.3, 2.2), (2.3, 3.5)],
+                                                   "pausas": {"palabras": [dict(w) for w in palabras], "tiempos": [(0.3, 2.2), (2.3, 3.5)]}},
+                                              final={"archivo": "final_16x9.mp4", "hecho": "ayer"}))
+    return mid
+
+
+def _esperar_montaje(mid, segundos=120):
+    import time as _t
+    from studio4 import montaje
+    fin = _t.time() + segundos
+    while montaje.cargar(mid)["trabajo"].get("ocupado") and _t.time() < fin:
+        _t.sleep(0.1)
+    return montaje.cargar(mid)
+
+
+def test_subtitulos_se_corrigen_y_se_rehacen_sin_volver_a_montar(aislado, tmp_path):
+    """Corregir una palabra («Lucia» → «Lucía») o cambiar el estilo solo rehace la última pasada: el vídeo final
+    sale de nuevo desde el cuerpo y la mezcla guardados, y el .srt lleva la palabra corregida."""
+    from studio4 import montaje
+    mid = _montado_de_prueba(tmp_path)
+    assert montaje.corregir_subtitulo(mid, "lucia", "Lucía") == 2   # en las palabras y en las de las pausas
+    p = _esperar_montaje(mid)
+    assert not p["trabajo"]["error"], p["trabajo"]["error"]
+    final = montaje.carpeta(mid) / "final_16x9.mp4"
+    assert final.exists() and abs(medios.duracion(final) - 4.0) < 0.3
+    assert "Lucía" in (montaje.carpeta(mid) / "subtitulos.srt").read_text(encoding="utf-8")
+    assert p["final"]["hecho"] != "ayer"
+    with pytest.raises(ValueError):
+        montaje.corregir_subtitulo(mid, "Inexistente", "Otra")
+    montaje.subtitulos_rapido(mid, {"estilo": "cine", "posicion": "centro"})
+    p = _esperar_montaje(mid)
+    assert p["subtitulos"]["estilo"] == "cine" and p["final"] and not p["trabajo"]["error"]
+    with pytest.raises(ValueError):
+        montaje.subtitulos_rapido(mid, {"estilo": "comic"})
+    vista = montaje.vista_subtitulos(mid, {"tamano": "grande"}, "9x16")
+    assert vista.exists() and vista.stat().st_size > 1000
+
+
+def test_chat_adjunta_imagenes_y_las_miniaturas_se_eligen_viendolas(servidor, tmp_path):
+    """Una imagen soltada en el chat queda en el vídeo (y se puede ver); lo que no es imagen se rechaza; una
+    miniatura candidata se elige y pasa a ser la miniatura."""
+    import http.client
+    from PIL import Image
+    from studio4 import montaje
+    pedir, puerto = servidor
+    mid = montaje.crear("Adjuntos", "Una frase con seis palabras justas aqui.")
+    img = tmp_path / "portada.png"
+    Image.new("RGB", (64, 36), (255, 0, 80)).save(img)
+    c = http.client.HTTPConnection("127.0.0.1", puerto, timeout=30)
+    c.request("POST", f"/api/m/adjuntar?id={mid}", body=img.read_bytes(), headers={"X-Nombre": "portada.png"})
+    r = c.getresponse(); d = json.loads(r.read())
+    assert r.status == 200, d
+    assert montaje.cargar(mid)["adjuntos"][0]["archivo"] == d["archivo"]
+    estado, cuerpo = pedir("GET", f"/m/{mid}/adjuntos/{d['archivo']}")
+    assert estado == 200 and cuerpo[:2] == b"\xff\xd8"
+    c.request("POST", f"/api/m/adjuntar?id={mid}", body=b"hola", headers={"X-Nombre": "notas.exe"})
+    r = c.getresponse(); r.read()
+    assert r.status == 400
+    c.close()
+    Image.new("RGB", (1280, 720)).save(montaje.carpeta(mid) / "miniatura_c2.jpg")
+    montaje.elegir_miniatura(mid, "miniatura_c2.jpg")
+    assert montaje.cargar(mid)["miniatura"] == "miniatura.jpg" and (montaje.carpeta(mid) / "miniatura.jpg").exists()
+    with pytest.raises(ValueError):
+        montaje.elegir_miniatura(mid, "../proyecto.json")
+    with pytest.raises(ValueError):
+        montaje.adjunto(mid, "../../.env")

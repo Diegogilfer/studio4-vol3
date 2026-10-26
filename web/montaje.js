@@ -462,9 +462,11 @@ function chatHTML(v) {
         ${(m.hechas || []).map((h) => `<small class="hecho">✓ ${esc(h)}</small>`).join("")}
         ${(m.errores || []).map((h) => `<small class="fallo">✕ ${esc(h)}</small>`).join("")}</div>`).join("")
       : `<p class="meta">Escribe lo que quieres: «hazlo más dinámico», «pon subtítulos estilo cine», «escribe un guion de 1 minuto»…</p>`}</div>
+    ${(v.adjuntos || []).length ? `<div class="adjuntos">${v.adjuntos.map((a) => `<img src="/m/${esc(v.id)}/adjuntos/${esc(a.archivo)}" alt="${esc(a.nombre)}" title="${esc(a.nombre)} · pídele: «ponla en la miniatura» o «ponla en la frase 3»">`).join("")}</div>` : ""}
     <div class="chips-ia sugerencias">${SUGERENCIAS.map((t) => `<button type="button" class="chip-ia" data-sugerencia="${esc(t)}">${esc(t)}</button>`).join("")}</div>
-    <form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Escribe un cambio para este vídeo…"></textarea>
-      <button class="primario" type="submit">Enviar</button></form></aside>`;
+    <form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Escribe un cambio o suelta aquí una imagen, un vídeo o un guion (.txt)…"></textarea>
+      <label class="boton clip" title="Adjuntar imagen, vídeo o guion">📎<input type="file" id="chat-adjunto" accept="image/*,video/*,.txt,.md" hidden></label>
+      <button class="primario" type="submit">Enviar</button></form><span class="meta" id="chat-estado"></span></aside>`;
 }
 function enlazarChat(v) {
   const caja = $("chat-msgs");
@@ -480,6 +482,31 @@ function enlazarChat(v) {
   $("chat-form").onsubmit = (ev) => { ev.preventDefault(); enviarChat($("chat-texto").value); };
   $("chat-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); enviarChat(ev.target.value); } };
   document.querySelectorAll("[data-sugerencia]").forEach((b) => { b.onclick = () => enviarChat(b.dataset.sugerencia); });
+  // adjuntos: imagen → queda en el vídeo para la miniatura o una frase; vídeo → material; .txt → guion
+  const adjuntar = async (f) => {
+    const estado = (t) => { $("chat-estado").textContent = t; };
+    try {
+      if (/\.(txt|md)$/i.test(f.name) || f.type.startsWith("text/")) {
+        const texto = await f.text();
+        if (!confirm(`¿Usar «${f.name}» como guion de este vídeo? (${texto.split(/\s+/).length} palabras)`)) return;
+        await api("/api/m/guion", { id: v.id, guion: texto });
+      } else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp)$/i.test(f.name)) {
+        await subirVideo(f, v.id, (pc) => estado(`Adjuntando «${f.name}»… ${pc} %`), "/api/m/adjuntar");
+      } else if (f.type.startsWith("video/") || /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(f.name)) {
+        await subirVideo(f, v.id, (pc) => estado(`Subiendo «${f.name}»… ${pc} %`));
+      } else { aviso("Adjunta una imagen, un vídeo o un guion en .txt."); return; }
+      estado(""); firma = ""; await cargarVideo(v.id);
+    } catch (e) { estado(""); aviso(e); }
+  };
+  $("chat-adjunto").onchange = (ev) => { if (ev.target.files[0]) adjuntar(ev.target.files[0]); };
+  const lado = document.querySelector(".chat-lado");
+  lado.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.stopPropagation(); lado.classList.add("soltando-chat"); });
+  lado.addEventListener("dragleave", () => lado.classList.remove("soltando-chat"));
+  lado.addEventListener("drop", (ev) => {
+    ev.preventDefault(); ev.stopPropagation(); lado.classList.remove("soltando-chat");
+    const f = ev.dataTransfer?.files?.[0];
+    if (f) adjuntar(f);
+  });
 }
 
 // Tarjeta «Resumen» y guion gráfico (escenas con su tiempo y su plano), como el lienzo de CapCut
@@ -768,6 +795,21 @@ function oir(boton) {
   sonando.play().catch(() => {});
 }
 
+// subtítulos del vídeo ya montado: se eligen VIENDO un fotograma y se aplican sin volver a montar
+function subsRapidosHTML(v) {
+  const s = { activos: true, estilo: "viral", posicion: "abajo", tamano: "normal", ...(v.subtitulos || {}) };
+  const grupo = (clave, opciones) => opciones.map(([val, txt]) =>
+    `<button class="chip${String(s[clave]) === String(val) ? " activo" : ""}" type="button" data-subs="${clave}" data-valor="${val}">${txt}</button>`).join("");
+  return `<div class="textos subs-rapidos"><span class="etiqueta">Subtítulos</span>
+    <div class="fila">${grupo("activos", [[true, "Con subtítulos"], [false, "Sin"]])}</div>
+    <div class="fila">${grupo("estilo", [["viral", "Viral"], ["cine", "Cine"]])}${grupo("posicion", [["abajo", "Abajo"], ["centro", "Centro"], ["arriba", "Arriba"]])}${grupo("tamano", [["pequeno", "Pequeño"], ["normal", "Normal"], ["grande", "Grande"]])}</div>
+    <div class="dos vistas-subs"><img id="vista-subs" alt="Vista previa 16:9"><img id="vista-subs-v" class="vertical-mini" alt="Vista previa 9:16"></div>
+    <div class="fila"><button class="primario" type="button" id="aplicar-subs">Aplicar a los 3 formatos</button><span class="meta">Solo rehace los subtítulos: segundos, no el vídeo entero.</span></div>
+    <div class="fila"><input class="campo corto-t" id="sub-de" placeholder="Palabra mal"><span>→</span><input class="campo corto-t" id="sub-a" placeholder="Corregida">
+      <button class="boton" type="button" id="corregir-sub">Corregir en los subtítulos</button></div>
+  </div>`;
+}
+
 function pasoFinal(v) {
   const t = v.textos;
   const fotosMini = v.frases.filter((f) => f.clip);
@@ -781,6 +823,7 @@ function pasoFinal(v) {
     ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
     ${calidadHTML(v.calidad?.final)}
     ${v.ia ? `<div class="avisos"><p>Este vídeo lleva escenas generadas con IA: al subirlo a YouTube marca «Contenido alterado o sintético» (lo pide YouTube).</p></div>` : ""}
+    ${subsRapidosHTML(v)}
     <div class="fila"><a class="boton" href="/m/${esc(v.id)}/subtitulos.srt" download="${esc(v.titulo)}.srt">Subtítulos .srt para YouTube</a>
       <a class="boton" href="/m/${esc(v.id)}/final_16x9.mp4" download="${esc(v.titulo)}.mp4">Descargar vídeo</a></div>
     <div class="dos">
@@ -791,11 +834,17 @@ function pasoFinal(v) {
         ${v.short ? `<video class="vertical" controls preload="metadata" src="/m/${esc(v.id)}/short_9x16.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : `<p class="meta">Elige de qué segundo a qué segundo (máx. 60).</p>`}
       </div>
       <div class="textos"><span class="etiqueta">Miniatura</span>
+        <div class="fila"><button class="primario" type="button" id="ver-minis">${(v.miniatura_candidatos || []).length ? "Otras opciones" : "Ver opciones para elegir"}</button></div>
+        ${(v.miniatura_candidatos || []).length ? `<div class="minis">${v.miniatura_candidatos.map((c) => `
+          <figure class="mini-op"><img src="/m/${esc(v.id)}/${esc(c.archivo)}?v=${encodeURIComponent(v.actualizado)}" alt="${esc(c.texto)}">
+            <button class="chip" type="button" data-mini="${esc(c.archivo)}">Usar esta</button></figure>`).join("")}</div>` : ""}
+        <details><summary class="meta">Hacerla a mano</summary>
         <input class="campo" id="mini-texto" value="${esc(t?.texto_miniatura || "")}" placeholder="Texto grande: ¿LO COPIÓ?">
         <div class="fila"><select class="campo" id="mini-a" style="flex:1">${fotosMini.map((f) => `<option value="${f.n}">Frase ${f.n}</option>`).join("")}</select>
           <select class="campo" id="mini-b" style="flex:1"><option value="">Una sola imagen</option>${fotosMini.map((f, k) => `<option value="${f.n}" ${k === fotosMini.length - 1 ? "selected" : ""}>Frase ${f.n}</option>`).join("")}</select></div>
         <button class="boton" type="button" id="hacer-mini">${v.miniatura ? "Rehacer miniatura" : "Hacer miniatura"}</button>
-        ${v.miniatura ? `<img class="miniatura-hecha" src="/m/${esc(v.id)}/miniatura.jpg?v=${encodeURIComponent(v.actualizado)}" alt="Miniatura">` : ""}
+        </details>
+        ${v.miniatura ? `<span class="meta">La elegida</span><img class="miniatura-hecha" src="/m/${esc(v.id)}/miniatura.jpg?v=${encodeURIComponent(v.actualizado)}" alt="Miniatura">` : ""}
       </div>
     </div>
     <div class="textos"><span class="etiqueta">Textos para publicar</span>
@@ -941,6 +990,26 @@ function enlazarVideo(p) {
       if (datos.coste_voz && !confirm(`La voz ${datos.video.voz_nombre} es de pago: ≈${datos.coste_voz.toFixed(2)} $ por este guion. ¿Montar?`)) return;
       enviar("/api/m/final");
     };
+    // subtítulos: la vista previa cambia al pulsar cada opción; «Aplicar» rehace solo los subtítulos
+    if ($("vista-subs")) {
+      const elegido = { ...(v.subtitulos || {}) };
+      const vista = () => {
+        const q = new URLSearchParams({ id: v.id, ...Object.fromEntries(Object.entries(elegido).map(([k, x]) => [k, String(x)])) });
+        $("vista-subs").src = `/api/m/subs-vista?${q}&formato=16x9`;
+        $("vista-subs-v").src = `/api/m/subs-vista?${q}&formato=9x16`;
+      };
+      document.querySelectorAll("[data-subs]").forEach((b) => { b.onclick = () => {
+        elegido[b.dataset.subs] = b.dataset.subs === "activos" ? b.dataset.valor === "true" : b.dataset.valor;
+        document.querySelectorAll(`[data-subs="${b.dataset.subs}"]`).forEach((x) => x.classList.toggle("activo", x === b));
+        vista();
+      }; });
+      $("vista-subs").onerror = () => { $("vista-subs").hidden = true; $("vista-subs-v").hidden = true; };
+      vista();
+      $("aplicar-subs").onclick = () => enviar("/api/m/subtitulos-rapido", { cambios: elegido });
+      $("corregir-sub").onclick = () => enviar("/api/m/corregir-subtitulo", { de: $("sub-de").value, a: $("sub-a").value });
+    }
+    if ($("ver-minis")) $("ver-minis").onclick = () => enviar("/api/m/miniaturas", { texto: $("mini-texto")?.value || "" });
+    document.querySelectorAll("[data-mini]").forEach((b) => { b.onclick = () => enviar("/api/m/miniatura/elegir", { archivo: b.dataset.mini }); });
     if ($("hacer-short")) $("hacer-short").onclick = () => enviar("/api/m/short", { desde: segundos($("s-desde").value), hasta: segundos($("s-hasta").value) });
     if ($("rehacer-textos")) $("rehacer-textos").onclick = () => enviar("/api/m/textos");
     if ($("hacer-mini")) $("hacer-mini").onclick = () => {

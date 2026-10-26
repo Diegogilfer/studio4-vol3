@@ -433,6 +433,12 @@ class Panel(BaseHTTPRequestHandler):
             tmp = self._cuerpo_a_temporal(maximo=config.MAX_BYTES_VIDEO)
             self._por_leer = 0
             return self._json({"ok": True, "id": montaje.subir_video(tmp, nombre, (query.get("id") or [""])[0])})
+        if ruta == "/api/m/adjuntar":   # una imagen soltada en el chat del vídeo
+            from studio4 import montaje
+            nombre = urllib.parse.unquote(self.headers.get("X-Nombre", "")) or "imagen.jpg"
+            tmp = self._cuerpo_a_temporal(maximo=50 * 1024 * 1024)
+            self._por_leer = 0
+            return self._json({"ok": True, "archivo": montaje.adjuntar_imagen((query.get("id") or [""])[0], tmp, nombre)})
         if ruta in ("/api/m/subir-voz", "/api/m/subir-musica"):   # tu locución o tu canción, con «Examinar»
             from studio4 import montaje
             nombre = urllib.parse.unquote(self.headers.get("X-Nombre", "")) or "audio.mp3"
