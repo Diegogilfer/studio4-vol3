@@ -48,11 +48,11 @@ def _transcribir(video: Path, trabajo: Path) -> tuple[list[dict[str, Any]], str]
     return palabras, getattr(info, "language", "") or ""
 
 
-def _filtro(ancho: int, alto: int, subs: str) -> str:
+def _filtro(ancho: int, alto: int, subs: str, marca: str) -> str:
     return (f"[0:v]fps={config.FPS},split=2[a][b];"
             f"[a]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},gblur=sigma=30,eq=brightness=-0.12[fondo];"
             f"[b]scale={ancho}:{alto}:force_original_aspect_ratio=decrease[centro];"
-            f"[fondo][centro]overlay=(W-w)/2:(H-h)/2,setsar=1{subs}[v]")
+            f"[fondo][centro]overlay=(W-w)/2:(H-h)/2,setsar=1{subs}[base];{marca}")
 
 
 def _tramo(total: float) -> float:
@@ -109,7 +109,8 @@ def entregar(mid: str, opciones: dict[str, Any] | None = None,
                 letra = FUENTE_LETRA.get(idioma, "Arial")
                 subs = (f",subtitles=subs.srt:force_style='FontName={letra},FontSize={TAMANO_LETRA[nombre]},Bold=1,"
                         "PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=24'")
-            medios.ffmpeg("-t", f"{dur:.3f}", "-i", str(origen), "-filter_complex", _filtro(ancho, alto, subs),
+            capas, marca = montaje._capas_marca({"canal": p["canal"]}, 0.0, dur, ancho, alto, "[base]", 1, emojis=False)
+            medios.ffmpeg("-t", f"{dur:.3f}", "-i", str(origen), *capas, "-filter_complex", _filtro(ancho, alto, subs, marca),
                           "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                           "-pix_fmt", "yuv420p", "-af", "loudnorm=I=-14:TP=-1:LRA=11", "-c:a", "aac", "-b:a", "192k",
                           "-movflags", "+faststart", str(base / nombre), cwd=trabajo)

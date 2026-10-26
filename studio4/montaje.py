@@ -1556,7 +1556,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     if logo:   # el logo del canal, discreto arriba a la derecha en todo el vídeo
         entradas += ["-loop", "1", "-i", str(logo)]
         lado = int(130 * escala)
-        filtros.append(f"[2:v]scale={lado}:{lado},format=rgba,colorchannelmixer=aa=0.55[logo];"
+        filtros.append(f"[2:v]scale={lado}:{lado},format=rgba,colorchannelmixer=aa={OPACIDAD_MARCA}[logo];"
                        f"{mezcla_v}[logo]overlay=W-w-{int(40 * escala)}:{int(36 * escala)}:shortest=1[v1]")
         mezcla_v = "[v1]"
     subs = {**SUBS_POR_DEFECTO, **(p.get("subtitulos") or {})}
@@ -1702,12 +1702,14 @@ def _hacer_short(mid: str, desde: float, hasta: float) -> None:
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920,
                                    {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
         puestos = f",ass={ass.name}"
+    capas, marca = _capas_marca(q, desde, hasta, 1080, 1920, "[base]", 2, emojis=True)
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
                   "-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / q["final"]["archivo"]),
+                  *capas,
                   "-filter_complex",
                   "[0:v]split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
                   "gblur=sigma=30,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
-                  f"[fondo][centro]overlay=0:(H-h)/2-120{puestos}[v]",
+                  f"[fondo][centro]overlay=0:(H-h)/2-120{puestos}[base];{marca}",
                   "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                   str(base / "short_9x16.mp4"), cwd=trabajo)
@@ -1741,16 +1743,98 @@ def _hacer_cuadrado(mid: str, desde: float, hasta: float) -> None:
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1080,
                                    {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
         puestos = f",ass={ass.name}"
+    capas, marca = _capas_marca(q, desde, hasta, 1080, 1080, "[base]", 2, emojis=False)
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
                   "-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / q["final"]["archivo"]),
+                  *capas,
                   "-filter_complex",
                   "[0:v]split=2[a][b];[a]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,"
                   "gblur=sigma=28,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
-                  f"[fondo][centro]overlay=0:(H-h)/2{puestos}[v]",
+                  f"[fondo][centro]overlay=0:(H-h)/2{puestos}[base];{marca}",
                   "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                   str(base / "cuadrado_1x1.mp4"), cwd=trabajo)
     modificar(mid, lambda r: r.update(cuadrado={"archivo": "cuadrado_1x1.mp4", "desde": desde, "hasta": hasta}))
+
+
+OPACIDAD_MARCA = 0.85
+# el emoji de cada frase del Short, por lo que dice (la primera regla que encaja); sin regla, sin emoji
+EMOJIS = (
+    (r"\b(faltan?|d[ií]as?|cuenta atr[aá]s|fecha|noviembre|diciembre|enero|semanas?)\b", "⏳"),
+    (r"(d[oó]lares|euros|precio|cuesta|\$|pagar|gratis)", "💰"),
+    (r"\b(disco|f[ií]sicas?|caja|copias?|c[oó]digo de descarga)\b", "💿"),
+    (r"\b(m[uú]sica|[aá]lbum|canci[oó]n|banda sonora|vinilo|cd|tocadiscos|temas)\b", "🎵"),
+    (r"\b(playstation|xbox|ps5|consolas?|pc|switch)\b", "🎮"),
+    (r"\b(sale|salida|lanzamiento|llega|estreno)\b", "🚀"),
+    (r"\b(coches?|autos?|carros?|motos?|veh[ií]culos?)\b", "🚗"),
+    (r"\b(armas?|pistolas?|disparos?|tiroteos?)\b", "🔫"),
+    (r"\b(confirm\w*|oficial\w*)\b", "✅"),
+    (r"\b(secreto|oculto|misterio|filtra\w*|rumor\w*)\b", "👀"),
+    (r"\b(pero|ojo|cuidado|sin embargo)\b", "⚠️"),
+    (r"\b(primera?|nuevos?|nunca|r[eé]cord|hist[oó]ric\w*|incluso)\b", "🔥"),
+    (r"\b(ciudad|vice city|leonida|mapa|florida|estado)\b", "🌴"),
+    (r"\b(protagonistas?|personajes?|pareja)\b", "⭐"),
+)
+
+
+def emoji_de(texto: str) -> str:
+    t = texto.lower()
+    return next((e for patron, e in EMOJIS if re.search(patron, t)), "")
+
+
+def _png_emoji(emoji: str) -> Path:
+    """El emoji a color en PNG transparente (FFmpeg los pinta en blanco y negro): lo dibuja el navegador, una vez."""
+    from playwright.sync_api import sync_playwright
+    destino = config.PRODUCCIONES / "_emojis" / f"{'-'.join(f'{ord(c):x}' for c in emoji)}.png"
+    if destino.exists():
+        return destino
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as pw:
+        nav = pw.chromium.launch()
+        pagina = nav.new_page(device_scale_factor=1)
+        pagina.set_content('<html><body style="margin:0;background:transparent"><span id="e" style="display:inline-block;'
+                           "padding:12px;font:220px/1 'Segoe UI Emoji','Noto Color Emoji',sans-serif\">" + emoji + "</span></body></html>")
+        pagina.locator("#e").screenshot(path=str(destino), omit_background=True)
+        nav.close()
+    return destino
+
+
+def _capas_marca(q: dict[str, Any], desde: float, hasta: float, ancho: int, alto: int, entrada: str,
+                 n_entrada: int, emojis: bool) -> tuple[list[str], str]:
+    """La marca 4L (y, en el Short, un emoji por frase) sobre `entrada`. Devuelve las entradas extra de FFmpeg y la
+    cadena de filtros que termina en [v]."""
+    entradas: list[str] = []
+    cadena, actual, k = "", entrada, n_entrada
+    logo = logo_de(q["canal"])
+    if logo:
+        lado, x, y = (150, 48, 150) if alto > ancho else (110, ancho - 140, 30)   # vertical: arriba a la izquierda (libre de la interfaz)
+        entradas += ["-loop", "1", "-i", str(logo)]
+        cadena += (f"[{k}:v]scale={lado}:{lado},format=rgba,colorchannelmixer=aa={OPACIDAD_MARCA}[m{k}];"
+                   f"{actual}[m{k}]overlay={x}:{y}:shortest=1[c{k}];")
+        actual, k = f"[c{k}]", k + 1
+    if emojis:
+        tiempos = (q.get("voz") or {}).get("pausas", {}).get("tiempos") or (q.get("voz") or {}).get("tiempos") or []
+        previo = ""
+        # cada emoji se queda hasta que empieza la frase siguiente (sin parpadeo en las pausas)
+        tiempos = [(a, tiempos[k + 1][0] if k + 1 < len(tiempos) else b) for k, (a, b) in enumerate(tiempos)]
+        for f, (a, b) in zip(q["frases"], tiempos):
+            e = emoji_de(f["texto"])
+            if not e or e == previo or b <= desde or a >= hasta:
+                previo = e or previo
+                continue
+            previo = e
+            a, b = max(0.0, a - desde), min(hasta - desde, b - desde)
+            try:
+                png = _png_emoji(e)
+            except Exception as err:  # noqa: BLE001 - sin navegador, el Short sale igual (sin emojis)
+                logger.warning("Emoji %s: %s", e, err)
+                break
+            entradas += ["-loop", "1", "-t", f"{hasta - desde:.3f}", "-i", str(png)]
+            cadena += (f"[{k}:v]scale=230:-1,format=rgba,fade=t=in:st={a:.2f}:d=0.18:alpha=1,"
+                       f"fade=t=out:st={max(a, b - 0.2):.2f}:d=0.2:alpha=1[e{k}];"
+                       f"{actual}[e{k}]overlay=(W-w)/2:{int(alto * 0.13)}:enable='between(t,{a:.2f},{b:.2f})'[c{k}];")
+            actual, k = f"[c{k}]", k + 1
+    return entradas, cadena + f"{actual}null[v]"
 
 
 def tramo_short(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
@@ -1815,8 +1899,9 @@ def render_basico(mid: str, opciones: dict[str, Any] | None = None) -> None:
 # --- Textos para publicar y miniatura -------------------------------------------------------------------------------
 SISTEMA_TEXTOS = """Eres editor de un canal de YouTube de videojuegos en español latino. Con el guion de un vídeo
 escribe lo necesario para publicarlo. Reglas: nada de clickbait engañoso; lo no confirmado se presenta como avance
-o rumor; nunca menciones a otros youtubers ni canales. Devuelve JSON:
-{"titulos": ["3 títulos de máx. 70 caracteres, distintos"], "descripcion": "3-5 frases, primera línea con gancho",
+o rumor; nunca menciones a otros youtubers ni canales. Para que llamen más la atención, pon 1 o 2 emojis o símbolos (🔥 ⏳ 💰 ⚠️ ✅ ➡️ 🎮) en cada título y en la descripción, sin
+llenarlo todo. Devuelve JSON:
+{"titulos": ["3 títulos de máx. 70 caracteres, distintos"], "titulo_short": "título del Short, máx. 60 caracteres, con emojis y #Shorts", "descripcion": "3-5 frases, primera línea con gancho",
  "hashtags": ["5 a 8, con #"], "texto_miniatura": "2 a 4 palabras en mayúsculas para la miniatura"}"""
 
 
@@ -1835,6 +1920,7 @@ def hacer_textos(mid: str) -> dict[str, Any]:
                 capitulos.append(f"{seg // 60}:{seg % 60:02d} {' '.join(f['texto'].split()[:6]).rstrip('.,:;')}")
     creditos = sorted({fuente(fid)["titulo"] for fid in p["fuentes"] if fid})
     textos = {"titulos": [str(t)[:100] for t in d.get("titulos", [])][:3], "descripcion": str(d.get("descripcion", "")),
+              "titulo_short": str(d.get("titulo_short", ""))[:100],
               "hashtags": [h for h in d.get("hashtags", []) if str(h).startswith("#")][:8],
               "texto_miniatura": str(d.get("texto_miniatura", ""))[:40], "capitulos": capitulos,
               "creditos": "\n".join(x for x in (

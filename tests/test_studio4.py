@@ -3106,3 +3106,18 @@ def test_la_voz_subida_queda_guardada_para_otros_videos_y_la_velocidad_se_elige(
         montaje.elegir_velocidad(b, 3)
     with pytest.raises(ValueError):
         montaje.usar_voz_guardada(b, "../../secreto")
+
+
+def test_shorts_con_emoji_por_frase_y_la_marca_4l_en_los_formatos(aislado, tmp_path, monkeypatch):
+    """Cada frase del Short lleva el emoji de lo que dice (sin repetir el mismo seguido); la marca del canal va en
+    todos los formatos, arriba a la izquierda en vertical."""
+    from studio4 import canales, montaje
+    assert montaje.emoji_de("Faltan 26 días para GTA 6") == "⏳"
+    assert montaje.emoji_de("Cuesta 79.99 dólares") == "💰"
+    assert montaje.emoji_de("Una frase sin nada especial aquí") == ""
+    q = {"canal": canales.activo()["id"], "frases": [{"texto": "Faltan 3 días."}, {"texto": "Quedan pocos días."}],
+         "voz": {"tiempos": [(0.0, 1.0), (1.5, 2.5)]}}
+    monkeypatch.setattr(montaje, "_png_emoji", lambda e: tmp_path / "e.png")   # sin navegador en la prueba
+    entradas, cadena = montaje._capas_marca(q, 0.0, 3.0, 1080, 1920, "[base]", 2, emojis=True)
+    assert cadena.endswith("null[v]") and cadena.count("between(") == 1   # el mismo emoji seguido no se repite
+    assert "between(t,0.00,1.50)" in cadena   # se queda hasta la frase siguiente
