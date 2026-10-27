@@ -74,6 +74,8 @@ ACCIONES: dict[str, dict[str, Any]] = {
                                 [{"adjunto": str(a.get("archivo", ""))}])), "Miniatura con tu imagen…")[1]},
     "imagen_en_frase": {"desc": "Pone una imagen adjunta en el chat como plano de una frase", "args": "n, archivo (de adjuntos)",
                         "fn": lambda mid, a: (montaje.imagen_adjunta_en_frase(mid, int(a["n"]), str(a.get("archivo", ""))), f"Imagen puesta en la frase {a['n']}.")[1]},
+    "ilustrar_isometrico": {"desc": "Pone una maqueta isométrica 3D (hecha con código, gratis) en cada frase sin imagen", "args": "todas (true|false)",
+                            "fondo": True, "fn": lambda mid, a: (montaje.ilustrar_isometrico(mid, bool(a.get("todas"))), "Dibujando las maquetas isométricas…")[1]},
     "hacer_previa": {"desc": "Monta la previa rápida para revisar", "args": "", "fondo": True,
                      "fn": lambda mid, a: (montaje.previa(mid), "Montando la previa…")[1]},
     "entregar_formatos": {"desc": "Vídeo traído (sin guion): entrega 16:9, 9:16 y 1:1 con miniatura y, si se pide, subtítulos",

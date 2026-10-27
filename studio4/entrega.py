@@ -9,7 +9,6 @@ El 16:9 es el vídeo entero; el 9:16 y el 1:1, enteros si duran ≤ 3 min (Short
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 import time
 from pathlib import Path
@@ -41,7 +40,7 @@ def _transcribir(video: Path, trabajo: Path) -> tuple[list[dict[str, Any]], str]
     audio = trabajo / "audio.wav"
     medios.ffmpeg("-i", str(video), "-vn", "-ac", "1", "-ar", "16000", str(audio))
     if _whisper is None:
-        _whisper = WhisperModel(os.getenv("STUDIO4_WHISPER", "small"), device="cpu", compute_type="int8")
+        _whisper = WhisperModel(config.WHISPER_MODELO, device="cpu", compute_type="int8")
     segmentos, info = _whisper.transcribe(str(audio), word_timestamps=True, vad_filter=True)
     palabras = [{"palabra": w.word.strip(), "ini": round(w.start, 3), "fin": round(w.end, 3)}
                 for s in segmentos for w in (s.words or []) if w.word.strip()]

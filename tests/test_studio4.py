@@ -3427,3 +3427,23 @@ def test_chat_de_inicio_empieza_sin_guion_y_pregunta_el_estilo(aislado, monkeypa
     assert nichos.veredicto({"mediana_vistas": 5000, "pequenos_que_explotan": 0, "top3_cuota": 0.9, "grandes_1M": 0}) == "Poca demanda"
     asistente.limpiar(cid)
     assert asistente.leer(cid) == []
+
+
+def test_isometrico_3d_hecho_con_codigo_y_modo_ligero(aislado, monkeypatch):
+    """El estilo isométrico lo hace Claude con código: la escena que llega de la IA se sanea (tipos, números,
+    colores, máximo de objetos) y se dibuja en SVG encuadrado; sin IA hay escena de reserva. El modo ligero se
+    puede forzar o apagar."""
+    from studio4 import config, estilos, isometrico
+    assert estilos.ESTILOS["isometrico"]["hecho_por"] == "claude" and estilos.ESTILOS["isometrico"]["generador"] == "isometrico"
+    sucia = {"paleta": "inventada", "objetos": [{"tipo": "caja", "x": 99, "h": "alto", "color": "rojo", "ventanas": True},
+                                               {"tipo": "dragon"}] + [{"tipo": "luz"}] * 40}
+    e = isometrico.validar(sucia)
+    assert e["paleta"] == "noche" and len(e["objetos"]) == isometrico.MAX_OBJETOS - 1   # el dragón fuera; 30 como mucho
+    assert e["objetos"][0]["x"] == 14 and e["objetos"][0]["h"] == 1 and e["objetos"][0]["color"].startswith("#")
+    s = isometrico.svg(isometrico.escena_de_reserva("Faltan 26 días"), semilla="x")
+    assert s.startswith("<svg") and "<polygon" in s and 'filter="url(#brillo)"' in s
+    assert isometrico.escena_de_reserva("a") != isometrico.escena_de_reserva("b")   # cada frase, su maqueta
+    monkeypatch.setenv("STUDIO4_LIGERO", "1")
+    assert config._equipo_ligero() is True
+    monkeypatch.setenv("STUDIO4_LIGERO", "0")
+    assert config._equipo_ligero() is False

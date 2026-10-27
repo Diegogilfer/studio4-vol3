@@ -131,6 +131,24 @@ def estilo_valido(estilo: str) -> str:
     """El estilo si existe; si no (vacío o uno viejo), el de por defecto."""
     return estilo if estilo in ESTILOS else ESTILO_POR_DEFECTO
 
+def _equipo_ligero() -> bool:
+    """Modo ligero para PCs flojos (menos de 4 núcleos o menos de 8 GB): 720p, sin cámara lenta interpolada y
+    Whisper «base». STUDIO4_LIGERO=1 lo fuerza y =0 lo apaga."""
+    v = os.getenv("STUDIO4_LIGERO", "").strip().lower()
+    if v in ("1", "si", "sí", "true"):
+        return True
+    if v in ("0", "no", "false"):
+        return False
+    try:
+        import psutil
+        return (psutil.cpu_count(logical=False) or 4) < 4 or psutil.virtual_memory().total < 8 * 2**30
+    except Exception:  # noqa: BLE001 - sin psutil, modo normal
+        return False
+
+
+MODO_LIGERO = _equipo_ligero()
+WHISPER_MODELO = os.getenv("STUDIO4_WHISPER", "base" if MODO_LIGERO else "small")
+
 MAX_BYTES_MEDIO = 400 * 1024 * 1024
 MAX_BYTES_VIDEO = 8 * 1024 * 1024 * 1024   # vídeos de tu PC para editar (gameplay grabado puede pesar varios GB)
 

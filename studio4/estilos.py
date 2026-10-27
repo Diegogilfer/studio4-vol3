@@ -129,7 +129,14 @@ ESTILOS.update({
         "imagen": "Lo hace Claude: material real de archivo con movimiento lento y rótulos", "video": "No hace falta",
         "coste": "gratis", "animar": 0},
 })
-HECHO_POR_CLAUDE = {"gameplay", "stickman", "pixelart", "motion", "tipografia", "vectorial", "collage"}
+ESTILOS["isometrico"] = {
+    "nombre": "Isométrico 3D", "para": "Explicar lugares, sistemas, historias y datos con maquetas 3D que brillan",
+    "visual": "", "genera": False, "generador": "isometrico",
+    "guion": "cada frase describe un lugar u objeto que se pueda enseñar como maqueta (edificios, templos, máquinas)",
+    "montaje": {"ritmo": "medio", "transicion": "fundido", "musica": "misterio", "subtitulos": "viral"},
+    "imagen": "Lo hace Claude con código: una maqueta isométrica por frase (la IA solo describe la escena)",
+    "video": "No hace falta: el montaje le pone movimiento lento", "coste": "gratis", "animar": 0}
+HECHO_POR_CLAUDE = {"gameplay", "stickman", "pixelart", "motion", "tipografia", "vectorial", "collage", "isometrico"}
 for _k, _e in ESTILOS.items():
     _e["hecho_por"] = "claude" if _k in HECHO_POR_CLAUDE else "modelo"
 POR_DEFECTO = "documental"

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import shutil
 from pathlib import Path
@@ -23,7 +22,7 @@ from . import config, medios
 logger = logging.getLogger("studio4.importar")
 
 MAX_MINUTOS = 90
-MODELO_WHISPER = os.getenv("STUDIO4_WHISPER", "small")   # tiny, base, small, medium: más grande = más fino y más lento
+MODELO_WHISPER = config.WHISPER_MODELO   # small (base en modo ligero); STUDIO4_WHISPER lo cambia
 _whisper = None
 
 

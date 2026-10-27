@@ -32,7 +32,7 @@ from . import animacion, calidad, canales, config, extractor, medios, musica, so
 
 logger = logging.getLogger("studio4.montaje")
 
-ANCHO, ALTO = 1920, 1080
+ANCHO, ALTO = (1280, 720) if config.MODO_LIGERO else (1920, 1080)   # PC flojo: 720p
 ANCHO_PREVIA, ALTO_PREVIA = 960, 540
 TRANSICION = 1.6        # segundos del cambio de bloque: el vídeo se encoge, entra la tarjeta nueva y crece
 ENTRADA = 0.25          # respiro antes de la primera palabra
@@ -710,7 +710,10 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
                                  identidad=guionista.identidad_del_canal(canales.obtener(cid)))
     cambiar_guion(mid, escrito[version]["guion"])
     ganchos = escrito[version].get("ganchos") or []
-    if buscar_material and inv:
+    generador = estilos.ESTILOS[o["estilo"]].get("generador")
+    if generador == "isometrico":   # cada frase con su maqueta hecha con código: no hace falta material de vídeo
+        _ilustrar_isometrico(mid)
+    if buscar_material and inv and not generador:
         _avisar(mid, "Bajando el mejor material", 72)
         candidatos = sorted((v for e in inv for v in e["videos"] if 20 <= (v.get("duracion") or 0) <= 15 * 60),
                             key=lambda v: -materiales.puntos(v))[:2]
@@ -950,6 +953,27 @@ def carpeta_imagenes(mid: str) -> Path:
     c = carpeta(mid) / "imagenes"
     c.mkdir(exist_ok=True)
     return c
+
+
+def _ilustrar_isometrico(mid: str, todas: bool = False) -> int:
+    """Una ilustración isométrica 3D (hecha con código) para cada frase sin imagen ni plano. Devuelve cuántas."""
+    import base64
+    from . import isometrico
+    p = cargar(mid)
+    frases = [f for f in p["frases"] if todas or not con_imagen(f)]
+    trabajo = carpeta(mid) / "render_isometrico"
+    trabajo.mkdir(exist_ok=True)
+    for k, f in enumerate(frases):
+        _avisar(mid, f"Maqueta isométrica {k + 1} de {len(frases)}", 75 + int(20 * k / max(1, len(frases))))
+        png = isometrico.dibujar(isometrico.escena_para(f["texto"], p["titulo"], produccion=mid),
+                                 trabajo / f"{f['n']:03d}.png", semilla=f"{mid}-{f['n']}")
+        poner_imagen(mid, f["n"], datos_b64=base64.b64encode(png.read_bytes()).decode(), credito="Ilustración isométrica de Studio 4")
+    shutil.rmtree(trabajo, ignore_errors=True)
+    return len(frases)
+
+
+def ilustrar_isometrico(mid: str, todas: bool = False) -> None:
+    _en_fondo(mid, "Isométrico", lambda: _ilustrar_isometrico(mid, todas))
 
 
 def poner_imagen(mid: str, n: int, url: str = "", datos_b64: str = "", credito: str = "") -> dict[str, Any]:
@@ -1255,7 +1279,8 @@ def _segmento(fuente_video: Path, ini: float, fin: float, d: float, ancho: int, 
     largo = max(0.3, min(fin, medios.duracion(fuente_video)) - ini)   # lo que de verdad hay en el archivo
     lento = min(LENTO_MAX, max(1.0, d / largo))
     # más lento sin repetir cuadros (eso se ve a tirones): se inventan los cuadros intermedios siguiendo el movimiento
-    interpola = (f",minterpolate=fps={config.FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1" if lento > 1.01 else "")
+    interpola = (f",minterpolate=fps={config.FPS}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
+                 if lento > 1.01 and not config.MODO_LIGERO else "")   # en un PC flojo, la interpolación es lo más pesado
     # y un acercamiento lento (+6 % en todo el plano): aunque el juego esté quieto (un menú, el minijuego), la imagen
     # nunca se ve parada. Se hace al doble de tamaño para que el movimiento sea fino, sin temblores.
     cuadros = max(1, round(d * config.FPS))
