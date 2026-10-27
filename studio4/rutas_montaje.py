@@ -43,6 +43,10 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
     m = re.fullmatch(r"/m/([\w-]+)/adjuntos/([0-9a-f]{12}\.jpg)", ruta)   # las imágenes adjuntas en el chat
     if m:
         return "archivo", montaje.adjunto(m.group(1), m.group(2))
+    if ruta == "/api/m/biblioteca-chat":   # la Biblioteca con chat: conversación, ideas guardadas y bases
+        from . import buscador
+        cid = canales.activo()["id"]
+        return "json", {**buscador.leer(cid), "bases": buscador.bases(cid), "canal": canales.activo()["nombre"]}
     if ruta == "/api/m/musica/cama":   # escuchar el fondo suave del Studio antes de elegirlo
         return "archivo", montaje.muestra_cama()
     m = re.fullmatch(r"/musica/(.+)", ruta)   # escuchar una pista (solo archivos de tu carpeta de música)
@@ -108,6 +112,23 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/chat":   # el chat del vídeo: DeepSeek elige acciones del estudio y se ejecutan
         from . import chat
         return "json", chat.responder(mid, str(d.get("mensaje", "")))
+    if ruta.startswith("/api/m/biblioteca/"):   # chat de la Biblioteca: buscar guiones en las bases y usarlos
+        from . import buscador
+        cid = canales.activo()["id"]
+        accion = ruta.rsplit("/", 1)[1]
+        if accion == "chat":
+            return "json", buscador.conversar(cid, str(d.get("mensaje", "")))
+        if accion == "guardar":
+            buscador.guardar_idea(cid, str(d.get("idea", "")))
+        elif accion == "quitar":
+            buscador.quitar_idea(cid, str(d.get("idea", "")))
+        elif accion == "crear":
+            return "json", {"ok": True, "id": buscador.crear_video(cid, str(d.get("idea", "")))}
+        elif accion == "bases":
+            return "json", {"ok": True, "fuentes": buscador.guardar_bases(cid, list(d.get("fuentes") or []))}
+        else:
+            raise NoExiste(ruta)
+        return "json", {"ok": True}
     if ruta == "/api/m/crear-ia":   # idea + duración/formato/tono → la IA busca material, escribe y pone planos
         return "json", {"ok": True, "id": montaje.crear_con_ia(str(d.get("tema", "")), d.get("opciones") or {})}
     if ruta == "/api/m/guion-ia":   # un vídeo con material y sin guion → la IA lo escribe

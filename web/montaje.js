@@ -228,15 +228,50 @@ function abrirNuevo() {
 }
 
 // ============================================================ Biblioteca
+// una propuesta de guion del chat de la Biblioteca: título, gancho, ángulo y sus fuentes reales
+function ideaHTML(i, guardada) {
+  const dominio = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return u; } };
+  return `<article class="idea-guion">
+    <div class="idea-cab"><span class="chip">${i.formato === "largo" ? "Vídeo largo" : "Short"}</span><b>${esc(i.titulo)}</b></div>
+    <p class="gancho">«${esc(i.gancho)}»</p>
+    ${i.angulo ? `<small class="meta">${esc(i.angulo)}</small>` : ""}
+    <div class="idea-fuentes">${i.fuentes.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(dominio(u))}</a>`).join("")}</div>
+    <div class="fila"><button class="primario" type="button" data-idea-crear="${esc(i.id)}">Crear vídeo</button>
+      ${guardada ? `<button class="boton" type="button" data-idea-quitar="${esc(i.id)}">Quitar</button>`
+        : `<button class="boton" type="button" data-idea-guardar="${esc(i.id)}">Guardar idea</button>`}</div>
+  </article>`;
+}
+
 async function vistaBiblioteca() {
-  const [m, d] = await Promise.all([api("/api/m"), seguro("/api/biblioteca")]);
+  const [m, d, bc] = await Promise.all([api("/api/m"), seguro("/api/biblioteca"), seguro("/api/m/biblioteca-chat")]);
+  const chat = bc?.chat || [];
+  const guardadas = bc?.guardadas || [];
+  const bases = bc?.bases || { canal: [], abiertas: [] };
   const mios = new Set(m.videos.map((v) => v.id));
   const guiones = d?.guiones || [];
   const temas = new Map();
   guiones.forEach((g) => { if (!temas.has(g.codigo)) temas.set(g.codigo, []); temas.get(g.codigo).push(g); });
   $("vista").innerHTML = `
-    ${cabecera("Biblioteca de <em>guiones</em>", `${temas.size} temas · ${guiones.length} guiones. El largo se monta en 16:9 y de él salen los Shorts.`)}
-    ${!temas.size ? `<p class="meta">Aún no hay guiones en la Biblioteca. Crea un vídeo desde una idea, una URL o pegando un guion.</p>` : ""}
+    ${cabecera("Biblioteca de <em>guiones</em>", `Pide guiones por chat: se buscan en las bases de ${esc(bc?.canal || "tu canal")} y en bases abiertas, con sus fuentes.`)}
+    <section class="bases">
+      <span class="etiqueta">Bases de donde salen los guiones</span>
+      <div class="bases-lista">${bases.canal.map((u) => `<span class="chip base-canal" title="Fuente de confianza del canal">${esc(u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""))}<button type="button" data-quitar-base="${esc(u)}" aria-label="Quitar">×</button></span>`).join("")}
+        ${bases.abiertas.map((b) => `<span class="chip base-abierta" title="${esc(b.para)}">${esc(b.nombre)}</span>`).join("")}</div>
+      <form class="fila" id="base-form"><input class="campo" id="base-url" placeholder="Añadir una web de confianza (https://…)"><button class="boton" type="submit">Añadir base</button></form>
+    </section>
+    <section class="bib-chat">
+      <div class="chat-msgs bib-msgs" id="bib-msgs">${chat.length ? chat.map((x) => x.quien === "tú"
+        ? `<div class="msg mio"><p>${esc(x.texto)}</p></div>`
+        : `<div class="msg ia"><p>${esc(x.texto)}</p>${(x.bases || []).length ? `<small class="meta">Buscado en: ${esc(x.bases.join(", "))}</small>` : ""}
+            <div class="ideas-rejilla">${(x.ideas || []).map((i) => ideaHTML(i, guardadas.some((g) => g.id === i.id))).join("")}</div></div>`).join("")
+        : `<p class="meta">Escribe qué guiones buscas: «misterios del mar sin resolver», «mitos nórdicos poco contados», «5 Shorts de enigmas arqueológicos»…</p>`}</div>
+      <form class="chat-form" id="bib-form"><textarea class="campo" id="bib-texto" rows="2" placeholder="¿Qué guiones buscamos?"></textarea>
+        <button class="primario" type="submit">Buscar</button></form>
+    </section>
+    ${guardadas.length ? `<section><span class="etiqueta">Ideas guardadas (${guardadas.length})</span>
+      <div class="ideas-rejilla">${guardadas.map((i) => ideaHTML(i, true)).join("")}</div></section>` : ""}
+    <details class="bib-antiguos"><summary class="etiqueta">Guiones ya escritos (${temas.size} temas · ${guiones.length} guiones)</summary>
+    ${!temas.size ? `<p class="meta">Aún no hay guiones escritos.</p>` : ""}
     <div class="temas">${[...temas].map(([codigo, gs]) => {
       const largo = gs.find((g) => g.tipo === "largo") || gs[0];
       const cortos = gs.filter((g) => g !== largo);
@@ -255,7 +290,36 @@ async function vistaBiblioteca() {
             ${cortos.map((g) => `<div class="corto-item"><b>${esc(g.etiqueta)}</b><span>${esc(g.titulo || g.guion.slice(0, 80))}</span>
               ${g.parecido_a?.length ? `<small class="repe">se parece a ${esc(g.parecido_a.join(", "))}</small>` : ""}</div>`).join("")}` : ""}
         </div>
-      </details>`; }).join("")}</div>`;
+      </details>`; }).join("")}</div></details>`;
+  const caja = $("bib-msgs");
+  if (caja) caja.scrollTop = caja.scrollHeight;
+  const buscar = async () => {
+    const texto = $("bib-texto").value.trim();
+    if (!texto) return;
+    const b = $("bib-form").querySelector("button");
+    b.disabled = true; b.textContent = "Buscando en las bases…";
+    try { await api("/api/m/biblioteca/chat", { mensaje: texto }); await vistaBiblioteca(); }
+    catch (e) { aviso(e); b.disabled = false; b.textContent = "Buscar"; }
+  };
+  $("bib-form").onsubmit = (ev) => { ev.preventDefault(); buscar(); };
+  $("bib-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); buscar(); } };
+  $("base-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    try { await api("/api/m/biblioteca/bases", { fuentes: [...bases.canal, $("base-url").value.trim()] }); await vistaBiblioteca(); } catch (e) { aviso(e); }
+  };
+  document.querySelectorAll("[data-quitar-base]").forEach((b) => { b.onclick = async () => {
+    try { await api("/api/m/biblioteca/bases", { fuentes: bases.canal.filter((u) => u !== b.dataset.quitarBase) }); await vistaBiblioteca(); } catch (e) { aviso(e); }
+  }; });
+  document.querySelectorAll("[data-idea-guardar]").forEach((b) => { b.onclick = async () => {
+    try { await api("/api/m/biblioteca/guardar", { idea: b.dataset.ideaGuardar }); await vistaBiblioteca(); } catch (e) { aviso(e); }
+  }; });
+  document.querySelectorAll("[data-idea-quitar]").forEach((b) => { b.onclick = async () => {
+    try { await api("/api/m/biblioteca/quitar", { idea: b.dataset.ideaQuitar }); await vistaBiblioteca(); } catch (e) { aviso(e); }
+  }; });
+  document.querySelectorAll("[data-idea-crear]").forEach((b) => { b.onclick = async () => {
+    b.disabled = true; b.textContent = "Creando…";
+    try { location.hash = `v=${(await api("/api/m/biblioteca/crear", { idea: b.dataset.ideaCrear })).id}`; } catch (e) { aviso(e); b.disabled = false; b.textContent = "Crear vídeo"; }
+  }; });
   document.querySelectorAll("[data-bib]").forEach((b) => { b.onclick = async (ev) => {
     ev.preventDefault(); b.disabled = true;
     try { location.hash = `v=${(await api("/api/m/desde-biblioteca", { item: b.dataset.bib })).id}`; } catch (e) { aviso(e); b.disabled = false; }

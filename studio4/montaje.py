@@ -647,6 +647,7 @@ def _opciones_ia(opciones: dict[str, Any] | None) -> dict[str, Any]:
     o["formato"] = "9:16" if str(o["formato"]) == "9:16" else "16:9"
     o["modo"] = "inventar" if o["modo"] == "inventar" else "buscar"
     o["tono"] = str(o["tono"])[:80]
+    o["fuentes"] = [str(u) for u in (o.get("fuentes") or []) if re.match(r"https?://\S+$", str(u))][:4]
     return o
 
 
@@ -656,6 +657,20 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     from . import material as materiales
     _avisar(mid, "Investigando el tema", 8)
     dossier = investigacion.investigar(tema, produccion=mid).get("dossier", "")
+    if o.get("fuentes"):   # las fuentes elegidas en la Biblioteca: el guion sale de ellas
+        from . import fuentes as paginas
+        leidas = []
+        for url in o["fuentes"]:
+            try:
+                texto = paginas.texto_de(url)
+            except Exception as e:  # noqa: BLE001 - una fuente caída no frena el guion
+                logger.info("Fuente %s: %s", url, e)
+                continue
+            if texto:
+                leidas.append(f"[{url}]\n{texto[:6000]}")
+        if leidas:
+            dossier = ("FUENTES ELEGIDAS (los datos salen de aquí; no inventes nada que no esté):\n"
+                       + "\n\n".join(leidas) + "\n\n" + dossier)
     metas = [fuente(f) for f in cargar(mid)["fuentes"]]
     if metas:
         dossier = "MATERIAL QUE YA TIENE EL VÍDEO (escribe sobre lo que se ve en él): " + "; ".join(

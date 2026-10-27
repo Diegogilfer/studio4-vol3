@@ -434,3 +434,20 @@ main:has(.lienzo) { max-width: 1480px; }
 .nota-titulo.medio { background: color-mix(in srgb, #f1c40f 25%, transparent); }
 .nota-titulo.bajo { background: color-mix(in srgb, #e74c3c 25%, transparent); }
 .copiable small.meta { display: block; margin-top: 4px; }
+
+/* Biblioteca con chat */
+.bases { display: grid; gap: 10px; }
+.bases-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+.base-canal { border-color: var(--rosa); display: inline-flex; align-items: center; gap: 6px; }
+.base-canal button { background: none; border: 0; color: var(--tenue); cursor: pointer; font-size: 15px; padding: 0; }
+.base-abierta { color: var(--tenue); }
+.bib-chat { display: grid; gap: 10px; }
+.bib-msgs { max-height: none; }
+.ideas-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 10px; }
+.idea-guion { display: grid; gap: 8px; padding: 16px; border-radius: 16px; background: var(--caja); border: 1px solid var(--borde); }
+.idea-cab { display: grid; gap: 6px; justify-items: start; }
+.idea-cab b { font-size: 17px; line-height: 1.25; }
+.idea-guion .gancho { margin: 0; font-style: italic; }
+.idea-fuentes { display: flex; flex-wrap: wrap; gap: 6px; }
+.idea-fuentes a { font-size: 12px; color: var(--cian); text-decoration: none; padding: 3px 8px; border-radius: 999px; background: var(--caja-2); }
+.bib-antiguos summary { cursor: pointer; }

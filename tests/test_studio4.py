@@ -3215,3 +3215,39 @@ def test_empaque_titulo_con_miniatura_capitulos_validos_y_gancho():
     g = empaque.revisar_gancho("Faltan 26 días para GTA 6 y llega sin disco.", "GTA 6 llega sin disco")
     assert g["nota"] >= 90 and not g["mal"]
     assert empaque.revisar_gancho("hola a todos y bienvenidos otra vez a mi canal de siempre donde hablamos de muchas cosas interesantes cada semana", "GTA 6")["mal"]
+
+
+def test_biblioteca_con_chat_propone_guiones_solo_con_fuentes_encontradas(aislado, monkeypatch):
+    """El chat de la Biblioteca busca en las bases y propone guiones; una idea que cita una fuente que no se
+    encontró se descarta; las ideas se guardan, se quitan y se convierten en vídeo con sus fuentes."""
+    from studio4 import buscador, canales, deepseek, montaje
+    cid = canales.activo()["id"]
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    hallado = [{"base": "es.wikipedia.org", "titulo": "Mecanismo de Anticitera", "resumen": "artefacto griego",
+                "url": "https://es.wikipedia.org/wiki/Mecanismo_de_Anticitera"}]
+    monkeypatch.setattr(buscador, "buscar_en_bases", lambda consultas: hallado)
+
+    def generar_json(sistema, prompt, **_):
+        if "búsquedas" in sistema:
+            return {"consultas": ["mecanismo de Anticitera"]}
+        assert "Mecanismo_de_Anticitera" in prompt
+        return {"respuesta": "Dos ideas.", "ideas": [
+            {"titulo": "El ordenador de hace 2.000 años", "gancho": "En 1901…", "angulo": "eclipses", "formato": "corto",
+             "fuentes": ["https://es.wikipedia.org/wiki/Mecanismo_de_Anticitera"]},
+            {"titulo": "Inventada", "gancho": "x", "angulo": "y", "formato": "largo", "fuentes": ["https://falsa.example/x"]}]}
+    monkeypatch.setattr(deepseek, "generar_json", generar_json)
+    r = buscador.conversar(cid, "misterios de la Grecia antigua")
+    assert [i["titulo"] for i in r["ideas"]] == ["El ordenador de hace 2.000 años"]   # la de fuente inventada fuera
+    idea = r["ideas"][0]["id"]
+    buscador.guardar_idea(cid, idea)
+    assert [i["id"] for i in buscador.leer(cid)["guardadas"]] == [idea]
+    pedido = {}
+    monkeypatch.setattr(montaje, "crear_con_ia", lambda tema, o: pedido.update(tema=tema, o=o) or "vid-1")
+    assert buscador.crear_video(cid, idea) == "vid-1"
+    assert pedido["o"]["fuentes"] == ["https://es.wikipedia.org/wiki/Mecanismo_de_Anticitera"] and pedido["o"]["duracion"] == 60
+    assert montaje._opciones_ia({"fuentes": ["https://a.org/x", "javascript:alert(1)"]})["fuentes"] == ["https://a.org/x"]
+    buscador.quitar_idea(cid, idea)
+    assert not buscador.leer(cid)["guardadas"]
+    assert buscador.guardar_bases(cid, ["https://www.britannica.com/", "no-es-url"]) == ["https://www.britannica.com/"]
+    with pytest.raises(ValueError):
+        buscador.conversar(cid, "  ")
