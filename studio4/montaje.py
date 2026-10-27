@@ -625,7 +625,7 @@ def preparar_fuente(url: str, desde: float | None = None, hasta: float | None = 
 
 
 # --- Crea con IA: idea → material real → guion → planos (como el creador de CapCut, con nuestro motor) -----------
-OPCIONES_IA = {"duracion": 60, "formato": "16:9", "tono": "", "modo": "buscar"}
+OPCIONES_IA = {"duracion": 60, "formato": "16:9", "tono": "", "modo": "buscar", "estilo": ""}
 DURACIONES_IA = (15, 30, 60, 180, 300, 600)
 
 
@@ -657,6 +657,8 @@ def _opciones_ia(opciones: dict[str, Any] | None) -> dict[str, Any]:
     o["formato"] = "9:16" if str(o["formato"]) == "9:16" else "16:9"
     o["modo"] = "inventar" if o["modo"] == "inventar" else "buscar"
     o["tono"] = str(o["tono"])[:80]
+    from . import estilos   # el estilo pedido o, si no, el del canal activo
+    o["estilo"] = estilos.valido(o.get("estilo"), canales.activo())
     o["fuentes"] = [str(u) for u in (o.get("fuentes") or []) if re.match(r"https?://\S+$", str(u))][:4]
     return o
 
@@ -701,7 +703,10 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     version = "corto" if seg <= 60 else "largo"
     _avisar(mid, "Escribiendo el guion", 55)
     cid = cargar(mid)["canal"]
-    escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=o.get("tono", ""),
+    from . import estilos
+    modificar(mid, lambda q: q.update(estilo=o["estilo"]))
+    tono = " ".join(x for x in (o.get("tono", ""), estilos.para_guion(o["estilo"])) if x)
+    escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=tono,
                                  identidad=guionista.identidad_del_canal(canales.obtener(cid)))
     cambiar_guion(mid, escrito[version]["guion"])
     ganchos = escrito[version].get("ganchos") or []
@@ -723,6 +728,7 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
         titulo=escrito.get("titulo_provisional") or q["titulo"],
         resumen_ia={"tema": tema[:200], "gancho": ganchos[0] if ganchos else "", "duracion": seg, "formato": o["formato"],
                     "tono": o.get("tono") or "el del canal", "modo": o["modo"], "voz": p.get("voz_nombre", ""),
+                    "estilo": estilos.ESTILOS[o["estilo"]]["nombre"],
                     "musica": p.get("musica") or "automática", "subtitulos": "karaoke",
                     "material": len(p["fuentes"]), "plataforma": "YouTube Shorts" if seg <= 60 else "YouTube"}))
 

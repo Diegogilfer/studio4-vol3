@@ -2933,7 +2933,8 @@ def test_crear_con_ia_escribe_guion_y_resumen(aislado, monkeypatch):
     p = _esperar_mid(mid)
     assert not p["trabajo"]["error"], p["trabajo"]["error"]
     assert pedido["versiones"] == {"corto": 30} or pedido["versiones"] == {"corto": 60}   # 45 → duración permitida más cercana
-    assert "MODO HISTORIA" in pedido["dossier"] and pedido["tono"] == "misterio"
+    assert "MODO HISTORIA" in pedido["dossier"] and pedido["tono"].startswith("misterio")
+    assert "Estilo de producción" in pedido["tono"]   # el guionista sabe cómo escribir según el estilo
     assert p["frases"] and p["titulo"] == "Título IA" and p["formato_principal"] == "9:16"
     assert p["resumen_ia"]["gancho"] == "Gancho fuerte" and p["resumen_ia"]["plataforma"] == "YouTube Shorts"
 
@@ -3362,3 +3363,22 @@ def test_planes_salen_de_los_costes_y_ninguno_pierde_dinero(servidor):
     assert estado == 200 and [p["id"] for p in d["planes"]] == ["gratis", "creador", "pro", "studio", "claves"]
     texto = json.dumps(d)
     assert "coste" not in texto and "margen" not in texto
+
+
+def test_estilos_de_produccion_guian_guion_y_recomiendan_modelo(aislado):
+    """Cada estilo dice cómo escribir, quién lo hace (Claude con código o un modelo) y qué modelo usar; el estilo
+    pedido manda y, si no hay, el del canal; los estilos visuales de Flow salen de la misma ficha."""
+    from studio4 import canales, config, estilos, montaje
+    cat = estilos.catalogo()
+    assert cat[0]["hecho_por"] == "claude"   # primero los gratis
+    for e in cat:
+        assert e["imagen"] and e["video"] and e["coste"] in ("gratis", "bajo", "medio", "alto")
+    assert estilos.ESTILOS["stickman"]["hecho_por"] == "claude" and estilos.ESTILOS["cinematografico"]["hecho_por"] == "modelo"
+    assert "logo" in estilos.ESTILOS["mundo_abierto"]["visual"]   # «no logos»: estética propia
+    assert config.ESTILOS["cinematografico"] == estilos.ESTILOS["cinematografico"]["visual"] and "motion" not in config.ESTILOS
+    assert "videojuego" in config.ESTILOS   # los vídeos viejos con ese estilo siguen funcionando
+    canales.guardar({"id": canales.activo()["id"], "estilo": "noir"})
+    assert montaje._opciones_ia({})["estilo"] == "noir"                  # el del canal
+    assert montaje._opciones_ia({"estilo": "anime"})["estilo"] == "anime"   # el pedido manda
+    assert montaje._opciones_ia({"estilo": "inventado"})["estilo"] == "noir"
+    assert "Noir" in estilos.para_guion("noir")

@@ -458,3 +458,8 @@ button.chip-radar:hover { outline: 1px solid var(--cian); }
 .tarjeta .archivar { position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 999px; font-size: 12px;
   background: var(--caja-2); border: 1px solid var(--borde); color: var(--tenue); cursor: pointer; opacity: 0; transition: opacity .15s; }
 .tarjeta:hover .archivar { opacity: 1; }
+
+/* estilos de producción: los que hace Claude con código, marcados */
+.estilos-ia .chip-ia.por-claude { border-color: color-mix(in srgb, var(--cian) 55%, var(--borde)); }
+.estilos-ia .chip-ia.por-claude::before { content: "✦ "; color: var(--cian); }
+.recomendacion { margin: 0; }

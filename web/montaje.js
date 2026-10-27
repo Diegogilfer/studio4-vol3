@@ -657,13 +657,24 @@ function calidadHTML(c) {
 
 // Opciones de «Crea con IA»: duración, formato, modo (investigación oficial o historia) y tono
 const DURACIONES_IA = [[15, "15 s"], [30, "30 s"], [60, "1 min"], [180, "3 min"], [300, "5 min"], [600, "10 min"]];
+let ESTILOS_IA = { estilos: [], canal: "" };   // se cargan una vez (studio4/estilos.py)
+seguro("/api/m/estilos").then((r) => { if (r) ESTILOS_IA = r; });
+function recomendacion(id) {
+  const e = ESTILOS_IA.estilos.find((x) => x.id === id);
+  if (!e) return "";
+  return `${e.hecho_por === "claude" ? "<b>Lo hace Claude · gratis.</b>" : `<b>Necesita modelo · coste ${esc(e.coste)}.</b>`} ${esc(e.para)}.
+    Imagen: ${esc(e.imagen)}. Vídeo: ${esc(e.video)}.${e.animar ? ` Como mucho ${e.animar} escenas animadas.` : ""}`;
+}
 function opcionesIA(o = {}) {
-  const d = Number(o.duracion || 60), f = o.formato || "16:9", m = o.modo || "buscar";
+  const d = Number(o.duracion || 60), f = o.formato || "16:9", m = o.modo || "buscar", es = o.estilo || ESTILOS_IA.canal || "documental";
   const chip = (grupo, valor, texto, activo) => `<button type="button" class="chip-ia${activo ? " activo" : ""}" data-valor="${esc(valor)}">${texto}</button>`;
   return `<div class="ia-opciones">
     <div class="chips-ia" data-grupo="duracion">${DURACIONES_IA.map(([sg, t]) => chip("duracion", sg, t, sg === d)).join("")}</div>
     <div class="chips-ia" data-grupo="formato">${chip("formato", "16:9", "▭ 16:9", f === "16:9")}${chip("formato", "9:16", "▯ 9:16", f === "9:16")}</div>
     <div class="chips-ia" data-grupo="modo">${chip("modo", "buscar", "Investigación oficial", m === "buscar")}${chip("modo", "inventar", "Historia inventada", m === "inventar")}</div>
+    ${ESTILOS_IA.estilos.length ? `<div class="chips-ia estilos-ia" data-grupo="estilo">${ESTILOS_IA.estilos.map((e) =>
+      `<button type="button" class="chip-ia${e.id === es ? " activo" : ""}${e.hecho_por === "claude" ? " por-claude" : ""}" data-valor="${esc(e.id)}" title="${esc(e.para)}">${esc(e.nombre)}</button>`).join("")}</div>
+    <p class="meta recomendacion" data-recomendacion>${recomendacion(es)}</p>` : ""}
     <input class="campo" data-tono placeholder="Tono (opcional): misterio, épico, humor…" value="${esc(o.tono || "")}">
   </div>`;
 }
@@ -675,6 +686,10 @@ function leerOpcionesIA(raiz) {
 document.addEventListener("click", (ev) => {   // un solo chip activo por grupo
   const c = ev.target.closest(".chip-ia");
   if (c) c.parentElement.querySelectorAll(".chip-ia").forEach((x) => x.classList.toggle("activo", x === c));
+  if (c && c.parentElement.dataset.grupo === "estilo") {   // al elegir estilo, su recomendación de modelos y coste
+    const r = c.closest(".ia-opciones")?.querySelector("[data-recomendacion]");
+    if (r) r.innerHTML = recomendacion(c.dataset.valor);
+  }
 });
 
 function pasoGuion(v) {

@@ -116,21 +116,14 @@ VELOCIDADES = (0.9, 1.0, 1.1, 1.2)   # velocidad de la voz: FFmpeg acelera sin c
 CAMARA_LENTA_MAX = 1.5  # si la voz dura más que el clip, se ralentiza hasta aquí y luego se congela el final
 
 # Estilos visuales que el director inyecta en cada prompt de Flow (siempre en inglés para Veo).
-ESTILOS = {
-    "cinematografico": "cinematic live-action, anamorphic 35mm lens, shallow depth of field, film grain, natural color grading",
-    "hiperrealista": "hyperrealistic, photorealistic 8K detail, true-to-life skin and materials, natural lighting, no stylization",
-    "documental": "documentary realism, handheld camera feel, natural light, authentic textures",
-    "videojuego": "modern AAA video game graphics, Unreal Engine 5 render, real-time ray tracing, in-game camera, open-world look",
-    "animacion3d": "high-end 3D animated film, soft global illumination, expressive characters, rich materials",
-    "anime": "high-quality anime, cel shading, vibrant colors, detailed backgrounds, Studio-style lighting",
-    "cartoon": "2D cartoon animation, bold clean outlines, flat vibrant colors, exaggerated expressive characters",
-    "stickman": "minimalist stick figure animation, simple black line characters on a plain white background, clean doodle style",
-    "comic": "comic book style, bold ink lines, halftone dots, dramatic panels, saturated colors",
-    "pixelart": "retro pixel art, 16-bit video game style, limited color palette, crisp pixels",
-    "stopmotion": "claymation stop-motion, handmade plasticine characters, miniature sets, tactile textures",
-    "noir": "neo-noir, high-contrast low-key lighting, deep shadows, wet streets, teal and amber palette",
-    "scifi": "epic science fiction, volumetric light, atmospheric haze, futuristic production design",
-}
+from .estilos import ESTILOS as _FICHAS   # el texto de cada estilo sale de studio4/estilos.py
+# Los 13 del panel clásico, en su orden (web/panel.js tiene la misma lista). «videojuego» se conserva para vídeos viejos.
+_CLASICOS = ("cinematografico", "hiperrealista", "documental", "videojuego", "animacion3d", "anime", "cartoon",
+             "stickman", "comic", "pixelart", "stopmotion", "noir", "scifi")
+_VIEJOS = {"videojuego": "modern AAA video game graphics, Unreal Engine 5 render, real-time ray tracing, in-game camera, open-world look",
+           "stickman": "minimalist stick figure animation, simple black line characters on a plain white background, clean doodle style",
+           "pixelart": "retro pixel art, 16-bit video game style, limited color palette, crisp pixels"}
+ESTILOS = {k: (_FICHAS.get(k) or {}).get("visual") or _VIEJOS[k] for k in _CLASICOS}
 ESTILO_POR_DEFECTO = "cinematografico"
 
 
