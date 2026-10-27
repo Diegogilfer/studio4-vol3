@@ -2703,7 +2703,7 @@ def test_radar_guardadas_lee_lo_ultimo_sin_red(monkeypatch, tmp_path):
     from studio4 import radar
     monkeypatch.setattr(radar, "SENALES", tmp_path / "_radar.jsonl")
     assert radar.guardadas() == []
-    monkeypatch.setattr(radar, "escanear", lambda cfg=None: [{"tema": "GTA 6", "fuerza": 30, "n_fuentes": 4, "caliente": True, "fuentes": [], "titulares": []}])
+    monkeypatch.setattr(radar, "escanear", lambda cfg=None, cid=None: [{"tema": "GTA 6", "fuerza": 30, "n_fuentes": 4, "caliente": True, "fuentes": [], "titulares": []}])
     radar.señales(n=5, guardar=True)   # día de hoy
     g = radar.guardadas()
     assert len(g) == 1 and g[0]["tema"] == "GTA 6" and g[0]["dia"]
@@ -3251,3 +3251,33 @@ def test_biblioteca_con_chat_propone_guiones_solo_con_fuentes_encontradas(aislad
     assert buscador.guardar_bases(cid, ["https://www.britannica.com/", "no-es-url"]) == ["https://www.britannica.com/"]
     with pytest.raises(ValueError):
         buscador.conversar(cid, "  ")
+
+
+def test_cada_canal_tiene_su_radar_y_sus_videos_sin_mezclarse(aislado, monkeypatch):
+    """FourLevel conserva su radar de juegos; un canal de misterios usa webs de historia agrupadas por grandes
+    temas; las señales de uno no aparecen en el otro; la lista de vídeos es solo del canal activo; un vídeo a medias
+    se archiva (no se borra)."""
+    from studio4 import canales, config, montaje, radar
+    monkeypatch.setattr(radar, "CONFIG", aislado / "_radar.json")
+    monkeypatch.setattr(radar, "SENALES", aislado / "_radar.jsonl")
+    canales.guardar({"id": "fourlevel", "nombre": "FourLevel", "nicho": "Video juegos"})
+    canales.guardar({"id": "arigab", "nombre": "ARIGAB", "nicho": "Misterios sin resolver de la historia y mitología"})
+    assert radar.config_radar("fourlevel")["wiki_api"] and not radar.config_radar("arigab").get("wiki_api")
+    assert radar.config_radar("arigab").get("temas")
+    titulares = {"a": ["Roman forum found under hotel", "Una tumba romana en Hispania"], "b": ["Roman legion camp", "Viking runes"]}
+    monkeypatch.setattr(radar, "_titulares_rss", lambda f, m: titulares.get(f["id"], []))
+    cfg = {**radar.config_radar("arigab"), "rss": [{"id": "a", "url": "a"}, {"id": "b", "url": "b"}]}
+    s = radar.escanear(cfg)
+    assert s[0]["tema"] == "Roma antigua" and s[0]["n_fuentes"] == 3 and s[0]["caliente"]
+    radar._guardar(s, "arigab")
+    radar._guardar([{"tema": "GTA 6", "fuerza": 9, "fuentes": ["ign"], "n_fuentes": 2, "caliente": True, "titulares": []}], "fourlevel")
+    assert [x["tema"] for x in radar.guardadas(12, "arigab")][0] == "Roma antigua"
+    assert [x["tema"] for x in radar.guardadas(12, "fourlevel")] == ["GTA 6"]   # nada se mezcla
+    canales.activar("arigab")
+    mio = montaje.crear("Expediente 001", "Una frase con seis palabras justas aqui.")
+    canales.activar("fourlevel")
+    otro = montaje.crear("GTA", "Otra frase con seis palabras justas aqui.")
+    assert {v["id"]: v["canal"] for v in montaje.listar()} == {mio: "arigab", otro: "fourlevel"}
+    montaje.archivar(otro)
+    assert otro not in [v["id"] for v in montaje.listar()]
+    assert (config.PRODUCCIONES / "_papelera" / f"montaje_{otro}" / "proyecto.json").exists()

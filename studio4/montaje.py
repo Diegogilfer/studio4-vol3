@@ -105,8 +105,18 @@ def listar() -> list[dict[str, Any]]:
             continue
         salida.append({"id": p["id"], "titulo": p["titulo"], "creado": p["creado"], "paso": paso_actual(p),
                        "frases": len(p["frases"]), "con_clip": sum(1 for x in p["frases"] if con_imagen(x)),
-                       "final": bool(p.get("final"))})
+                       "final": bool(p.get("final")), "canal": p.get("canal", "")})
     return salida
+
+
+def archivar(mid: str) -> None:
+    """Un vídeo que no se va a terminar sale de la lista (a la papelera, no se borra: se puede recuperar a mano)."""
+    p = cargar(mid)
+    if p["trabajo"].get("ocupado"):
+        raise ValueError("Espera a que termine lo que está haciendo antes de archivarlo.")
+    destino = config.PRODUCCIONES / "_papelera" / f"montaje_{mid}"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(carpeta(mid)), str(destino))
 
 
 def con_imagen(f: dict[str, Any]) -> bool:

@@ -451,3 +451,10 @@ main:has(.lienzo) { max-width: 1480px; }
 .idea-fuentes { display: flex; flex-wrap: wrap; gap: 6px; }
 .idea-fuentes a { font-size: 12px; color: var(--cian); text-decoration: none; padding: 3px 8px; border-radius: 999px; background: var(--caja-2); }
 .bib-antiguos summary { cursor: pointer; }
+
+/* tendencias que se pulsan y vídeos a medias que se archivan */
+button.chip-radar { cursor: pointer; font: inherit; color: inherit; }
+button.chip-radar:hover { outline: 1px solid var(--cian); }
+.tarjeta .archivar { position: absolute; top: 12px; right: 12px; padding: 4px 10px; border-radius: 999px; font-size: 12px;
+  background: var(--caja-2); border: 1px solid var(--borde); color: var(--tenue); cursor: pointer; opacity: 0; transition: opacity .15s; }
+.tarjeta:hover .archivar { opacity: 1; }

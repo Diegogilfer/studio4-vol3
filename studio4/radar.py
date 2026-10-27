@@ -55,15 +55,89 @@ POR_DEFECTO: dict[str, Any] = {
 }
 
 
-def config_radar() -> dict[str, Any]:
-    if CONFIG.is_file():
+# Canal de historia, misterios y mitos: webs de arqueología e historia (una noticia grande sale en varias a la vez)
+HISTORIA: dict[str, Any] = {
+    "rss": [
+        {"id": "physorg", "nombre": "Phys.org Arqueología", "url": "https://phys.org/rss-feed/science-news/archaeology/"},
+        {"id": "smithsonian", "nombre": "Smithsonian Historia", "url": "https://www.smithsonianmag.com/rss/history/"},
+        {"id": "ancientorigins", "nombre": "Ancient Origins", "url": "https://www.ancient-origins.net/rss.xml"},
+        {"id": "historyblog", "nombre": "The History Blog", "url": "https://www.thehistoryblog.com/feed"},
+        {"id": "brujulaverde", "nombre": "La Brújula Verde", "url": "https://www.labrujulaverde.com/feed"},
+        {"id": "worldhistory", "nombre": "World History Encyclopedia", "url": "https://www.worldhistory.org/rss/"},
+    ],
+    "wiki_api": "",
+    "min_fuentes": 2,
+    "max_titulares": 120,
+    "ruido": POR_DEFECTO["ruido"] + [
+        "archaeologists", "scientists", "researchers", "study", "ancient", "discovery", "discovered", "found", "rare",
+        "oldest", "old", "world", "year", "years", "century", "mysterious", "mystery", "secret", "inside", "could",
+        "may", "might", "experts", "museum", "new study", "un", "una", "el", "la", "descubren", "hallan", "arqueólogos",
+        "investigadores", "nuevo", "nueva", "antiguo", "antigua", "encuentran", "estudio", "revela", "reveals",
+        "where", "when", "who", "they", "these", "were", "was", "from", "after", "before", "near", "under"],
+    "calientes": ["egipto", "egypt", "maya", "azteca", "aztec", "roma", "roman", "grecia", "greek", "vikingo", "viking",
+                  "pirámide", "pyramid", "atlántida", "atlantis", "faraón", "pharaoh", "momia", "mummy", "templario",
+                  "inca", "stonehenge", "pompeya", "pompeii", "babilonia", "babylon", "mitología", "mythology"],
+    "descripcion": "De qué hablan hoy las webs de historia y arqueología (cuántos titulares tiene cada tema).",
+    # en historia no se agrupa por nombres propios (los titulares en inglés van en Mayúsculas) sino por grandes temas
+    "temas": {
+        "Roma antigua": ["roman", "romano", "romana", "imperio romano", "pompeii", "pompeya", "legion", "legión"],
+        "Antiguo Egipto": ["egypt", "egipto", "egipcio", "pharaoh", "faraón", "pyramid", "pirámide", "nile", "nilo"],
+        "Mayas": ["maya", "mayan"],
+        "Aztecas": ["aztec", "azteca", "mexica", "tenochtitlan"],
+        "Incas": ["inca", "machu picchu", "andes"],
+        "Vikingos y nórdicos": ["viking", "vikingo", "norse", "nórdico", "rune", "runa"],
+        "Grecia antigua": ["greek", "grecia", "griego", "griega", "athens", "atenas", "sparta", "esparta"],
+        "Mesopotamia": ["mesopotamia", "babylon", "babilonia", "sumer", "sumerio", "assyria", "asiria", "cuneiform", "cuneiforme"],
+        "Celtas": ["celt", "celta", "druid", "druida"],
+        "Edad Media": ["medieval", "middle ages", "edad media", "templar", "templario", "knight", "caballero", "crusade", "cruzada"],
+        "Naufragios": ["shipwreck", "naufragio", "pecio", "sunken", "hundido"],
+        "Tumbas y momias": ["tomb", "tumba", "burial", "entierro", "grave", "mummy", "momia", "skeleton", "esqueleto", "necrópolis", "necropolis"],
+        "Prehistoria": ["neolithic", "neolítico", "paleolithic", "paleolítico", "stone age", "edad de piedra", "prehistoric", "prehistoria", "neanderthal", "neandertal"],
+        "Mitos y dioses": ["myth", "mito", "mitología", "mythology", "god ", "dios", "goddess", "diosa", "legend", "leyenda"],
+        "Manuscritos y textos perdidos": ["manuscript", "manuscrito", "codex", "códice", "inscription", "inscripción", "scroll", "papiro", "papyrus"],
+        "Misterios sin resolver": ["mystery", "misterio", "enigma", "unexplained", "inexplicable", "cold case", "disappear", "desaparec"],
+        "Tesoros": ["treasure", "tesoro", "hoard", "coins", "monedas", "gold", "oro"],
+    },
+    "min_titulares": 2,
+}
+POR_DEFECTO.setdefault("descripcion", "Juegos y temas que suenan en varias webs de videojuegos a la vez, antes de ser tendencia en vídeo.")
+CANAL_ORIGINAL = "fourlevel"   # el radar de siempre (videojuegos) sigue en sus archivos de siempre
+
+
+def _rutas(cid: str | None):
+    """Cada canal con su radar: su configuración y sus señales aparte (nunca se mezclan)."""
+    if not cid or cid == CANAL_ORIGINAL:
+        return CONFIG, SENALES
+    base = config.PRODUCCIONES / "_canales" / cid
+    return base / "radar.json", base / "radar.jsonl"
+
+
+def _plantilla(cid: str | None) -> dict[str, Any]:
+    if not cid or cid == CANAL_ORIGINAL:
+        return POR_DEFECTO
+    from . import canales
+    try:
+        nicho = f"{canales.obtener(cid).get('nicho', '')}".lower()
+    except ValueError:
+        nicho = ""
+    if re.search(r"misterio|mito|historia|leyenda|arqueolog|enigma", nicho):
+        return HISTORIA
+    if re.search(r"juego|gaming|gamer", nicho):
+        return {**POR_DEFECTO, "wiki_api": ""}
+    return {**POR_DEFECTO, "rss": [], "wiki_api": "", "descripcion": "Añade las webs RSS de tu nicho en el radar de este canal."}
+
+
+def config_radar(cid: str | None = None) -> dict[str, Any]:
+    archivo, _ = _rutas(cid)
+    base = _plantilla(cid)
+    if archivo.is_file():
         try:
-            return {**POR_DEFECTO, **json.loads(CONFIG.read_text(encoding="utf-8"))}
+            return {**base, **json.loads(archivo.read_text(encoding="utf-8"))}
         except ValueError:
             pass
-    CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(POR_DEFECTO, ensure_ascii=False, indent=1), encoding="utf-8")
-    return dict(POR_DEFECTO)
+    archivo.parent.mkdir(parents=True, exist_ok=True)
+    archivo.write_text(json.dumps(base, ensure_ascii=False, indent=1), encoding="utf-8")
+    return dict(base)
 
 
 def _titulares_rss(fuente: dict[str, str], maximo: int) -> list[str]:
@@ -108,18 +182,31 @@ def _temas(titulo: str, ruido: set[str]) -> list[str]:
     return salida
 
 
-def escanear(cfg: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def escanear(cfg: dict[str, Any] | None = None, cid: str | None = None) -> list[dict[str, Any]]:
     """Señales de hoy: juegos/temas que salen en varias fuentes a la vez, ordenados por fuerza. No llama a ninguna IA."""
-    cfg = cfg or config_radar()
+    cfg = cfg or config_radar(cid)
     ruido = {x.lower() for x in cfg["ruido"]}
     items: list[tuple[str, str, str]] = []   # (fuente, titular, enlace de la fuente)
     for f in cfg["rss"]:
         for t in _titulares_rss(f, cfg["max_titulares"]):
             items.append((f["id"], t, f["url"]))
-    for t in _titulos_wiki(cfg):
+    for t in (_titulos_wiki(cfg) if cfg.get("wiki_api") else []):
         items.append(("gtawiki", t, "https://gta.wiki/w/" + t.replace(" ", "_")))
 
     temas: dict[str, dict[str, Any]] = {}
+    if cfg.get("temas"):   # por grandes temas (historia): un titular cuenta en cada tema cuyas palabras nombra
+        for fuente, titular, _ in items:
+            t = f" {titular.lower()} "
+            for tema, palabras in cfg["temas"].items():
+                if any(p in t for p in palabras):
+                    d = temas.setdefault(tema.lower(), {"tema": tema, "fuentes": set(), "titulares": [], "caliente": True})
+                    d["fuentes"].add(fuente)
+                    if titular not in d["titulares"]:
+                        d["titulares"].append(titular)
+        senales = [{"tema": d["tema"], "fuerza": len(d["fuentes"]) * 4 + min(len(d["titulares"]), 12), "fuentes": sorted(d["fuentes"]),
+                    "n_fuentes": len(d["titulares"]), "caliente": len(d["fuentes"]) >= 2, "titulares": d["titulares"][:4]}
+                   for d in temas.values() if len(d["titulares"]) >= cfg.get("min_titulares", 2)]
+        return sorted(senales, key=lambda s: -s["fuerza"])
     for fuente, titular, _ in items:
         for tema in _temas(titular, ruido):
             clave = tema.lower()
@@ -141,29 +228,31 @@ def escanear(cfg: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     return senales
 
 
-def _guardar(senales: list[dict[str, Any]]) -> None:
-    SENALES.parent.mkdir(parents=True, exist_ok=True)
+def _guardar(senales: list[dict[str, Any]], cid: str | None = None) -> None:
+    _, archivo = _rutas(cid)
+    archivo.parent.mkdir(parents=True, exist_ok=True)
     dia = time.strftime("%Y-%m-%d")
-    with SENALES.open("a", encoding="utf-8") as f:
+    with archivo.open("a", encoding="utf-8") as f:
         for s in senales:
             f.write(json.dumps({**s, "dia": dia}, ensure_ascii=False) + "\n")
 
 
-def señales(n: int = 10, guardar: bool = False) -> list[dict[str, Any]]:
+def señales(n: int = 10, guardar: bool = False, cid: str | None = None) -> list[dict[str, Any]]:
     """Las n señales más fuertes de ahora. `guardar`: deja constancia en _radar.jsonl (para la tarea diaria).
     Hace 6 descargas en vivo: lento. El panel usa `guardadas()`, no esto."""
-    s = escanear()[:n]
+    s = escanear(cid=cid)[:n]
     if guardar and s:
-        _guardar(s)
+        _guardar(s, cid)
     return s
 
 
-def guardadas(n: int = 12) -> list[dict[str, Any]]:
+def guardadas(n: int = 12, cid: str | None = None) -> list[dict[str, Any]]:
     """Las señales del último escaneo guardado (rápido, sin red). Para el panel: no espera a 6 webs en cada carga."""
-    if not SENALES.is_file():
+    _, archivo = _rutas(cid)
+    if not archivo.is_file():
         return []
     try:
-        lineas = [json.loads(l) for l in SENALES.read_text(encoding="utf-8").splitlines() if l.strip()]
+        lineas = [json.loads(l) for l in archivo.read_text(encoding="utf-8").splitlines() if l.strip()]
     except (OSError, ValueError):
         return []
     if not lineas:
@@ -177,7 +266,7 @@ def para_ideas(cid: str, n: int = 3, avisar=lambda _f: None) -> list[dict[str, A
     del radar llega lista para escribir solo sobre lo que se puede enseñar."""
     from . import material
     salida = []
-    for s in escanear():
+    for s in escanear(cid=cid):
         if len(salida) >= n:
             break
         avisar(f"Buscando material para «{s['tema']}» ({len(salida) + 1} de {n})")
@@ -193,3 +282,25 @@ def para_ideas(cid: str, n: int = 3, avisar=lambda _f: None) -> list[dict[str, A
                        "por_que": f"«{s['tema']}» sale en {s['n_fuentes']} webs de juegos a la vez ahora mismo: señal "
                                   f"temprana antes de que sea tendencia en vídeo."})
     return salida
+
+
+_actualizando: set[str] = set()
+
+
+def para_panel(cid: str, n: int = 12) -> dict[str, Any]:
+    """Lo que enseña el panel del canal activo: sus señales guardadas; si no son de hoy, se buscan en segundo plano
+    (el panel no espera) y salen en la siguiente carga."""
+    import threading
+    s = guardadas(n, cid)
+    if (not s or s[0].get("dia") != time.strftime("%Y-%m-%d")) and cid not in _actualizando and config_radar(cid)["rss"]:
+        _actualizando.add(cid)
+
+        def fondo() -> None:
+            try:
+                señales(10, guardar=True, cid=cid)
+            except Exception as e:  # noqa: BLE001 - sin red no hay radar; el panel sigue
+                logger.warning("Radar de %s: %s", cid, e)
+            finally:
+                _actualizando.discard(cid)
+        threading.Thread(target=fondo, daemon=True).start()
+    return {"senales": s, "descripcion": config_radar(cid).get("descripcion", ""), "actualizando": cid in _actualizando}

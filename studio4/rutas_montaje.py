@@ -27,7 +27,10 @@ class NoExiste(Exception):
 def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
     q = lambda k: (query.get(k) or [""])[0]  # noqa: E731
     if ruta == "/api/m":
-        return "json", {"videos": montaje.listar(), "canal": canales.activo(),
+        activo = canales.activo()
+        # solo los vídeos del canal activo (los antiguos sin canal son de FourLevel): cada canal, lo suyo
+        suyos = [v for v in montaje.listar() if (v.get("canal") or "fourlevel") == activo["id"]]
+        return "json", {"videos": suyos, "canal": activo,
                         "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
                                   for f in montaje.banco()]}
     if ruta == "/api/m/musica":   # tu música de la Biblioteca de audio de YouTube, catalogada
@@ -58,7 +61,7 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
     if ruta == "/api/m/flow":   # el enlace de tu herramienta de Google Flow
         return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
-        return "json", {"senales": radar.guardadas(12)}
+        return "json", radar.para_panel(canales.activo()["id"])
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
@@ -138,6 +141,9 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         return "json", {"ok": True, "id": montaje.desde_url(str(d.get("url", "")))}
     if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion
         return "json", {"ok": True, "id": montaje.desde_idea(int(d.get("n", -1)))}
+    if ruta == "/api/m/archivar":   # un vídeo a medias que no se va a terminar sale de la lista
+        montaje.archivar(str(d.get("id", "")))
+        return "json", {"ok": True}
     if ruta == "/api/m/liberar":
         return "json", {"ok": True, "liberado": montaje.liberar()}
     if ruta == "/api/m/actualizar-descargador":

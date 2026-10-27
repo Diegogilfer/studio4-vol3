@@ -74,8 +74,13 @@ def tarea_semana() -> str:
 
 def tarea_radar() -> str:
     """Guarda las señales de tendencia del día (juegos que se mueven en varias webs); no gasta IA."""
-    s = radar.señales(n=10, guardar=True)
-    return "radar: " + (", ".join(f"{x['tema']} ({x['n_fuentes']})" for x in s[:6]) if s else "sin señales fuertes hoy")
+    partes = []
+    for c in canales.listar():   # cada canal con su radar (sus webs, sus señales)
+        if not radar.config_radar(c["id"])["rss"]:
+            continue
+        s = radar.señales(n=10, guardar=True, cid=c["id"])
+        partes.append(f"{c['nombre']}: " + (", ".join(f"{x['tema']} ({x['n_fuentes']})" for x in s[:6]) if s else "sin señales fuertes"))
+    return "radar · " + " | ".join(partes)
 
 
 def tarea_vigilar() -> str:

@@ -78,6 +78,7 @@ const tarjetaVideo = (v) => `
     <b>${esc(v.titulo)}</b>
     <div class="puntos">${[1, 2, 3, 4, 5].map((n) => `<i class="${n < v.paso || v.final ? "si" : ""}"></i>`).join("")}</div>
     <small>${v.final ? "Terminado" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
+    ${v.final ? "" : `<button class="archivar" type="button" data-archivar="${esc(v.id)}" title="No lo voy a terminar: sacarlo de la lista">Archivar</button>`}
   </article>`;
 
 let datos = null;          // el vídeo abierto: {video, paso, fuentes}
@@ -171,12 +172,28 @@ function enlazarCanal() {
 
 function pintarRadar(r) {
   const s = r?.senales || [];
-  if (!s.length) return "";
+  if (!s.length) return r?.actualizando ? `<section class="bloque-inicio"><div class="seccion-cab"><h2>En <em>tendencia</em> ahora</h2>
+    <p class="meta">Buscando las tendencias de este canal…</p></div></section>` : "";
+  // pulsar una tendencia = pedir guiones sobre ella en la Biblioteca (no crea ningún vídeo a medias)
   return `<section class="bloque-inicio">
-    <div class="seccion-cab"><h2>En <em>tendencia</em> ahora</h2><p class="meta">Juegos y temas que suenan en varias webs de videojuegos a la vez, antes de ser tendencia en vídeo.</p></div>
-    <div class="chips">${s.map((x) => `<span class="chip-radar${x.caliente ? " caliente" : ""}" title="${esc((x.titulares || []).join(" · "))}">${esc(x.tema)} <b>${x.n_fuentes}</b></span>`).join("")}</div>
+    <div class="seccion-cab"><h2>En <em>tendencia</em> ahora</h2><p class="meta">${esc(r.descripcion || "")} Pulsa una para ver guiones posibles.</p></div>
+    <div class="chips">${s.map((x) => `<button type="button" class="chip-radar${x.caliente ? " caliente" : ""}" data-tendencia="${esc(x.tema)}" data-titulares="${esc((x.titulares || []).slice(0, 2).join(" · "))}" title="${esc((x.titulares || []).join(" · "))}">${esc(x.tema)} <b>${x.n_fuentes}</b></button>`).join("")}</div>
   </section>`;
 }
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-tendencia]");
+  if (t) {
+    sessionStorage.setItem("s4-buscar", `Guiones sobre «${t.dataset.tendencia}», que está en tendencia ahora (${t.dataset.titulares})`);
+    location.hash = "biblioteca";
+    return;
+  }
+  const a = ev.target.closest("[data-archivar]");
+  if (a) {
+    ev.stopPropagation();
+    if (!confirm("¿Archivar este vídeo? Sale de la lista (se guarda en la papelera, no se borra).")) return;
+    try { await api("/api/m/archivar", { id: a.dataset.archivar }); ir(); } catch (e) { aviso(e); }
+  }
+}, true);
 
 function pintarIdeas(d) {
   const ideas = d?.ideas || [];
@@ -293,6 +310,8 @@ async function vistaBiblioteca() {
       </details>`; }).join("")}</div></details>`;
   const caja = $("bib-msgs");
   if (caja) caja.scrollTop = caja.scrollHeight;
+  const pendiente = sessionStorage.getItem("s4-buscar");   // viene de pulsar una tendencia
+  if (pendiente) { sessionStorage.removeItem("s4-buscar"); $("bib-texto").value = pendiente; setTimeout(() => buscar(), 0); }
   const buscar = async () => {
     const texto = $("bib-texto").value.trim();
     if (!texto) return;
