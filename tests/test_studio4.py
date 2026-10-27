@@ -3364,7 +3364,8 @@ def test_planes_salen_de_los_costes_y_ninguno_pierde_dinero(servidor):
     texto = json.dumps(d)
     assert "coste" not in texto and "margen" not in texto
     assert d["prueba"]["dias"] == 3 and d["prueba"]["plan"] == "Básico"   # sin plan gratis: prueba de 3 días
-    assert planes.coste_prueba() < 3   # cada prueba cuesta poco
+    assert planes.coste_prueba() <= 0.05   # la prueba solo usa el PC del cliente: no se invierte en pruebas
+    assert planes.PRUEBA["solo_estilos"] == "claude" and not planes.PRUEBA["cupos"]["imagen"]
 
 
 def test_estilos_de_produccion_guian_guion_y_recomiendan_modelo(aislado):

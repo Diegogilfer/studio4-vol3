@@ -32,8 +32,11 @@ PLANES: list[dict[str, Any]] = [
      "cupos": {"video": None, "imagen": 500, "voz_premium": 15, "veo_segundo": 60}},
 ]
 
-# No hay plan gratis: prueba de 3 días del Básico, POTENCIADO con un adelanto del Pro (voz premium y vídeo con IA)
-PRUEBA = {"dias": 3, "plan": "basico", "cupos": {"video": 3, "imagen": 30, "voz_premium": 1, "veo_segundo": 6}}
+# No hay plan gratis: prueba de 3 días con SOLO lo que hace el PC del cliente (estilos hechos con código, material
+# real, voz y subtítulos locales). Lo único con coste es escribir el guion (~0,01 $). ¿Más calidad? Plan de pago.
+COSTE_GUION = 0.01
+PRUEBA = {"dias": 3, "plan": "basico", "cupos": {"video": 3, "imagen": 0, "voz_premium": 0, "veo_segundo": 0},
+          "solo_estilos": "claude"}
 
 NOMBRES = {"video": "vídeos al mes en los 3 formatos", "imagen": "imágenes con IA al mes",
            "voz_premium": "vídeos con voz premium al mes", "veo_segundo": "segundos de vídeo con IA al mes"}
@@ -80,12 +83,13 @@ def prueba() -> dict[str, Any]:
     """La prueba de 3 días, tal como la ve el cliente (y su coste máximo, solo para el dueño)."""
     c = PRUEBA["cupos"]
     return {"dias": PRUEBA["dias"], "plan": next(p["nombre"] for p in PLANES if p["id"] == PRUEBA["plan"]),
-            "puntos": [f"{c['video']} vídeos en los 3 formatos", f"{c['imagen']} imágenes con IA",
-                       f"{c['voz_premium']} vídeo con voz premium", f"{c['veo_segundo']} segundos de vídeo con IA"]}
+            "puntos": [f"{c['video']} vídeos en los 3 formatos", "Estilos hechos con código (stickman, motion, collage…) y material real",
+                       "Voz, subtítulos y miniaturas en tu PC", "Imágenes, voz premium y vídeo con IA: en los planes de pago"]}
 
 
 def coste_prueba() -> float:
-    return round(sum(COSTES[k] * n for k, n in PRUEBA["cupos"].items()), 2)
+    """Solo el guion de cada vídeo: la voz, los subtítulos y el montaje los hace el PC del cliente."""
+    return round(PRUEBA["cupos"]["video"] * COSTE_GUION + sum(COSTES[k] * n for k, n in PRUEBA["cupos"].items() if k != "video"), 2)
 
 
 # --- La cuenta del negocio entero: no solo la IA de cada cliente --------------------------------------------------
