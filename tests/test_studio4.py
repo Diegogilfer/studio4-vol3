@@ -2799,7 +2799,7 @@ def test_panel_tiene_pestana_planes_producto():
     """La cáscara de producto: pestaña Planes con tarjetas (gratis/pro/studio)."""
     js = (config.RAIZ / "web" / "montaje.js").read_text(encoding="utf-8")
     html = (config.RAIZ / "web" / "montaje.html").read_text(encoding="utf-8")
-    assert "planes: vistaPlanes" in js and '"gratis"' in js and '"pro"' in js and '"studio"' in js
+    assert "planes: vistaPlanes" in js and "/api/m/planes" in js   # los planes salen de studio4/planes.py (costes)
     assert 'data-vista="planes"' in html
 
 
@@ -3346,3 +3346,19 @@ def test_secretos_salen_del_env_y_se_leen_del_almacen(tmp_path, monkeypatch):
     assert not secretos.mover_del_env("NO_EXISTE", str(env))
     monkeypatch.setenv("SOLO_ENV", "x")
     assert secretos.leer("SOLO_ENV") == "x"
+
+
+def test_planes_salen_de_los_costes_y_ninguno_pierde_dinero(servidor):
+    """Cada plan de pago deja margen aunque el cliente gaste todo su cupo; el cliente ve precio y cupos, nunca los
+    costes ni los márgenes."""
+    from studio4 import planes
+    for p in planes.PLANES:
+        if p["precio"]:
+            assert planes.margen(p) >= 0.4, (p["nombre"], planes.margen(p))
+    assert planes.coste_maximo(next(p for p in planes.PLANES if p["id"] == "gratis")) < 0.5   # el gratis cuesta céntimos
+    pedir, _ = servidor
+    estado, cuerpo = pedir("GET", "/api/m/planes")
+    d = json.loads(cuerpo)
+    assert estado == 200 and [p["id"] for p in d["planes"]] == ["gratis", "creador", "pro", "studio", "claves"]
+    texto = json.dumps(d)
+    assert "coste" not in texto and "margen" not in texto

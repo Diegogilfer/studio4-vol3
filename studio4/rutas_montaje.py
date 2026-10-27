@@ -50,6 +50,9 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         from . import buscador
         cid = canales.activo()["id"]
         return "json", {**buscador.leer(cid), "bases": buscador.bases(cid), "canal": canales.activo()["nombre"]}
+    if ruta == "/api/m/planes":   # las suscripciones, sacadas de lo que cuesta producir (sin costes ni márgenes)
+        from . import planes
+        return "json", {"planes": planes.para_clientes()}
     if ruta == "/api/m/nube":   # la copia en la nube: si está conectada y cuándo se subió por última vez
         from . import nube
         return "json", {"conectada": nube.disponible(), **nube.estado}

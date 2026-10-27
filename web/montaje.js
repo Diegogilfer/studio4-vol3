@@ -1217,12 +1217,8 @@ function pintarTrabajo(t) {
 
 // ============================================================ Rutas
 // Planes de suscripción (producto). Precios de ejemplo: Diego los ajusta. Aún sin cobro real (eso llega con el hosting).
-const PLANES = [
-  { id: "gratis", nombre: "Gratis", precio: "0 €", gancho: "Para probar", puntos: ["1 canal", "3 vídeos al mes", "Marca de agua Studio 4", "Voz de Google"] },
-  { id: "pro", nombre: "Pro", precio: "19 €/mes", gancho: "El más elegido", destacado: true, puntos: ["Canales ilimitados", "Vídeos ilimitados", "Sin marca de agua", "Los 3 formatos", "Radar de tendencias"] },
-  { id: "studio", nombre: "Studio", precio: "49 €/mes", gancho: "Para equipos", puntos: ["Todo lo de Pro", "Voz premium (ElevenLabs)", "Subtítulos multiidioma", "Upscaler HD", "Soporte prioritario"] },
-];
 async function vistaPlanes() {
+  const PLANES = (await seguro("/api/m/planes"))?.planes || [];   // calculados en studio4/planes.py desde los costes
   $("vista").innerHTML = `
     ${cabecera("<em>Planes</em>", "Elige el que te cuadre. Cambias o cancelas cuando quieras.")}
     <div class="planes">
