@@ -34,6 +34,8 @@ def aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "")
     monkeypatch.setattr(config, "XIAOMIMIMO_API_KEY", "")
     monkeypatch.setattr(config, "ELEVENLABS_API_KEY", "")
+    from studio4 import secretos   # las pruebas nunca leen tus secretos reales del almacén de Windows
+    monkeypatch.setattr(secretos, "_almacen", lambda: None)
     from studio4 import tarjetas   # las pruebas no abren el navegador: el render sale sin carátula
 
     def sin_navegador(*_a, **_k):
@@ -3321,3 +3323,26 @@ def test_nube_sube_canales_videos_ideas_y_tendencias_con_la_cuenta_del_dueno(ais
     assert sum(1 for u, _ in peticiones if "/auth/v1/token" in u) == 1   # una sola sesión
     tablas = [u.rsplit("/", 1)[1] for u, _ in peticiones if "/rest/v1/" in u]
     assert tablas[:2] == ["canales", "videos"] and nube.estado["ultima"]
+
+
+def test_secretos_salen_del_env_y_se_leen_del_almacen(tmp_path, monkeypatch):
+    """Un secreto se pasa del .env al almacén (y desaparece del .env); se lee del almacén y, si no está, del entorno."""
+    from studio4 import secretos
+    caja = {}
+
+    class Falso:
+        def get_password(self, servicio, nombre):
+            return caja.get((servicio, nombre))
+
+        def set_password(self, servicio, nombre, valor):
+            caja[(servicio, nombre)] = valor
+    monkeypatch.setattr(secretos, "_almacen", lambda: Falso())
+    env = tmp_path / ".env"
+    env.write_text("OTRA=1\nSUPABASE_CLAVE=secreta\nY=2\n", encoding="utf-8")
+    monkeypatch.setenv("SUPABASE_CLAVE", "secreta")
+    assert secretos.mover_del_env("SUPABASE_CLAVE", str(env))
+    assert "SUPABASE_CLAVE" not in env.read_text(encoding="utf-8") and "OTRA=1" in env.read_text(encoding="utf-8")
+    assert secretos.leer("SUPABASE_CLAVE") == "secreta"
+    assert not secretos.mover_del_env("NO_EXISTE", str(env))
+    monkeypatch.setenv("SOLO_ENV", "x")
+    assert secretos.leer("SOLO_ENV") == "x"

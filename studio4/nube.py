@@ -26,7 +26,8 @@ estado: dict[str, Any] = {"ultima": "", "error": "", "subidos": {}}
 
 
 def _cfg() -> dict[str, str]:
-    return {k: os.getenv(k, "").strip() for k in ("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_EMAIL", "SUPABASE_CLAVE")}
+    from . import secretos   # la cuenta va cifrada en el almacén de Windows; la URL y la clave publicable, en .env
+    return {k: secretos.leer(k) for k in ("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_EMAIL", "SUPABASE_CLAVE")}
 
 
 def disponible() -> bool:
