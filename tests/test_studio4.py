@@ -3396,3 +3396,33 @@ def test_cuenta_del_negocio_cubre_gastos_con_pocos_clientes():
     e = planes.economia(100)
     assert e["beneficio"] > 0 and e["ingresos"] == 60 * 17 + 30 * 49 + 10 * 100
     assert planes.coste_captacion() < 10
+
+
+def test_chat_de_inicio_empieza_sin_guion_y_pregunta_el_estilo(aislado, monkeypatch):
+    """La portada empieza hablando: analiza nichos, propone ideas, enseña tendencias y crea el vídeo; si no se dijo
+    el estilo, lo pregunta en vez de crear; la historia es de cada canal."""
+    from studio4 import asistente, canales, deepseek, montaje, nichos
+    cid = canales.activo()["id"]
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    monkeypatch.setattr(nichos, "analizar", lambda temas: [{"tema": t, "videos": 50, "mediana_vistas": 400000, "grandes_1M": 3,
+                                                           "top3_cuota": 0.4, "pequenos_que_explotan": 15, "ejemplo": "",
+                                                           "veredicto": "Hueco: canales nuevos rompen"} for t in temas])
+    creados = []
+    monkeypatch.setattr(montaje, "crear_con_ia", lambda tema, o: creados.append((tema, o)) or "vid-9")
+    respuestas = iter([
+        {"respuesta": "Miro esos nichos.", "accion": "nicho", "args": {"temas": ["misterios sin resolver"]}},
+        {"respuesta": "¿En qué estilo?", "accion": "crear", "args": {"tema": "El mecanismo de Anticitera", "duracion": 60}},
+        {"respuesta": "Creándolo.", "accion": "crear", "args": {"tema": "El mecanismo de Anticitera", "estilo": "collage", "duracion": 60}},
+    ])
+    pensar = lambda canal, historia, mensaje: next(respuestas)   # noqa: E731
+    r = asistente.responder(cid, "busca un nicho de misterios", pensar=pensar)
+    assert r["resultado"]["tipo"] == "nicho" and r["resultado"]["nichos"][0]["veredicto"].startswith("Hueco")
+    r = asistente.responder(cid, "hazme un short del mecanismo de Anticitera", pensar=pensar)
+    assert r["resultado"]["tipo"] == "estilo" and not creados   # sin estilo no crea: pregunta
+    r = asistente.responder(cid, "en collage", pensar=pensar)
+    assert r["resultado"] == {"tipo": "video", "id": "vid-9", "estilo": "Collage documental"}
+    assert creados[0][1]["estilo"] == "collage"
+    assert [m["quien"] for m in asistente.leer(cid)] == ["tú", "IA"] * 3
+    assert nichos.veredicto({"mediana_vistas": 5000, "pequenos_que_explotan": 0, "top3_cuota": 0.9, "grandes_1M": 0}) == "Poca demanda"
+    asistente.limpiar(cid)
+    assert asistente.leer(cid) == []

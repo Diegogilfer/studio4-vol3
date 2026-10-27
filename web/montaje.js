@@ -93,12 +93,7 @@ async function vistaInicio() {
   $("vista").innerHTML = `
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
-    <section class="ia-caja crear-ia" id="crear-ia">
-      <span class="etiqueta">Crea con IA</span>
-      <textarea class="campo" id="ia-tema" placeholder="Escribe la idea: «los secretos de la Mansión de Boo en Super Mario 64»"></textarea>
-      ${opcionesIA()}
-      <div class="fila"><button class="primario" type="button" id="ia-crear">Generar vídeo</button></div>
-    </section>
+    <section class="inicio-chat" id="inicio-chat"><div class="cargando-chat meta">Cargando el chat…</div></section>
     <section class="url-magica">
       <div><span class="etiqueta">Trae tu vídeo</span><h2>Pega un <em>enlace</em> o suelta un <em>archivo</em></h2>
         <p class="meta">Entra como material y lo editas: planos, 3 formatos, subtítulos.</p></div>
@@ -117,16 +112,12 @@ async function vistaInicio() {
     <section class="bloque-inicio">
       <div class="seccion-cab fila-entre"><h2>Sigue con <em>tus vídeos</em></h2><a class="boton" href="#videos">Ver todos</a></div>
       <div class="videos">
-        <article class="tarjeta nuevo" data-nuevo><span>+</span><b>Nuevo vídeo</b><small>Pega tu guion y empieza</small></article>
+        <article class="tarjeta nuevo" data-al-chat><span>+</span><b>Nuevo vídeo</b><small>Cuéntaselo al chat: sin guion</small></article>
         ${m.videos.slice(0, 5).map(tarjetaVideo).join("")}
       </div>
     </section>`;
   $("archivo-input").onchange = (ev) => ev.target.files[0] && traerArchivo(ev.target.files[0]);
-  $("ia-crear").onclick = async (ev) => {
-    const b = ev.target; b.disabled = true; b.textContent = "Creando…";
-    try { location.hash = `v=${(await api("/api/m/crear-ia", { tema: $("ia-tema").value, opciones: leerOpcionesIA($("crear-ia")) })).id}/1`; }
-    catch (e) { aviso(e); b.disabled = false; b.textContent = "Generar vídeo"; }
-  };
+  pintarInicioChat();
   $("url-form").onsubmit = async (ev) => {
     ev.preventDefault();
     const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Trayendo…";
@@ -169,6 +160,72 @@ function enlazarCanal() {
     try { await api("/api/canales/activar", { id: ev.target.value }); ir(); } catch (e) { aviso(e); }
   };
 }
+
+// ============================================================ Chat de Inicio: se empieza hablando, nunca con un guion
+const SUGERENCIAS_INICIO = ["Busca un nicho poco saturado para mi canal", "Dame 5 ideas de Shorts para esta semana",
+  "¿Qué es tendencia hoy en mi nicho?", "Hazme un Short de 1 minuto sobre algo que esté sonando"];
+function nichoHTML(n) {
+  const color = n.veredicto.startsWith("Hueco") ? "ok" : n.veredicto.startsWith("Saturado") || n.veredicto.startsWith("Poca") ? "bajo" : "medio";
+  return `<div class="nicho-fila"><b>${esc(n.tema)}</b><span class="nota-titulo ${color}">${esc(n.veredicto)}</span>
+    ${n.videos ? `<small class="meta">${corto(n.mediana_vistas)} vistas medianas · ${n.grandes_1M} canales de +1M · el top 3 se lleva el ${Math.round(n.top3_cuota * 100)} % · ${n.pequenos_que_explotan} canales pequeños que explotan</small>` : ""}
+    ${n.ejemplo ? `<small class="meta">Ejemplo: ${esc(n.ejemplo)}</small>` : ""}
+    <button class="chip" type="button" data-preguntar="Dame ideas de guiones sobre ${esc(n.tema)}">Ideas de este nicho</button></div>`;
+}
+function resultadoHTML(r) {
+  if (!r) return "";
+  if (r.tipo === "nicho") return `<div class="nichos">${r.nichos.map(nichoHTML).join("")}</div>`;
+  if (r.tipo === "ideas") return `<div class="ideas-rejilla">${r.ideas.map((i) => ideaHTML(i, false)).join("")}</div>`;
+  if (r.tipo === "tendencias") return `<div class="chips">${r.senales.map((s) => `<button type="button" class="chip-radar" data-preguntar="Dame ideas de guiones sobre ${esc(s.tema)} (${esc((s.titulares || [])[0] || "")})">${esc(s.tema)} <b>${s.n_fuentes}</b></button>`).join("") || `<span class="meta">El radar aún no tiene señales de hoy.</span>`}</div>`;
+  if (r.tipo === "estilo") return `<div class="estilos-ia chips-ia">${r.estilos.map((e) => `<button type="button" class="chip-ia${e.hecho_por === "claude" ? " por-claude" : ""}" title="${esc(e.para)} · ${esc(e.imagen)}" data-preguntar="Hazlo en estilo ${esc(e.nombre)} (${esc(e.id)})">${esc(e.nombre)}</button>`).join("")}</div>
+    <p class="meta">✦ = lo hace Claude con código, gratis. El resto necesita un modelo de imagen o vídeo.</p>`;
+  if (r.tipo === "video") return `<div class="fila"><a class="primario" href="#v=${esc(r.id)}/1">Abrir el vídeo (${esc(r.estilo)})</a><span class="meta">Se está investigando y escribiendo solo.</span></div>`;
+  return "";
+}
+async function pintarInicioChat() {
+  const caja = $("inicio-chat");
+  if (!caja) return;
+  const d = await seguro("/api/m/inicio-chat");
+  const chat = d?.chat || [];
+  caja.innerHTML = `<div class="seccion-cab fila-entre"><h2>¿Qué vídeo <em>hacemos</em> hoy?</h2>
+      ${chat.length ? `<button class="boton" type="button" id="inicio-limpiar">Empezar de nuevo</button>` : ""}</div>
+    <div class="chat-msgs inicio-msgs" id="inicio-msgs">${chat.map((x) => x.quien === "tú"
+      ? `<div class="msg mio"><p>${esc(x.texto)}</p></div>`
+      : `<div class="msg ia"><p>${esc(x.texto)}</p>${x.error ? `<small class="fallo">✕ ${esc(x.error)}</small>` : ""}${resultadoHTML(x.resultado)}</div>`).join("")
+      || `<p class="meta">Cuéntame qué quieres: un nicho, ideas, lo que es tendencia o un vídeo. No hace falta guion: lo escribo yo.</p>`}</div>
+    <div class="chips-ia sugerencias">${SUGERENCIAS_INICIO.map((t) => `<button type="button" class="chip-ia" data-preguntar="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+    <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Ej.: «busca un nicho de misterios poco saturado» o «hazme un Short sobre el mecanismo de Anticitera»"></textarea>
+      <button class="primario" type="submit">Enviar</button></form>`;
+  const msgs = $("inicio-msgs");
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  const enviarInicio = async (texto) => {
+    if (!texto.trim()) return;
+    const b = $("inicio-form").querySelector("button");
+    b.disabled = true; b.textContent = "Pensando…";
+    try {
+      const r = await api("/api/m/inicio-chat", { mensaje: texto });
+      if (r.resultado?.tipo === "video") { location.hash = `v=${r.resultado.id}/1`; return; }
+      await pintarInicioChat();
+    } catch (e) { aviso(e); b.disabled = false; b.textContent = "Enviar"; }
+  };
+  $("inicio-form").onsubmit = (ev) => { ev.preventDefault(); enviarInicio($("inicio-texto").value); };
+  $("inicio-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); enviarInicio(ev.target.value); } };
+  caja.querySelectorAll("[data-preguntar]").forEach((x) => { x.onclick = () => enviarInicio(x.dataset.preguntar); });
+  if ($("inicio-limpiar")) $("inicio-limpiar").onclick = async () => { await api("/api/m/inicio-chat/limpiar", {}); pintarInicioChat(); };
+  // las propuestas de guion: crear el vídeo o guardarlas, igual que en la Biblioteca
+  caja.querySelectorAll("[data-idea-crear]").forEach((x) => { x.onclick = async () => {
+    x.disabled = true; x.textContent = "Creando…";
+    try { location.hash = `v=${(await api("/api/m/biblioteca/crear", { idea: x.dataset.ideaCrear })).id}/1`; } catch (e) { aviso(e); x.disabled = false; x.textContent = "Crear vídeo"; }
+  }; });
+  caja.querySelectorAll("[data-idea-guardar]").forEach((x) => { x.onclick = async () => {
+    try { await api("/api/m/biblioteca/guardar", { idea: x.dataset.ideaGuardar }); x.textContent = "Guardada"; x.disabled = true; } catch (e) { aviso(e); }
+  }; });
+  if (sessionStorage.getItem("s4-al-chat")) { sessionStorage.removeItem("s4-al-chat"); $("inicio-texto").focus(); caja.scrollIntoView({ behavior: "smooth" }); }
+}
+document.addEventListener("click", (ev) => {   // «Nuevo vídeo» = ir al chat de inicio
+  if (!ev.target.closest("[data-al-chat]")) return;
+  sessionStorage.setItem("s4-al-chat", "1");
+  if (location.hash === "#inicio" || location.hash === "") { pintarInicioChat(); } else { location.hash = "inicio"; }
+});
 
 function pintarRadar(r) {
   const s = r?.senales || [];
@@ -229,8 +286,11 @@ async function vistaVideos() {
       <div class="fila"><button class="primario" type="submit">Crear vídeo</button><button class="boton" type="button" id="n-cancelar">Cancelar</button></div>
     </form>
     <div class="videos">
-      <article class="tarjeta nuevo" data-nuevo><span>+</span><b>Nuevo vídeo</b><small>Pega tu guion y empieza</small></article>
+      <article class="tarjeta nuevo" data-al-chat><span>+</span><b>Nuevo vídeo</b><small>Cuéntaselo al chat: sin guion</small></article>
       ${m.videos.map(tarjetaVideo).join("")}
+    </div>
+    <p class="meta">¿Ya tienes el guion escrito? <a href="#" data-nuevo>Pégalo aquí</a>.</p>
+    <div hidden>
     </div>`;
   $("n-cancelar").onclick = () => { $("nuevo-form").hidden = true; };
   $("nuevo-form").onsubmit = async (ev) => {

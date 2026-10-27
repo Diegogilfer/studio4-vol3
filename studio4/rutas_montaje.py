@@ -50,6 +50,9 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         from . import buscador
         cid = canales.activo()["id"]
         return "json", {**buscador.leer(cid), "bases": buscador.bases(cid), "canal": canales.activo()["nombre"]}
+    if ruta == "/api/m/inicio-chat":   # el chat de la portada del canal activo
+        from . import asistente
+        return "json", {"chat": asistente.leer(canales.activo()["id"]), "canal": canales.activo()["nombre"]}
     if ruta == "/api/m/estilos":   # los estilos de producción: quién los hace, modelos recomendados y coste
         from . import estilos
         return "json", {"estilos": estilos.catalogo(), "canal": canales.activo().get("estilo", "")}
@@ -124,6 +127,13 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/chat":   # el chat del vídeo: DeepSeek elige acciones del estudio y se ejecutan
         from . import chat
         return "json", chat.responder(mid, str(d.get("mensaje", "")))
+    if ruta in ("/api/m/inicio-chat", "/api/m/inicio-chat/limpiar"):   # empezar hablando: nicho, ideas, tendencias o vídeo
+        from . import asistente
+        cid = canales.activo()["id"]
+        if ruta.endswith("/limpiar"):
+            asistente.limpiar(cid)
+            return "json", {"ok": True}
+        return "json", asistente.responder(cid, str(d.get("mensaje", "")))
     if ruta.startswith("/api/m/biblioteca/"):   # chat de la Biblioteca: buscar guiones en las bases y usarlos
         from . import buscador
         cid = canales.activo()["id"]

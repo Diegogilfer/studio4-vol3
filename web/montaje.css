@@ -465,3 +465,11 @@ button.chip-radar:hover { outline: 1px solid var(--cian); }
 .recomendacion { margin: 0; }
 .prueba-plan { display: grid; gap: 4px; padding: 16px 20px; border-radius: 16px; border: 1px solid var(--rosa);
   background: color-mix(in srgb, var(--rosa) 10%, var(--caja)); }
+
+/* chat de inicio: se empieza hablando */
+.inicio-chat { display: grid; gap: 12px; padding: 22px; border-radius: var(--r); background: var(--caja);
+  border: 1px solid color-mix(in srgb, var(--rosa) 35%, var(--borde)); }
+.inicio-msgs { max-height: none; display: grid; gap: 10px; }
+.nichos { display: grid; gap: 10px; margin-top: 8px; }
+.nicho-fila { display: grid; gap: 4px; justify-items: start; padding: 12px 14px; border-radius: 14px; background: var(--caja-2); }
+.nicho-fila .nota-titulo { margin-left: 0; }
