@@ -86,3 +86,58 @@ def prueba() -> dict[str, Any]:
 
 def coste_prueba() -> float:
     return round(sum(COSTES[k] * n for k, n in PRUEBA["cupos"].items()), 2)
+
+
+# --- La cuenta del negocio entero: no solo la IA de cada cliente --------------------------------------------------
+# Gastos fijos al mes (USD). Supuestos a confirmar por Diego; se cambian aquí y todo se recalcula.
+FIJOS = {
+    "Supabase Pro (sin pausas, copias, más espacio)": 25.0,
+    "Dominio y correo profesional": 8.0,
+    "Web de venta (hosting)": 20.0,
+    "Claude para mantener y mejorar Studio": 100.0,
+}
+USO_ESPERADO = 0.5          # qué parte de la IA de pago gasta de media un cliente (el peor caso es 1,0)
+VIDEOS_ESPERADOS_ILIMITADO = 40   # vídeos al mes de un cliente «ilimitado» medio (el peor caso es USO_JUSTO_VIDEOS)
+CONVERSION_PRUEBA = 0.25    # de cada 4 pruebas de 3 días, 1 acaba pagando
+MEZCLA = {"basico": 0.6, "pro": 0.3, "ilimitado": 0.1}   # cómo se reparten los clientes entre los planes
+
+
+def coste_esperado(plan: dict[str, Any], uso: float = USO_ESPERADO) -> float:
+    """Lo que cuesta de verdad un cliente medio: sus vídeos enteros + la parte de IA de pago que suele gastar."""
+    videos = VIDEOS_ESPERADOS_ILIMITADO if plan["cupos"]["video"] is None else plan["cupos"]["video"]
+    de_pago = sum(COSTES[k] * n for k, n in plan["cupos"].items() if k != "video" and n)
+    return round(COSTES["video"] * videos + de_pago * uso, 2)
+
+
+def contribucion(plan: dict[str, Any], uso: float = USO_ESPERADO) -> float:
+    """Lo que deja un cliente al mes para pagar los gastos fijos: precio − su IA − la comisión del cobro."""
+    return round(plan["precio"] - coste_esperado(plan, uso) - comision(plan), 2)
+
+
+def coste_captacion() -> float:
+    """Lo que cuestan las pruebas gratis por cada cliente que acaba pagando (pruebas fallidas incluidas)."""
+    return round(coste_prueba() * USO_ESPERADO / CONVERSION_PRUEBA, 2)
+
+
+def economia(clientes: int, mezcla: dict[str, float] | None = None, uso: float = USO_ESPERADO) -> dict[str, Any]:
+    """El mes del negocio con N clientes de pago: ingresos, costes, comisiones, fijos, pruebas y beneficio."""
+    mezcla = mezcla or MEZCLA
+    por_id = {p["id"]: p for p in PLANES}
+    n = {k: round(clientes * f) for k, f in mezcla.items()}
+    ingresos = sum(por_id[k]["precio"] * c for k, c in n.items())
+    ia = sum(coste_esperado(por_id[k], uso) * c for k, c in n.items())
+    comisiones = sum(comision(por_id[k]) * c for k, c in n.items())
+    fijos = sum(FIJOS.values())
+    pruebas = coste_captacion() * clientes * 0.1   # se renueva ~10 % de clientes al mes: hay que captarlos con pruebas
+    beneficio = ingresos - ia - comisiones - fijos - pruebas
+    return {"clientes": n, "ingresos": round(ingresos, 2), "ia": round(ia, 2), "comisiones": round(comisiones, 2),
+            "fijos": round(fijos, 2), "pruebas": round(pruebas, 2), "beneficio": round(beneficio, 2),
+            "margen": round(beneficio / ingresos, 2) if ingresos else 0.0}
+
+
+def equilibrio(mezcla: dict[str, float] | None = None, uso: float = USO_ESPERADO) -> int:
+    """Cuántos clientes de pago hacen falta para no perder dinero."""
+    for c in range(1, 10_000):
+        if economia(c, mezcla, uso)["beneficio"] >= 0:
+            return c
+    return -1

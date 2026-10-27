@@ -3384,3 +3384,15 @@ def test_estilos_de_produccion_guian_guion_y_recomiendan_modelo(aislado):
     assert montaje._opciones_ia({"estilo": "anime"})["estilo"] == "anime"   # el pedido manda
     assert montaje._opciones_ia({"estilo": "inventado"})["estilo"] == "noir"
     assert "Noir" in estilos.para_guion("noir")
+
+
+def test_cuenta_del_negocio_cubre_gastos_con_pocos_clientes():
+    """Con gastos fijos, comisiones, pruebas gratis y la IA de cada cliente, el negocio cubre gastos con pocos
+    clientes y cada plan deja dinero aunque el cliente gaste todo."""
+    from studio4 import planes
+    for p in planes.PLANES:
+        assert planes.contribucion(p, 1.0) > 0, p["nombre"]
+    assert planes.equilibrio() <= 10 and planes.equilibrio(uso=1.0) <= 15
+    e = planes.economia(100)
+    assert e["beneficio"] > 0 and e["ingresos"] == 60 * 17 + 30 * 49 + 10 * 100
+    assert planes.coste_captacion() < 10
