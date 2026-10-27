@@ -50,6 +50,9 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         from . import buscador
         cid = canales.activo()["id"]
         return "json", {**buscador.leer(cid), "bases": buscador.bases(cid), "canal": canales.activo()["nombre"]}
+    if ruta == "/api/m/nube":   # la copia en la nube: si está conectada y cuándo se subió por última vez
+        from . import nube
+        return "json", {"conectada": nube.disponible(), **nube.estado}
     if ruta == "/api/m/musica/cama":   # escuchar el fondo suave del Studio antes de elegirlo
         return "archivo", montaje.muestra_cama()
     m = re.fullmatch(r"/musica/(.+)", ruta)   # escuchar una pista (solo archivos de tu carpeta de música)
@@ -141,6 +144,9 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         return "json", {"ok": True, "id": montaje.desde_url(str(d.get("url", "")))}
     if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion
         return "json", {"ok": True, "id": montaje.desde_idea(int(d.get("n", -1)))}
+    if ruta == "/api/m/nube/sincronizar":   # subir ya a la nube (además de cada 30 min)
+        from . import nube
+        return "json", {"ok": True, "subidos": nube.sincronizar()}
     if ruta == "/api/m/archivar":   # un vídeo a medias que no se va a terminar sale de la lista
         montaje.archivar(str(d.get("id", "")))
         return "json", {"ok": True}

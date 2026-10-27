@@ -742,6 +742,8 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001 - el vigilante nunca se cae
                 logger.warning("Vigilante de la carpeta: %s", e)
     threading.Thread(target=vigilar, name="studio4-carpeta", daemon=True).start()
+    from studio4 import nube   # copia de los datos en Supabase cada 30 min (solo si hay cuenta en .env)
+    threading.Thread(target=nube.vigilar, name="studio4-nube", daemon=True).start()
     ThreadingHTTPServer.daemon_threads = True
     servidor = ThreadingHTTPServer(("127.0.0.1", config.PUERTO), Panel)
     print(f"\n  STUDIO 4 listo  →  http://127.0.0.1:{config.PUERTO}")

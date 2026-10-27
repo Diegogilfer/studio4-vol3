@@ -3281,3 +3281,43 @@ def test_cada_canal_tiene_su_radar_y_sus_videos_sin_mezclarse(aislado, monkeypat
     montaje.archivar(otro)
     assert otro not in [v["id"] for v in montaje.listar()]
     assert (config.PRODUCCIONES / "_papelera" / f"montaje_{otro}" / "proyecto.json").exists()
+
+
+def test_nube_sube_canales_videos_ideas_y_tendencias_con_la_cuenta_del_dueno(aislado, monkeypatch):
+    """Sin cuenta no hace nada; con cuenta inicia sesión una vez y sube cada tabla (las tendencias sin repetirse
+    por día). Nunca toca la base real en la prueba."""
+    from studio4 import canales, montaje, nube
+    for k in ("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "SUPABASE_EMAIL", "SUPABASE_CLAVE"):
+        monkeypatch.delenv(k, raising=False)
+    assert not nube.disponible()
+    with pytest.raises(ValueError):
+        nube.sincronizar()
+    monkeypatch.setenv("SUPABASE_URL", "https://x.supabase.co")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_prueba")
+    monkeypatch.setenv("SUPABASE_EMAIL", "yo@ejemplo.com")
+    monkeypatch.setenv("SUPABASE_CLAVE", "secreta")
+    nube._sesion.clear()
+    canales.guardar({"id": "fourlevel", "nombre": "FourLevel"})
+    montaje.crear("Mi vídeo", "Una frase con seis palabras justas aqui.")
+    peticiones = []
+
+    class R:
+        def __init__(self, code, data=None):
+            self.status_code, self._d, self.text = code, data or {}, ""
+
+        def json(self):
+            return self._d
+
+    def post(url, **kw):
+        peticiones.append((url, kw))
+        if "/auth/v1/token" in url:
+            assert kw["json"]["email"] == "yo@ejemplo.com"
+            return R(200, {"access_token": "tok", "expires_in": 3600})
+        assert kw["headers"]["Authorization"] == "Bearer tok"
+        return R(201)
+    monkeypatch.setattr(nube.requests, "post", post)
+    subidos = nube.sincronizar()
+    assert subidos["canales"] >= 1 and subidos["videos"] == 1
+    assert sum(1 for u, _ in peticiones if "/auth/v1/token" in u) == 1   # una sola sesión
+    tablas = [u.rsplit("/", 1)[1] for u, _ in peticiones if "/rest/v1/" in u]
+    assert tablas[:2] == ["canales", "videos"] and nube.estado["ultima"]
