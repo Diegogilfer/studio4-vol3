@@ -463,3 +463,5 @@ button.chip-radar:hover { outline: 1px solid var(--cian); }
 .estilos-ia .chip-ia.por-claude { border-color: color-mix(in srgb, var(--cian) 55%, var(--borde)); }
 .estilos-ia .chip-ia.por-claude::before { content: "✦ "; color: var(--cian); }
 .recomendacion { margin: 0; }
+.prueba-plan { display: grid; gap: 4px; padding: 16px 20px; border-radius: 16px; border: 1px solid var(--rosa);
+  background: color-mix(in srgb, var(--rosa) 10%, var(--caja)); }

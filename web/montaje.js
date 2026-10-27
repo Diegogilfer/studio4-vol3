@@ -1233,9 +1233,12 @@ function pintarTrabajo(t) {
 // ============================================================ Rutas
 // Planes de suscripción (producto). Precios de ejemplo: Diego los ajusta. Aún sin cobro real (eso llega con el hosting).
 async function vistaPlanes() {
-  const PLANES = (await seguro("/api/m/planes"))?.planes || [];   // calculados en studio4/planes.py desde los costes
+  const datosPlanes = await seguro("/api/m/planes");   // calculados en studio4/planes.py desde los costes
+  const PLANES = datosPlanes?.planes || [], PRUEBA = datosPlanes?.prueba;
   $("vista").innerHTML = `
     ${cabecera("<em>Planes</em>", "Elige el que te cuadre. Cambias o cancelas cuando quieras.")}
+    ${PRUEBA ? `<section class="prueba-plan"><b>Prueba ${PRUEBA.dias} días el plan ${esc(PRUEBA.plan)}, potenciado</b>
+      <span class="meta">${PRUEBA.puntos.map(esc).join(" · ")}</span></section>` : ""}
     <div class="planes">
       ${PLANES.map((p) => `
         <article class="plan${p.destacado ? " destacado" : ""}">

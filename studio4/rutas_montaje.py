@@ -55,7 +55,7 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"estilos": estilos.catalogo(), "canal": canales.activo().get("estilo", "")}
     if ruta == "/api/m/planes":   # las suscripciones, sacadas de lo que cuesta producir (sin costes ni márgenes)
         from . import planes
-        return "json", {"planes": planes.para_clientes()}
+        return "json", {"planes": planes.para_clientes(), "prueba": planes.prueba()}
     if ruta == "/api/m/nube":   # la copia en la nube: si está conectada y cuándo se subió por última vez
         from . import nube
         return "json", {"conectada": nube.disponible(), **nube.estado}

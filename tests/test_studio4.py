@@ -3356,13 +3356,15 @@ def test_planes_salen_de_los_costes_y_ninguno_pierde_dinero(servidor):
     for p in planes.PLANES:
         if p["precio"]:
             assert planes.margen(p) >= 0.4, (p["nombre"], planes.margen(p))
-    assert planes.coste_maximo(next(p for p in planes.PLANES if p["id"] == "gratis")) < 0.5   # el gratis cuesta céntimos
+    assert next(p for p in planes.PLANES if p["id"] == "ilimitado")["cupos"]["video"] is None   # ilimitado de verdad
     pedir, _ = servidor
     estado, cuerpo = pedir("GET", "/api/m/planes")
     d = json.loads(cuerpo)
-    assert estado == 200 and [p["id"] for p in d["planes"]] == ["gratis", "creador", "pro", "studio", "claves"]
+    assert estado == 200 and [p["id"] for p in d["planes"]] == ["basico", "pro", "ilimitado"]
     texto = json.dumps(d)
     assert "coste" not in texto and "margen" not in texto
+    assert d["prueba"]["dias"] == 3 and d["prueba"]["plan"] == "Básico"   # sin plan gratis: prueba de 3 días
+    assert planes.coste_prueba() < 3   # cada prueba cuesta poco
 
 
 def test_estilos_de_produccion_guian_guion_y_recomiendan_modelo(aislado):
