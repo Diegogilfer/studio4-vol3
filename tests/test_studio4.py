@@ -3535,3 +3535,26 @@ def test_sofi_se_sirve_y_dice_como_van_los_montajes(servidor, monkeypatch):
     montaje.modificar(a, lambda p: p["trabajo"].update(ocupado=True, fase="Plano 3 de 9", progreso=30))
     r = asistente._ejecutar(canales.activo()["id"], "estado", {})
     assert r["tipo"] == "estado" and r["en_curso"][0] == {"titulo": "Uno en marcha", "fase": "Plano 3 de 9", "progreso": 30}
+
+
+def test_sincronizar_con_cifras_y_wikipedia_reintenta(monkeypatch):
+    """Whisper oye «1963» y el guion dice «mil novecientos sesenta y tres»: se casan palabra a palabra. Y si
+    Wikipedia pide calma (429/503), se espera y se reintenta en vez de dar el tema por perdido."""
+    from studio4 import investigacion, montaje
+    o = [{"palabra": "En", "ini": 0.0, "fin": 0.2}, {"palabra": "1963,", "ini": 0.2, "fin": 1.4},
+         {"palabra": "la", "ini": 1.5, "fin": 1.6}, {"palabra": "empresa", "ini": 1.6, "fin": 2.0}]
+    t = montaje.alinear_voz(["En mil novecientos sesenta y tres, la empresa."], o, 2.2)
+    assert [w["palabra"] for w in t["palabras"]][:3] == ["En", "mil", "novecientos"] and t["palabras"][-2]["ini"] == 1.5
+    respuestas = iter([429, 503, 200])
+    esperas = []
+
+    class R:
+        def __init__(self, c):
+            self.status_code, self.headers = c, {}
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(self.status_code)
+    monkeypatch.setattr(investigacion.requests, "get", lambda *a, **k: R(next(respuestas)))
+    monkeypatch.setattr("time.sleep", lambda s: esperas.append(s))
+    assert investigacion._wiki_get("https://es.wikipedia.org/w/api.php", {}).status_code == 200 and len(esperas) == 2

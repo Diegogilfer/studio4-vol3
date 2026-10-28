@@ -19,7 +19,22 @@ from google.genai import types
 from . import config, gemini, registro
 
 logger = logging.getLogger("studio4.investigacion")
-CABECERAS = {"User-Agent": "STUDIO4-Vol3/1.0 (investigacion de guiones; uso personal)"}
+CABECERAS = {"User-Agent": "STUDIO4-Vol3/1.0 (investigacion de guiones; uso personal; https://github.com/)"}
+
+
+def _wiki_get(url: str, params: dict[str, Any]) -> requests.Response:
+    """Wikipedia contesta 429 (demasiadas peticiones) o 503 (ocupada) si se le pide rápido: se espera lo que pida
+    (Retry-After) y se reintenta hasta 4 veces, en vez de dar el tema por perdido."""
+    import time
+    for intento in range(4):
+        r = requests.get(url, headers=CABECERAS, timeout=20, params={**params, "maxlag": 5})
+        if r.status_code not in (429, 503):
+            r.raise_for_status()
+            return r
+        espera = r.headers.get("Retry-After", "")
+        time.sleep(min(30, int(espera)) if espera.isdigit() else 2 * (intento + 1) ** 2)
+    r.raise_for_status()
+    return r
 MAX_CARACTERES_ARTICULO = 12000
 
 SISTEMA = """Eres documentalista de un canal de divulgación. Entrega un dossier en español, en texto plano,
@@ -53,16 +68,14 @@ def _con_google(idea: str, produccion: str) -> dict[str, Any]:
 
 
 def _buscar_wikipedia(lang: str, consulta: str, n: int = 2) -> list[str]:
-    r = requests.get(f"https://{lang}.wikipedia.org/w/api.php", headers=CABECERAS, timeout=20, params={
+    r = _wiki_get(f"https://{lang}.wikipedia.org/w/api.php", {
         "action": "query", "list": "search", "srsearch": consulta, "srlimit": n, "format": "json"})
-    r.raise_for_status()
     return [x["title"] for x in r.json().get("query", {}).get("search", [])]
 
 
 def _articulo(lang: str, titulo: str) -> dict[str, str] | None:
-    r = requests.get(f"https://{lang}.wikipedia.org/w/api.php", headers=CABECERAS, timeout=20, params={
+    r = _wiki_get(f"https://{lang}.wikipedia.org/w/api.php", {
         "action": "query", "prop": "extracts", "explaintext": 1, "redirects": 1, "titles": titulo, "format": "json"})
-    r.raise_for_status()
     for pagina in r.json().get("query", {}).get("pages", {}).values():
         texto = re.sub(r"\n{3,}", "\n\n", pagina.get("extract") or "").strip()
         if len(texto) > 400:

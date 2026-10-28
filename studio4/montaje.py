@@ -474,6 +474,25 @@ def elegir_velocidad(mid: str, velocidad: float) -> None:
     modificar(mid, lambda p: p.update(voz_velocidad=velocidad, final=None, short=None))
 
 
+def _numeros_en_letra(oidas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Las cifras que oye Whisper («1963», «14.800», «26,») pasadas a palabras, repartiendo su tiempo entre ellas: así
+    casan con el guion escrito en letra y los subtítulos no pierden la referencia en cada año o precio."""
+    try:
+        from num2words import num2words
+    except ImportError:
+        return oidas
+    salida: list[dict[str, Any]] = []
+    for w in oidas:
+        limpio = re.sub(r"[^\d]", "", w["palabra"]) if re.fullmatch(r"[\W_]*\d[\d.,]*[\W_]*", w["palabra"]) else ""
+        if not limpio or len(limpio) > 9:
+            salida.append(w)
+            continue
+        partes = num2words(int(limpio), lang="es").split()
+        paso = (w["fin"] - w["ini"]) / len(partes)
+        salida += [{"palabra": x, "ini": round(w["ini"] + i * paso, 3), "fin": round(w["ini"] + (i + 1) * paso, 3)} for i, x in enumerate(partes)]
+    return salida
+
+
 def _normal(palabra: str) -> str:
     import unicodedata
     p = unicodedata.normalize("NFD", palabra.lower())
@@ -488,6 +507,7 @@ def alinear_voz(segmentos: list[str], oidas: list[dict[str, Any]], duracion: flo
     guion = [(k, w) for k, seg in enumerate(segmentos) for w in seg.split()]
     if not oidas or not guion:
         raise ValueError("No se oye voz en tu audio.")
+    oidas = _numeros_en_letra(oidas)   # Whisper escribe «1963»; el guion dice «mil novecientos sesenta y tres»
     a, b = [_normal(w) for _, w in guion], [_normal(w["palabra"]) for w in oidas]
     fijo: dict[int, tuple[float, float]] = {}
     for blq in difflib.SequenceMatcher(None, a, b, autojunk=False).get_matching_blocks():

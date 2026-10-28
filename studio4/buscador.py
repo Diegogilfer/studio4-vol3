@@ -59,9 +59,8 @@ def guardar_bases(cid: str, urls: list[str]) -> list[str]:
 
 # --- búsqueda en las bases abiertas --------------------------------------------------------------------------------
 def _mediawiki(sitio: str, consulta: str, n: int) -> list[dict[str, str]]:
-    r = requests.get(f"https://{sitio}/w/api.php", headers=CABECERAS, timeout=20, params={
-        "action": "query", "list": "search", "srsearch": consulta, "srlimit": n, "format": "json"})
-    r.raise_for_status()
+    from .investigacion import _wiki_get   # con reintentos si Wikipedia/Wikisource piden calma (429/503)
+    r = _wiki_get(f"https://{sitio}/w/api.php", {"action": "query", "list": "search", "srsearch": consulta, "srlimit": n, "format": "json"})
     return [{"base": sitio, "titulo": x["title"], "resumen": re.sub(r"<[^>]+>", "", x.get("snippet", ""))[:240],
              "url": f"https://{sitio}/wiki/{x['title'].replace(' ', '_')}"} for x in r.json().get("query", {}).get("search", [])]
 
