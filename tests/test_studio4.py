@@ -3464,3 +3464,32 @@ def test_composicion_gancho_ritmo_y_leyenda_llegan_al_guion_y_a_los_subtitulos(a
     assert {"gancho", "ritmo", "leyenda"} <= set(cat) and all(x["nombre"] for x in cat["gancho"])
     with pytest.raises(ValueError):
         montaje._validar_subs({"paleta": "fucsia"})
+
+
+def test_biblioteca_pregunta_si_el_pedido_es_ambiguo_y_lee_videos_de_referencia(aislado, monkeypatch):
+    """«mosquitos» en un canal de juegos: no fuerza ideas raras, pregunta con opciones. Con un enlace de referencia,
+    lo lee (sin descargar) y lo pasa al guionista para ideas propias."""
+    from studio4 import buscador, canales, deepseek
+    cid = canales.activo()["id"]
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    monkeypatch.setattr(buscador, "buscar_en_bases", lambda c: [{"base": "es.wikipedia.org", "titulo": "Faro", "resumen": "",
+                                                                 "url": "https://es.wikipedia.org/wiki/Faro"}])
+    vistos = []
+
+    def generar_json(sistema, prompt, **_):
+        vistos.append(prompt)
+        if "búsquedas" in sistema:
+            if "mosquitos" in prompt and "VÍDEO DE REFERENCIA" not in prompt:
+                return {"claro": False, "pregunta": "¿Juegos con insectos o es para otro canal?", "opciones": ["Juegos con insectos", "Es para ARIGAB"]}
+            return {"claro": True, "consultas": ["faro de Flannan"]}
+        return {"respuesta": "Ideas.", "ideas": [{"titulo": "El faro", "gancho": "x", "angulo": "y", "formato": "corto",
+                                                  "fuentes": ["https://es.wikipedia.org/wiki/Faro"]}]}
+    monkeypatch.setattr(deepseek, "generar_json", generar_json)
+    r = buscador.conversar(cid, "mosquitos")
+    assert not r["ideas"] and r["opciones"] == ["Juegos con insectos", "Es para ARIGAB"]
+    assert buscador.leer(cid)["chat"][-1]["opciones"]
+    monkeypatch.setattr(buscador, "referencia", lambda url: {"url": url, "titulo": "Los fareros", "canal": "X", "duracion": 60,
+                                                             "descripcion": "d", "transcripcion": "lo que se dice"})
+    r = buscador.conversar(cid, "algo así: https://www.youtube.com/watch?v=abc")
+    assert r["ideas"] and "VÍDEO DE REFERENCIA" in vistos[-1] and "lo que se dice" in vistos[-1]
+    assert buscador.leer(cid)["chat"][-1]["referencia"]["titulo"] == "Los fareros"

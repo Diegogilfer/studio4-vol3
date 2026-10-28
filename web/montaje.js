@@ -339,10 +339,11 @@ async function vistaBiblioteca() {
     <section class="bib-chat">
       <div class="chat-msgs bib-msgs" id="bib-msgs">${chat.length ? chat.map((x) => x.quien === "tú"
         ? `<div class="msg mio"><p>${esc(x.texto)}</p></div>`
-        : `<div class="msg ia"><p>${esc(x.texto)}</p>${(x.bases || []).length ? `<small class="meta">Buscado en: ${esc(x.bases.join(", "))}</small>` : ""}
+        : `<div class="msg ia"><p>${esc(x.texto)}</p>${x.referencia ? `<small class="meta">Vídeo de referencia: <a href="${esc(x.referencia.url)}" target="_blank" rel="noopener">${esc(x.referencia.titulo)}</a></small>` : ""}${(x.bases || []).length ? `<small class="meta">Buscado en: ${esc(x.bases.join(", "))}</small>` : ""}
+            ${(x.opciones || []).length ? `<div class="chips-ia">${x.opciones.map((o) => `<button type="button" class="chip-ia" data-bib-opcion="${esc(o)}">${esc(o)}</button>`).join("")}</div>` : ""}
             <div class="ideas-rejilla">${(x.ideas || []).map((i) => ideaHTML(i, guardadas.some((g) => g.id === i.id))).join("")}</div></div>`).join("")
         : `<p class="meta">Escribe qué guiones buscas: «misterios del mar sin resolver», «mitos nórdicos poco contados», «5 Shorts de enigmas arqueológicos»…</p>`}</div>
-      <form class="chat-form" id="bib-form"><textarea class="campo" id="bib-texto" rows="2" placeholder="¿Qué guiones buscamos?"></textarea>
+      <form class="chat-form" id="bib-form"><textarea class="campo" id="bib-texto" rows="2" placeholder="Escribe la idea con tus palabras o pega el enlace de un vídeo de referencia…"></textarea>
         <button class="primario" type="submit">Buscar</button></form>
     </section>
     ${guardadas.length ? `<section><span class="etiqueta">Ideas guardadas (${guardadas.length})</span>
@@ -381,6 +382,7 @@ async function vistaBiblioteca() {
     catch (e) { aviso(e); b.disabled = false; b.textContent = "Buscar"; }
   };
   $("bib-form").onsubmit = (ev) => { ev.preventDefault(); buscar(); };
+  document.querySelectorAll("[data-bib-opcion]").forEach((b) => { b.onclick = () => { $("bib-texto").value = b.dataset.bibOpcion; buscar(); }; });
   $("bib-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); buscar(); } };
   $("base-form").onsubmit = async (ev) => {
     ev.preventDefault();
