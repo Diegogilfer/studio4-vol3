@@ -78,7 +78,7 @@ def _caja(o: dict[str, Any], acento: str, azar: random.Random) -> str:
                     du, dv = 0.5 * largo / cols, 0.4 * h / pisos
                     luz = acento if azar.random() < 0.7 else _mezcla(acento, 0.6)
                     s += _poligono([punto(u0, v0), punto(u0 + du, v0), punto(u0 + du, v0 + dv), punto(u0, v0 + dv)],
-                                   luz, 'filter="url(#brillo)"')
+                                   luz, f'filter="url(#brillo)" class="ventana" style="animation-delay:-{azar.random() * 3:.2f}s"')
     return s
 
 
@@ -111,8 +111,27 @@ def _luz(o: dict[str, Any], acento: str) -> str:
     return f'<circle cx="{cx:.3f}" cy="{cy:.3f}" r="{r:.3f}" fill="{_hex(o["color"], acento)}" opacity=".9" filter="url(#halo)"/>'
 
 
-def svg(escena: dict[str, Any], ancho: int = 1920, alto: int = 1080, semilla: str = "") -> str:
-    """La escena (ya validada) en SVG, encuadrada y centrada en el lienzo."""
+CAMARAS = ("acercar", "alejar", "paneo_izq", "paneo_der", "elevar")
+CSS_ANIMADO = """
+.obj { animation: entra .75s cubic-bezier(.2,.9,.3,1.15) both; }
+@keyframes entra { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.luz { animation: late 1.6s ease-in-out infinite alternate; }
+@keyframes late { from { opacity: .45; } to { opacity: 1; } }
+.ventana { animation: brilla 2.6s ease-in-out infinite alternate; }
+@keyframes brilla { 0% { opacity: .35; } 60% { opacity: 1; } 100% { opacity: .7; } }
+.cam { transform-origin: var(--cx) var(--cy); animation-timing-function: ease-in-out; animation-fill-mode: both; }
+.cam-acercar { animation-name: acercar; } @keyframes acercar { from { transform: scale(1); } to { transform: scale(1.2); } }
+.cam-alejar { animation-name: alejar; } @keyframes alejar { from { transform: scale(1.25); } to { transform: scale(1); } }
+.cam-paneo_izq { animation-name: pizq; } @keyframes pizq { from { transform: translateX(90px) scale(1.14); } to { transform: translateX(-90px) scale(1.14); } }
+.cam-paneo_der { animation-name: pder; } @keyframes pder { from { transform: translateX(-90px) scale(1.14); } to { transform: translateX(90px) scale(1.14); } }
+.cam-elevar { animation-name: elevar; } @keyframes elevar { from { transform: translateY(70px) scale(1.08); } to { transform: translateY(-50px) scale(1.18); } }
+"""
+
+
+def svg(escena: dict[str, Any], ancho: int = 1920, alto: int = 1080, semilla: str = "", camara: str = "",
+        segundos: float = 0.0) -> str:
+    """La escena (ya validada) en SVG, encuadrada y centrada en el lienzo. Con `camara` y `segundos`, animada: las
+    piezas entran una a una, las luces y ventanas laten y la cámara se mueve durante toda la escena."""
     e = validar(escena)
     azar = random.Random(hashlib.sha1((semilla or str(e)).encode()).hexdigest())
     # primero lo que está más abajo (el suelo elevado antes que lo que lleva encima), luego de atrás adelante
@@ -134,17 +153,26 @@ def svg(escena: dict[str, Any], ancho: int = 1920, alto: int = 1080, semilla: st
     for i in range(int(y1 - y0) + 1):
         a, b = _p(x0, y0 + i, 0), _p(x1, y0 + i, 0)
         cuerpo += f'<line x1="{a[0]:.3f}" y1="{a[1]:.3f}" x2="{b[0]:.3f}" y2="{b[1]:.3f}" stroke="{e["acento"]}" stroke-opacity=".08" stroke-width=".02"/>'
-    for o in objs:
+    animada = camara in CAMARAS and segundos > 0
+    for k, o in enumerate(objs):
         if o["tipo"] in ("caja", "plataforma"):
-            cuerpo += _caja(o, e["acento"], azar)
+            pieza = _caja(o, e["acento"], azar)
         elif o["tipo"] == "piramide":
-            cuerpo += _piramide(o)
+            pieza = _piramide(o)
         elif o["tipo"] == "cilindro":
-            cuerpo += _cilindro(o)
+            pieza = _cilindro(o)
         elif o["tipo"] == "esfera":
-            cuerpo += _esfera(o)
-        elif o["tipo"] == "luz":
-            cuerpo += _luz(o, e["acento"])
+            pieza = _esfera(o)
+        else:
+            pieza = _luz(o, e["acento"])
+        if animada:   # cada pieza entra con un pequeño retraso: la maqueta se «construye» al empezar la escena
+            retraso = min(1.2, 0.06 * k)
+            if o["tipo"] == "luz":   # entra y después late
+                estilo = f"animation: entra .75s ease {retraso:.2f}s both, late 1.6s ease-in-out {retraso + 0.75:.2f}s infinite alternate"
+            else:
+                estilo = f"animation-delay:{retraso:.2f}s"
+            pieza = f'<g class="obj" style="{estilo}">{pieza}</g>'
+        cuerpo += pieza
     # encuadre: todos los puntos proyectados caben con margen
     pts = [_p(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (-0.4,)]
     pts += [_p(o["x"] + dx, o["y"] + dy, o["z"] + o["h"]) for o in objs for dx in (0, o["w"]) for dy in (0, o["d"])]
@@ -162,8 +190,10 @@ def svg(escena: dict[str, Any], ancho: int = 1920, alto: int = 1080, semilla: st
   <radialGradient id="vineta" cx="50%" cy="50%" r="75%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".75"/></radialGradient>
   <radialGradient id="fondo" cx="50%" cy="40%" r="80%"><stop offset="0" stop-color="{_mezcla(e['fondo'], 2.4)}"/><stop offset="1" stop-color="{e['fondo']}"/></radialGradient>
 </defs>
+{f"<style>{CSS_ANIMADO}</style>" if animada else ""}
 <rect width="100%" height="100%" fill="url(#fondo)"/>
-<g transform="translate({tx:.2f},{ty:.2f}) scale({escala:.3f})">{cuerpo}</g>
+{f'<g class="cam cam-{camara}" style="--cx:{ancho / 2}px;--cy:{alto / 2}px;animation-duration:{segundos:.2f}s">' if animada else "<g>"}
+<g transform="translate({tx:.2f},{ty:.2f}) scale({escala:.3f})">{cuerpo}</g></g>
 <rect width="100%" height="100%" fill="url(#vineta)"/>
 </svg>"""
 
@@ -181,6 +211,38 @@ def dibujar(escena: dict[str, Any], destino: Path, ancho: int = 1920, alto: int 
         pag.screenshot(path=str(destino), type="png")
         nav.close()
     html.unlink(missing_ok=True)
+    return destino
+
+
+def animar(escena: dict[str, Any], destino: Path, segundos: float, camara: str = "acercar", ancho: int = 1920,
+           alto: int = 1080, semilla: str = "", fps: int = 30) -> Path:
+    """La escena animada a MP4: el navegador la mueve y se saca un fotograma exacto cada 1/fps s (sin tirones)."""
+    import subprocess
+    from playwright.sync_api import sync_playwright
+    camara = camara if camara in CAMARAS else "acercar"
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    html = destino.with_suffix(".html")
+    html.write_text(f'<!doctype html><body style="margin:0;background:#000">{svg(escena, ancho, alto, semilla, camara, segundos)}</body>',
+                    encoding="utf-8")
+    cuadros = max(2, round(segundos * fps))
+    ff = subprocess.Popen(["ffmpeg", "-nostdin", "-v", "error", "-y", "-f", "image2pipe", "-framerate", str(fps), "-c:v", "mjpeg",
+                           "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+                           "-r", str(fps), str(destino)], stdin=subprocess.PIPE)
+    try:
+        with sync_playwright() as pw:
+            nav = pw.chromium.launch(channel="msedge", headless=True)
+            pag = nav.new_page(viewport={"width": ancho, "height": alto})
+            pag.goto(html.as_uri())
+            for i in range(cuadros):
+                pag.evaluate("t => document.getAnimations().forEach(a => { a.pause(); a.currentTime = t; })", i * 1000 / fps)
+                ff.stdin.write(pag.screenshot(type="jpeg", quality=92))
+            nav.close()
+    finally:
+        ff.stdin.close()
+        ff.wait()
+        html.unlink(missing_ok=True)
+    if ff.returncode != 0 or not destino.exists():
+        raise RuntimeError("No se pudo animar la escena isométrica.")
     return destino
 
 

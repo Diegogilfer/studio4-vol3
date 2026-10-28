@@ -121,7 +121,7 @@ def archivar(mid: str) -> None:
 
 def con_imagen(f: dict[str, Any]) -> bool:
     """La frase ya tiene qué enseñar: un plano de vídeo, un panel de texto o una imagen."""
-    return bool(f.get("clip") or f.get("panel") or f.get("imagen"))
+    return bool(f.get("clip") or f.get("panel") or f.get("imagen") or f.get("isometrico"))
 
 
 def paso_actual(p: dict[str, Any]) -> int:
@@ -1043,7 +1043,7 @@ def buscar_imagenes(mid: str, consulta: str) -> list[dict[str, Any]]:
              "pagina": i.get("pagina", "")} for i in galeria.buscar(p["canal"], consulta, n=24, produccion=mid, sitio_entero=True)]
 
 
-def _segmento_imagen(imagen: Path, d: float, ancho: int, alto: int, destino: Path) -> None:
+def _segmento_imagen(imagen: Path, d: float, ancho: int, alto: int, destino: Path, archivo: bool = False) -> None:
     """Una imagen durante `d` s con un acercamiento lento. Apaisada: a pantalla completa. Si no (una caja, un
     cartel vertical, un producto): como tarjeta sobre la misma imagen desenfocada, sin bandas negras."""
     from PIL import Image
@@ -1052,7 +1052,19 @@ def _segmento_imagen(imagen: Path, d: float, ancho: int, alto: int, destino: Pat
     cuadros = max(1, round(d * config.FPS))
     acerca = (f"scale={ancho * 2}:{alto * 2}:flags=bicubic,zoompan=z='1+{ACERCA * 1.5}*on/{cuadros}'"
               f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS},setsar=1")
-    if 1.55 <= w / h <= 1.95:
+    if archivo:   # foto real (de archivo): enmarcada en dorado sobre su propia imagen oscurecida, con su etiqueta
+        borde = max(4, int(6 * ancho / 1920))
+        letra = "C\\:/Windows/Fonts/arialbd.ttf"
+        filtro = ["-filter_complex",
+                  f"[0:v]split=2[a][b];[a]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},"
+                  f"gblur=sigma={max(10, int(45 * ancho / 1920))},eq=brightness=-0.32:saturation=0.6[fondo];"
+                  f"[b]scale={int(ancho * 0.72)}:{int(alto * 0.72)}:force_original_aspect_ratio=decrease,"
+                  f"pad=iw+{2 * borde}:ih+{2 * borde}:{borde}:{borde}:color=0xC8A45A[frente];"
+                  f"[fondo][frente]overlay=(W-w)/2:(H-h)/2,{acerca},"
+                  f"drawtext=fontfile='{letra}':text='ARCHIVO':fontcolor=0xC8A45A:fontsize={int(30 * ancho / 1920)}:"
+                  f"x={int(60 * ancho / 1920)}:y={int(50 * alto / 1080)}:box=1:boxcolor=0x0C0D0F@0.7:boxborderw={int(10 * ancho / 1920)},"
+                  f"fade=t=in:st=0:d=0.35[v]", "-map", "[v]"]
+    elif 1.55 <= w / h <= 1.95:
         filtro = ["-vf", f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},{acerca}"]
     else:
         filtro = ["-filter_complex",
@@ -1432,10 +1444,20 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             if nuevo_bloque:   # la pausa larga antes del panel no queda vacía
                 eventos.append((cursor - 0.9, "subida", 0.5))
             eventos += [(cursor + 0.8 + j * 0.42, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
-        elif f.get("imagen"):   # una imagen (arte, captura, producto) con movimiento lento
-            seg = cache / f"{huella('imagen', f['imagen']['archivo'], round(d, 3))}.mp4"
+        elif f.get("isometrico"):   # maqueta isométrica animada, hecha con código a la duración exacta de la frase
+            from . import isometrico
+            iso = f["isometrico"]
+            seg = cache / f"{huella('isometrico', iso, round(d, 3))}.mp4"
             if not seg.exists():
-                _segmento_imagen(carpeta_imagenes(mid) / f["imagen"]["archivo"], d, ancho, alto, seg)
+                isometrico.animar(iso["escena"], seg, d, iso.get("camara", "acercar"), ancho, alto, semilla=f"{mid}-{f['n']}")
+            en_uso.add(seg)
+            usados.append({"frase": f["n"], "fuente": "Ilustración isométrica animada de Studio 4", "canal": "", "url": "", "imagen": True})
+            eventos.append((cursor + 0.05, "whoosh", 0.35))
+        elif f.get("imagen"):   # una imagen (arte, captura, producto) con movimiento lento
+            real = str(f["imagen"].get("credito", "")).startswith("Foto")   # foto real: marco de archivo
+            seg = cache / f"{huella('imagen', f['imagen']['archivo'], round(d, 3), real)}.mp4"
+            if not seg.exists():
+                _segmento_imagen(carpeta_imagenes(mid) / f["imagen"]["archivo"], d, ancho, alto, seg, archivo=real)
             en_uso.add(seg)
             usados.append({"frase": f["n"], "fuente": f["imagen"].get("credito") or "Imagen", "canal": "",
                            "url": f["imagen"].get("url", ""), "imagen": True})

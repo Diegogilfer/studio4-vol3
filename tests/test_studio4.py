@@ -3493,3 +3493,15 @@ def test_biblioteca_pregunta_si_el_pedido_es_ambiguo_y_lee_videos_de_referencia(
     r = buscador.conversar(cid, "algo así: https://www.youtube.com/watch?v=abc")
     assert r["ideas"] and "VÍDEO DE REFERENCIA" in vistos[-1] and "lo que se dice" in vistos[-1]
     assert buscador.leer(cid)["chat"][-1]["referencia"]["titulo"] == "Los fareros"
+
+
+def test_isometrico_animado_y_fotos_de_archivo(aislado):
+    """Con cámara y duración, la escena sale animada (piezas que entran, luces que laten, cámara que se mueve el
+    tiempo exacto de la frase); sin ellas, quieta. Una frase con escena isométrica cuenta como frase con imagen."""
+    from studio4 import isometrico, montaje
+    e = isometrico.escena_de_reserva("x")
+    quieta = isometrico.svg(e, semilla="a")
+    movida = isometrico.svg(e, semilla="a", camara="paneo_der", segundos=4.5)
+    assert "@keyframes" not in quieta and 'class="cam cam-paneo_der"' in movida and "animation-duration:4.50s" in movida
+    assert movida.count('class="obj"') >= len(isometrico.validar(e)["objetos"])
+    assert montaje.con_imagen({"isometrico": {"escena": e, "camara": "acercar"}})
