@@ -1453,6 +1453,15 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         avisar("Pausas de la voz", 12)
         voz_montaje = trabajo / "voz_pausas.wav"
         tiempos, palabras = _respirar(wav, tiempos, palabras, p["frases"], voz_montaje)
+        # La voz CON sus pausas es la que suena en el vídeo: Whisper la escucha y de ahí salen los subtítulos y los
+        # cambios de plano (al cortar en los silencios, el cálculo podía quedarse hasta 3-4 s desfasado).
+        try:
+            avisar("Comprobando la voz final con los subtítulos", 13)
+            final_oida = _sincronizar_voz(segmentos, voz_montaje, trabajo)
+            tiempos = [(e["ini"] + ENTRADA, e["fin"] + ENTRADA) for e in final_oida["escenas"]]
+            palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in final_oida["palabras"]]
+        except Exception as e:  # noqa: BLE001 - sin Whisper (o sin voz audible) se queda el cálculo anterior
+            logger.warning("Segunda sincronización: %s", e)
         modificar(mid, lambda q: q["voz"].update(pausas={"tiempos": tiempos, "palabras": palabras}))
     else:
         tiempos = _tiempos_estimados(p)
