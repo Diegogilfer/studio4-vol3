@@ -3505,3 +3505,16 @@ def test_isometrico_animado_y_fotos_de_archivo(aislado):
     assert "@keyframes" not in quieta and 'class="cam cam-paneo_der"' in movida and "animation-duration:4.50s" in movida
     assert movida.count('class="obj"') >= len(isometrico.validar(e)["objetos"])
     assert montaje.con_imagen({"isometrico": {"escena": e, "camara": "acercar"}})
+
+
+def test_la_voz_de_ia_se_sincroniza_escuchandola(aislado, monkeypatch, tmp_path):
+    """La voz de IA no dice cuándo dice cada palabra: se le pregunta a Whisper y los tiempos reales mandan (en un
+    vídeo largo, las estimaciones adelantaban los subtítulos y los planos varios segundos)."""
+    from studio4 import entrega, montaje
+    wav = tmp_path / "voz.wav"
+    medios.ffmpeg("-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono", "-t", "6", str(wav))
+    oidas = [{"palabra": w, "ini": 1.0 + k, "fin": 1.6 + k} for k, w in enumerate("Hola mundo cruel adiós amigo".split())]
+    monkeypatch.setattr(entrega, "_transcribir", lambda video, trabajo: (oidas, "es"))
+    t = montaje._sincronizar_voz(["Hola mundo cruel.", "Adiós amigo."], wav, tmp_path)
+    assert t["escenas"][1]["ini"] == 4.0 and t["palabras"][0]["ini"] == 1.0   # los tiempos que oyó Whisper
+    assert [w["palabra"] for w in t["palabras"]][:2] == ["Hola", "mundo"]    # el texto, el del guion

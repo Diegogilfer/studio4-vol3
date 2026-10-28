@@ -518,6 +518,15 @@ def alinear_voz(segmentos: list[str], oidas: list[dict[str, Any]], duracion: flo
     return {"duracion": duracion, "escenas": escenas, "palabras": palabras}
 
 
+def _sincronizar_voz(segmentos: list[str], wav: Path, trabajo: Path) -> dict[str, Any]:
+    """Los tiempos REALES de cada palabra de una voz ya grabada: Whisper la escucha y se casan sus palabras con las
+    del guion (el texto de los subtítulos sigue siendo el del guion). Sin esto, en un vídeo largo los subtítulos y
+    los cambios de plano se adelantaban o atrasaban varios segundos."""
+    from . import entrega
+    oidas, _idioma = entrega._transcribir(wav, trabajo)
+    return alinear_voz(segmentos, oidas, medios.duracion(wav))
+
+
 def _locutar_propia(mid: str, segmentos: list[str], wav: Path, trabajo: Path) -> dict[str, Any]:
     from . import entrega
     shutil.copyfile(carpeta(mid) / VOZ_PROPIA, wav)
@@ -1398,22 +1407,29 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                                              p.get("voz_velocidad", 1.0)]
                                             ).encode("utf-8")).hexdigest()
         previa_voz = p.get("voz") or {}
-        if previa_voz.get("firma") == firma_voz and wav.exists():   # mismo texto y misma voz: no se regraba
+        if previa_voz.get("firma") == firma_voz and wav.exists() and previa_voz.get("alineada"):   # mismo texto y voz: no se regraba
             avisar("Voz ya grabada (mismo guion)", 10)
             tiempos, palabras = [tuple(x) for x in previa_voz["tiempos"]], previa_voz["palabras"]
         else:
-            avisar("Escuchando tu voz para sincronizarla" if proveedor == "propia" else "Grabando la voz", 5)
-            vel = float(p.get("voz_velocidad", 1.0))
-            t = _locutar_propia(mid, segmentos, wav, trabajo) if proveedor == "propia" else voz.locutar(segmentos, wav, proveedor, produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ,
-                            voice_id=p["voz_nombre"] if proveedor == "fal" else None)
-            if abs(vel - 1.0) > 0.01:
-                voz.acelerar(wav, vel)
-                t = {"duracion": t["duracion"] / vel, "escenas": [{"ini": e["ini"] / vel, "fin": e["fin"] / vel} for e in t["escenas"]],
-                     "palabras": [{**w, "ini": w["ini"] / vel, "fin": w["fin"] / vel} for w in t["palabras"]]}
+            if previa_voz.get("firma") == firma_voz and wav.exists():   # grabada pero sin sincronizar: se sincroniza, sin regrabar
+                avisar("Sincronizando la voz con los subtítulos", 8)
+                t = _sincronizar_voz(segmentos, wav, trabajo)
+            else:
+                avisar("Escuchando tu voz para sincronizarla" if proveedor == "propia" else "Grabando la voz", 5)
+                vel = float(p.get("voz_velocidad", 1.0))
+                t = _locutar_propia(mid, segmentos, wav, trabajo) if proveedor == "propia" else voz.locutar(segmentos, wav, proveedor, produccion=mid, voz_nombre=p["voz_nombre"], estilo_voz=ESTILO_VOZ,
+                                voice_id=p["voz_nombre"] if proveedor == "fal" else None)
+                if abs(vel - 1.0) > 0.01:
+                    voz.acelerar(wav, vel)
+                    t = {"duracion": t["duracion"] / vel, "escenas": [{"ini": e["ini"] / vel, "fin": e["fin"] / vel} for e in t["escenas"]],
+                         "palabras": [{**w, "ini": w["ini"] / vel, "fin": w["fin"] / vel} for w in t["palabras"]]}
+                if proveedor != "propia":   # la voz de IA no dice cuándo dice cada palabra: lo dice Whisper escuchándola
+                    avisar("Sincronizando la voz con los subtítulos", 8)
+                    t = _sincronizar_voz(segmentos, wav, trabajo)
             tiempos = [(e["ini"] + ENTRADA, e["fin"] + ENTRADA) for e in t["escenas"]]
             palabras = [{**w, "ini": w["ini"] + ENTRADA, "fin": w["fin"] + ENTRADA} for w in t["palabras"]]
             modificar(mid, lambda q: q.update(voz={"archivo": "voz.wav", "duracion": t["duracion"], "palabras": palabras,
-                                                   "tiempos": tiempos, "firma": firma_voz}))
+                                                   "tiempos": tiempos, "firma": firma_voz, "alineada": True}))
         avisar("Pausas de la voz", 12)
         voz_montaje = trabajo / "voz_pausas.wav"
         tiempos, palabras = _respirar(wav, tiempos, palabras, p["frases"], voz_montaje)
