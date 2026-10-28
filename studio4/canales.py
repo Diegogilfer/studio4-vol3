@@ -78,7 +78,9 @@ def _limpio(c: dict[str, Any]) -> dict[str, Any]:
             "cta": str(c.get("cta", "")).strip()[:100],
             "velocidad": min((0.9, 1.0, 1.1, 1.2), key=lambda v: abs(v - float(c.get("velocidad") or 1.0))),
             "fuentes": [u.strip() for u in (c.get("fuentes") or []) if re.match(r"https?://\S+$", str(u).strip())][:6],
-            "referentes": list(dict.fromkeys(_usuario(str(u)) for u in (c.get("referentes") or []) if str(u).strip()))[:5], "publico": str(c.get("publico", ""))[:80]}
+            "referentes": list(dict.fromkeys(_usuario(str(u)) for u in (c.get("referentes") or []) if str(u).strip()))[:5], "publico": str(c.get("publico", ""))[:80],
+            # la composición por defecto del canal: gancho, ritmo y leyenda (studio4/composicion.py)
+            "composicion": {k: str(v)[:30] for k, v in (c.get("composicion") or {}).items() if k in ("gancho", "ritmo", "leyenda") and v}}
 
 
 def listar() -> list[dict[str, Any]]:

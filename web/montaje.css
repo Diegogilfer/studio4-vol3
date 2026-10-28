@@ -473,3 +473,9 @@ button.chip-radar:hover { outline: 1px solid var(--cian); }
 .nichos { display: grid; gap: 10px; margin-top: 8px; }
 .nicho-fila { display: grid; gap: 4px; justify-items: start; padding: 12px 14px; border-radius: 14px; background: var(--caja-2); }
 .nicho-fila .nota-titulo { margin-left: 0; }
+
+/* composición: gancho, ritmo y subtítulos */
+.composicion { display: grid; gap: 8px; }
+.comp-fila { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; }
+.leyenda-dorado { color: #c8a45a; } .leyenda-amarillo { color: #ffe100; } .leyenda-cian { color: #00e1ff; }
+.leyenda-rosa { color: #ff20b0; } .leyenda-blanco { color: #e8e8e8; }

@@ -21,7 +21,9 @@ NUNCA necesita traer un guion: tú propones y Studio lo escribe. Elige UNA acci�
 - "nicho": analizar si unos temas están saturados en YouTube (args: temas = lista de 1-5 temas cortos en español).
 - "ideas": proponer guiones con fuentes para el canal (args: pedido = qué ideas busca, en una frase).
 - "tendencias": enseñar lo que es tendencia hoy en el canal (sin args).
-- "crear": crear el vídeo ya (args: tema, estilo, duracion en segundos 15|30|60|180|300|600, formato 16:9|9:16).
+- "crear": crear el vídeo ya (args: tema, estilo, duracion en segundos 15|30|60|180|300|600, formato 16:9|9:16; y si
+  el usuario los pide: gancho dato_imposible|pregunta|nadie_conto|contradiccion|final_primero|cuenta_atras,
+  ritmo rapido|medio|lento, leyenda viral_dorado|viral_amarillo|viral_cian|viral_rosa|cine|minimal).
   Solo si el usuario ya eligió estilo; si no lo dijo, usa "preguntar_estilo".
 - "preguntar_estilo": el usuario quiere un vídeo pero no dijo el estilo (args: tema, duracion).
 - "responder": solo contestar (dudas, consejos), sin acción.
@@ -76,7 +78,8 @@ def _ejecutar(cid: str, accion: str, args: dict[str, Any]) -> dict[str, Any]:
         if accion == "preguntar_estilo" or args.get("estilo") not in estilos.ESTILOS:
             return {"tipo": "estilo", "tema": tema, "duracion": duracion, "estilos": estilos.catalogo()}
         from . import montaje
-        mid = montaje.crear_con_ia(tema, {"estilo": args["estilo"], "duracion": duracion, "formato": str(args.get("formato") or "16:9")})
+        mid = montaje.crear_con_ia(tema, {"estilo": args["estilo"], "duracion": duracion, "formato": str(args.get("formato") or "16:9"),
+                                          **{k: args[k] for k in ("gancho", "ritmo", "leyenda") if args.get(k)}})
         return {"tipo": "video", "id": mid, "estilo": estilos.ESTILOS[args["estilo"]]["nombre"]}
     return {"tipo": "texto"}
 

@@ -55,7 +55,10 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"chat": asistente.leer(canales.activo()["id"]), "canal": canales.activo()["nombre"]}
     if ruta == "/api/m/estilos":   # los estilos de producción: quién los hace, modelos recomendados y coste
         from . import estilos
-        return "json", {"estilos": estilos.catalogo(), "canal": canales.activo().get("estilo", "")}
+        from . import composicion
+        activo = canales.activo()
+        return "json", {"estilos": estilos.catalogo(), "canal": activo.get("estilo", ""),
+                        "composicion": composicion.catalogo(), "canal_composicion": composicion.valida({}, activo)}
     if ruta == "/api/m/planes":   # las suscripciones, sacadas de lo que cuesta producir (sin costes ni márgenes)
         from . import planes
         return "json", {"planes": planes.para_clientes(), "prueba": planes.prueba()}

@@ -3447,3 +3447,20 @@ def test_isometrico_3d_hecho_con_codigo_y_modo_ligero(aislado, monkeypatch):
     assert config._equipo_ligero() is True
     monkeypatch.setenv("STUDIO4_LIGERO", "0")
     assert config._equipo_ligero() is False
+
+
+def test_composicion_gancho_ritmo_y_leyenda_llegan_al_guion_y_a_los_subtitulos(aislado):
+    """La composición: lo pedido manda, si no el canal, si no lo de por defecto; el gancho y el ritmo llegan al
+    guionista y la leyenda a los subtítulos (con su paleta, también la dorada de ARIGAB)."""
+    from studio4 import canales, composicion, montaje, subtitulos
+    cid = canales.activo()["id"]
+    canales.guardar({"id": cid, "composicion": {"gancho": "pregunta", "ritmo": "lento", "leyenda": "viral_dorado"}})
+    o = montaje._opciones_ia({"ritmo": "rapido"})
+    assert (o["gancho"], o["ritmo"], o["leyenda"]) == ("pregunta", "rapido", "viral_dorado")
+    assert "pregunta" in composicion.para_guion(o) and "8 palabras" in composicion.para_guion(o)
+    assert composicion.subtitulos(o)["paleta"] == "dorado" and "dorado" in subtitulos.PALETAS
+    assert composicion.valida({"gancho": "inventado"})["gancho"] == composicion.POR_DEFECTO["gancho"]
+    cat = composicion.catalogo()
+    assert {"gancho", "ritmo", "leyenda"} <= set(cat) and all(x["nombre"] for x in cat["gancho"])
+    with pytest.raises(ValueError):
+        montaje._validar_subs({"paleta": "fucsia"})

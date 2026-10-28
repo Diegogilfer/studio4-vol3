@@ -717,7 +717,7 @@ function calidadHTML(c) {
 
 // Opciones de «Crea con IA»: duración, formato, modo (investigación oficial o historia) y tono
 const DURACIONES_IA = [[15, "15 s"], [30, "30 s"], [60, "1 min"], [180, "3 min"], [300, "5 min"], [600, "10 min"]];
-let ESTILOS_IA = { estilos: [], canal: "" };   // se cargan una vez (studio4/estilos.py)
+let ESTILOS_IA = { estilos: [], canal: "", composicion: null, canal_composicion: {} };   // studio4/estilos.py y composicion.py
 seguro("/api/m/estilos").then((r) => { if (r) ESTILOS_IA = r; });
 function recomendacion(id) {
   const e = ESTILOS_IA.estilos.find((x) => x.id === id);
@@ -735,8 +735,18 @@ function opcionesIA(o = {}) {
     ${ESTILOS_IA.estilos.length ? `<div class="chips-ia estilos-ia" data-grupo="estilo">${ESTILOS_IA.estilos.map((e) =>
       `<button type="button" class="chip-ia${e.id === es ? " activo" : ""}${e.hecho_por === "claude" ? " por-claude" : ""}" data-valor="${esc(e.id)}" title="${esc(e.para)}">${esc(e.nombre)}</button>`).join("")}</div>
     <p class="meta recomendacion" data-recomendacion>${recomendacion(es)}</p>` : ""}
+    ${composicionHTML(o)}
     <input class="campo" data-tono placeholder="Tono (opcional): misterio, épico, humor…" value="${esc(o.tono || "")}">
   </div>`;
+}
+// la composición: gancho + ritmo + leyenda (el estilo va arriba); cada fila con su ejemplo
+function composicionHTML(o = {}) {
+  const c = ESTILOS_IA.composicion;
+  if (!c) return "";
+  const def = ESTILOS_IA.canal_composicion || {};
+  const fila = (grupo, titulo) => `<div class="comp-fila"><span class="meta">${titulo}</span>
+    <div class="chips-ia" data-grupo="${grupo}">${c[grupo].map((x) => `<button type="button" class="chip-ia${x.id === (o[grupo] || def[grupo]) ? " activo" : ""}${grupo === "leyenda" ? ` leyenda-${esc(x.paleta)}` : ""}" data-valor="${esc(x.id)}" title="${esc(x.detalle)}">${esc(x.nombre)}</button>`).join("")}</div></div>`;
+  return `<div class="composicion"><span class="etiqueta">Composición</span>${fila("gancho", "Gancho")}${fila("ritmo", "Ritmo")}${fila("leyenda", "Subtítulos")}</div>`;
 }
 function leerOpcionesIA(raiz) {
   const o = { tono: raiz.querySelector("[data-tono]")?.value || "" };

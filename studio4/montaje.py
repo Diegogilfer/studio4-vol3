@@ -659,6 +659,8 @@ def _opciones_ia(opciones: dict[str, Any] | None) -> dict[str, Any]:
     o["tono"] = str(o["tono"])[:80]
     from . import estilos   # el estilo pedido o, si no, el del canal activo
     o["estilo"] = estilos.valido(o.get("estilo"), canales.activo())
+    from . import composicion   # gancho, ritmo y leyenda: los pedidos o los del canal
+    o.update(composicion.valida(o, canales.activo()))
     o["fuentes"] = [str(u) for u in (o.get("fuentes") or []) if re.match(r"https?://\S+$", str(u))][:4]
     return o
 
@@ -705,7 +707,9 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     cid = cargar(mid)["canal"]
     from . import estilos
     modificar(mid, lambda q: q.update(estilo=o["estilo"]))
-    tono = " ".join(x for x in (o.get("tono", ""), estilos.para_guion(o["estilo"])) if x)
+    from . import composicion
+    tono = " ".join(x for x in (o.get("tono", ""), estilos.para_guion(o["estilo"]), composicion.para_guion(o)) if x)
+    modificar(mid, lambda q: q.update(subtitulos={**SUBS_POR_DEFECTO, **composicion.subtitulos(o)}))   # la leyenda elegida
     escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=tono,
                                  identidad=guionista.identidad_del_canal(canales.obtener(cid)))
     cambiar_guion(mid, escrito[version]["guion"])
@@ -732,6 +736,8 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
         resumen_ia={"tema": tema[:200], "gancho": ganchos[0] if ganchos else "", "duracion": seg, "formato": o["formato"],
                     "tono": o.get("tono") or "el del canal", "modo": o["modo"], "voz": p.get("voz_nombre", ""),
                     "estilo": estilos.ESTILOS[o["estilo"]]["nombre"],
+                    "tipo_gancho": composicion.GANCHOS[o["gancho"]]["nombre"], "ritmo": composicion.RITMOS[o["ritmo"]]["nombre"],
+                    "leyenda": composicion.LEYENDAS[o["leyenda"]]["nombre"],
                     "musica": p.get("musica") or "automática", "subtitulos": "karaoke",
                     "material": len(p["fuentes"]), "plataforma": "YouTube Shorts" if seg <= 60 else "YouTube"}))
 
@@ -1626,7 +1632,7 @@ def _pasada_imagen(p: dict[str, Any], trabajo: Path, cuerpo: Path, mezcla: Path,
     subs = {**SUBS_POR_DEFECTO, **(p.get("subtitulos") or {})}
     if final and subs.get("activos", True):
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", ancho, alto,
-                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
+                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"], "paleta": subs.get("paleta", "amarillo")})
         filtros.append(f"{mezcla_v}ass={ass.name},{cierre_v}[v]")
     else:
         filtros.append(f"{mezcla_v}{cierre_v}[v]")
@@ -1662,7 +1668,9 @@ def rehacer_subtitulos(mid: str) -> None:
 
 
 def _validar_subs(cambios: dict[str, Any]) -> dict[str, Any]:
-    c = {k: cambios[k] for k in ("activos", "estilo", "posicion", "tamano") if k in cambios}
+    c = {k: cambios[k] for k in ("activos", "estilo", "posicion", "tamano", "paleta") if k in cambios}
+    if "paleta" in c and c["paleta"] not in subtitulos.PALETAS:
+        raise ValueError(f"Colores de subtítulos: {', '.join(subtitulos.PALETAS)}.")
     if "estilo" in c and c["estilo"] not in ("viral", "cine"):
         raise ValueError("Estilo de subtítulos: viral o cine.")
     if "posicion" in c and c["posicion"] not in ("abajo", "arriba", "centro"):
@@ -1724,7 +1732,7 @@ def vista_subtitulos(mid: str, cambios: dict[str, Any], formato: str = "16x9") -
     vista = carpeta(mid) / "render_vista"
     vista.mkdir(exist_ok=True)
     ancho, alto = (1080, 1920) if formato == "9x16" else (ANCHO, ALTO)
-    ass = subtitulos.construir(cerca, vista / "v.ass", ancho, alto, {k: c[k] for k in ("estilo", "posicion", "tamano")})
+    ass = subtitulos.construir(cerca, vista / "v.ass", ancho, alto, {**{k: c[k] for k in ("estilo", "posicion", "tamano")}, "paleta": c.get("paleta", "amarillo")})
     subs = f",ass={ass.name}" if c.get("activos", True) else ""
     if formato == "9x16":
         filtro = ("split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=30,"
@@ -1934,7 +1942,7 @@ def _hacer_short(mid: str, desde: float, hasta: float) -> None:
     puestos = ""
     if subs.get("activos", True):
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920,
-                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
+                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"], "paleta": subs.get("paleta", "amarillo")})
         puestos = f",ass={ass.name}"
     capas, marca = _capas_marca(q, desde, hasta, 1080, 1920, "[base]", 2, emojis=True)
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
@@ -1975,7 +1983,7 @@ def _hacer_cuadrado(mid: str, desde: float, hasta: float) -> None:
     puestos = ""
     if subs.get("activos", True):
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1080,
-                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"]})
+                                   {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"], "paleta": subs.get("paleta", "amarillo")})
         puestos = f",ass={ass.name}"
     capas, marca = _capas_marca(q, desde, hasta, 1080, 1080, "[base]", 2, emojis=False)
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),

@@ -16,6 +16,7 @@ PALETAS = {
     "rosa": {"nombre": "Rosa eléctrico", "resalte": "&H00B020FF", "texto": "&H00FFFFFF"},
     "verde": {"nombre": "Verde lima", "resalte": "&H0000FF7F", "texto": "&H00FFFFFF"},
     "blanco": {"nombre": "Blanco minimal", "resalte": "&H00FFFFFF", "texto": "&H00C8C8C8"},
+    "dorado": {"nombre": "Dorado ARIGAB", "resalte": "&H005AA4C8", "texto": "&H00CFE1E9"},   # #C8A45A sobre papel #E9E1CF
 }
 POR_DEFECTO = {"activos": True, "paleta": "amarillo", "posicion": "abajo", "tamano": "normal", "gancho": True,
                "estilo": "viral", "sonidos": True}
