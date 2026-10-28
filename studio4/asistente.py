@@ -21,6 +21,7 @@ NUNCA necesita traer un guion: tú propones y Studio lo escribe. Elige UNA acci�
 - "nicho": analizar si unos temas están saturados en YouTube (args: temas = lista de 1-5 temas cortos en español).
 - "ideas": proponer guiones con fuentes para el canal (args: pedido = qué ideas busca, en una frase).
 - "tendencias": enseñar lo que es tendencia hoy en el canal (sin args).
+- "estado": decir cómo van los vídeos que se están montando y los últimos terminados (sin args).
 - "crear": crear el vídeo ya (args: tema, estilo, duracion en segundos 15|30|60|180|300|600, formato 16:9|9:16; y si
   el usuario los pide: gancho dato_imposible|pregunta|nadie_conto|contradiccion|final_primero|cuenta_atras,
   ritmo rapido|medio|lento, leyenda viral_dorado|viral_amarillo|viral_cian|viral_rosa|cine|minimal).
@@ -67,6 +68,16 @@ def _ejecutar(cid: str, accion: str, args: dict[str, Any]) -> dict[str, Any]:
         from . import buscador
         r = buscador.conversar(cid, str(args.get("pedido") or "ideas para el canal"))
         return {"tipo": "ideas", "ideas": r["ideas"]}
+    if accion == "estado":   # «¿cómo va el vídeo?»: lo que se monta ahora y lo último terminado
+        from . import montaje
+        en_curso, hechos = [], []
+        for v in montaje.listar()[:30]:
+            t = montaje.cargar(v["id"])["trabajo"]
+            if t.get("ocupado"):
+                en_curso.append({"titulo": v["titulo"], "fase": t.get("fase", ""), "progreso": t.get("progreso", 0)})
+            elif v["final"] and len(hechos) < 3:
+                hechos.append(v["titulo"])
+        return {"tipo": "estado", "en_curso": en_curso, "terminados": hechos}
     if accion == "tendencias":
         from . import radar
         return {"tipo": "tendencias", "senales": radar.guardadas(12, cid)}

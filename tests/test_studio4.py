@@ -3518,3 +3518,20 @@ def test_la_voz_de_ia_se_sincroniza_escuchandola(aislado, monkeypatch, tmp_path)
     t = montaje._sincronizar_voz(["Hola mundo cruel.", "Adiós amigo."], wav, tmp_path)
     assert t["escenas"][1]["ini"] == 4.0 and t["palabras"][0]["ini"] == 1.0   # los tiempos que oyó Whisper
     assert [w["palabra"] for w in t["palabras"]][:2] == ["Hola", "mundo"]    # el texto, el del guion
+
+
+def test_sofi_se_sirve_y_dice_como_van_los_montajes(servidor, monkeypatch):
+    """Sofi: su página y la librería 3D se sirven (como JavaScript, si no el navegador no la carga) y la acción
+    «estado» del chat dice qué se está montando y lo último terminado."""
+    from studio4 import asistente, canales, montaje
+    pedir, _ = servidor
+    estado, cuerpo = pedir("GET", "/sofi")
+    assert estado == 200 and b"Sofi" in cuerpo and b"/web/vendor/three/three.module.js" in cuerpo
+    estado, cuerpo = pedir("GET", "/web/sofi.js")
+    assert estado == 200 and b"Oye Sofi" in cuerpo
+    estado, cuerpo = pedir("GET", "/web/vendor/three/three.module.js")
+    assert estado == 200 and len(cuerpo) > 100_000
+    a = montaje.crear("Uno en marcha", "Una frase con seis palabras justas aqui.")
+    montaje.modificar(a, lambda p: p["trabajo"].update(ocupado=True, fase="Plano 3 de 9", progreso=30))
+    r = asistente._ejecutar(canales.activo()["id"], "estado", {})
+    assert r["tipo"] == "estado" and r["en_curso"][0] == {"titulo": "Uno en marcha", "fase": "Plano 3 de 9", "progreso": 30}
