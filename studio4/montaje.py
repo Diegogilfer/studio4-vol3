@@ -1058,9 +1058,9 @@ def _segmento_imagen(imagen: Path, d: float, ancho: int, alto: int, destino: Pat
         filtro = ["-filter_complex",
                   f"[0:v]split=2[a][b];[a]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},"
                   f"gblur=sigma={max(10, int(45 * ancho / 1920))},eq=brightness=-0.32:saturation=0.6[fondo];"
-                  f"[b]scale={int(ancho * 0.72)}:{int(alto * 0.72)}:force_original_aspect_ratio=decrease,"
+                  f"[b]scale={int(ancho * 0.62)}:{int(alto * 0.62)}:force_original_aspect_ratio=decrease,"
                   f"pad=iw+{2 * borde}:ih+{2 * borde}:{borde}:{borde}:color=0xC8A45A[frente];"
-                  f"[fondo][frente]overlay=(W-w)/2:(H-h)/2,{acerca},"
+                  f"[fondo][frente]overlay=(W-w)/2:(H-h)/2-{int(alto * 0.08)},{acerca},"
                   f"drawtext=fontfile='{letra}':text='ARCHIVO':fontcolor=0xC8A45A:fontsize={int(30 * ancho / 1920)}:"
                   f"x={int(60 * ancho / 1920)}:y={int(50 * alto / 1080)}:box=1:boxcolor=0x0C0D0F@0.7:boxborderw={int(10 * ancho / 1920)},"
                   f"fade=t=in:st=0:d=0.35[v]", "-map", "[v]"]
@@ -1455,7 +1455,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             eventos.append((cursor + 0.05, "whoosh", 0.35))
         elif f.get("imagen"):   # una imagen (arte, captura, producto) con movimiento lento
             real = str(f["imagen"].get("credito", "")).startswith("Foto")   # foto real: marco de archivo
-            seg = cache / f"{huella('imagen', f['imagen']['archivo'], round(d, 3), real)}.mp4"
+            seg = cache / f"{huella('imagen', f['imagen']['archivo'], round(d, 3), real, 'marco-2')}.mp4"
             if not seg.exists():
                 _segmento_imagen(carpeta_imagenes(mid) / f["imagen"]["archivo"], d, ancho, alto, seg, archivo=real)
             en_uso.add(seg)
@@ -1803,7 +1803,7 @@ def imagen_adjunta_en_frase(mid: str, n: int, archivo: str) -> None:
 def candidatos_miniatura(mid: str, texto: str = "") -> None:
     """3 o 4 miniaturas distintas (planos y textos) para VERLAS y elegir, en segundo plano."""
     p = cargar(mid)
-    con_plano = [f["clip"] for f in p["frases"] if f.get("clip")]
+    con_plano = [f["clip"] for f in p["frases"] if f.get("clip")] or         [{"imagen": f["imagen"]["archivo"]} for f in p["frases"] if f.get("imagen")]
     adj = p.get("adjuntos") or []
     if not con_plano and not adj:
         raise ValueError("Este vídeo aún no tiene planos ni imágenes para la miniatura.")
@@ -2211,6 +2211,10 @@ def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]], destino_nombre:
     for k, ft in enumerate(fotos[:2]):
         if ft.get("adjunto"):   # una imagen tuya soltada en el chat
             shutil.copyfile(adjunto(mid, str(ft["adjunto"])), trabajo / f"m{k}.jpg")
+            imgs.append(f"m{k}.jpg")
+            continue
+        if ft.get("imagen"):   # la imagen de una frase (p. ej. una foto real de archivo)
+            shutil.copyfile(carpeta_imagenes(mid) / Path(str(ft["imagen"])).name, trabajo / f"m{k}.jpg")
             imgs.append(f"m{k}.jpg")
             continue
         meta = fuente(ft["fuente"])
