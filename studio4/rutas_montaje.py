@@ -186,6 +186,13 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/paquete":   # todo el vídeo terminado en una carpeta ordenada + su .zip para descargar
         from . import paquete
         return "json", {"ok": True, "carpeta": str(paquete.preparar(mid)), "zip": f"/m/{mid}/paquete.zip"}
+    if ruta == "/api/m/terminar":   # cerrar la edición: carpeta al día y el panel invita a hacer otro vídeo
+        from . import paquete
+        return "json", {"ok": True, "carpeta": str(paquete.terminar(mid))}
+    if ruta == "/api/m/reabrir":   # seguir editando un vídeo ya terminado
+        from . import paquete
+        paquete.reabrir(mid)
+        return "json", {"ok": True}
     if ruta == "/api/m/paquete/abrir":   # la carpeta de entrega en el Explorador
         destino = (montaje.cargar(mid).get("paquete") or {}).get("carpeta", "")
         if not destino or not Path(destino).is_dir():

@@ -479,3 +479,12 @@ button.chip-radar:hover { outline: 1px solid var(--cian); }
 .comp-fila { display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; }
 .leyenda-dorado { color: #c8a45a; } .leyenda-amarillo { color: #ffe100; } .leyenda-cian { color: #00e1ff; }
 .leyenda-rosa { color: #ff20b0; } .leyenda-blanco { color: #e8e8e8; }
+
+/* cierre del vídeo terminado: la edición acaba y se invita a hacer el siguiente */
+.cierre h2 { font-family: var(--serif); font-size: clamp(28px, 4vw, 42px); margin: 0; }
+.cierre-nuevo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 22px 24px; border-radius: var(--r); background: var(--caja-2); border: 1px solid var(--borde); }
+.cierre-nuevo p { margin: 4px 0 0; }
+.primario.grande { padding: 16px 30px; font-size: 17px; }
+.cierre a.boton, .cierre a.primario { text-decoration: none; }
+.lienzo.solo { grid-template-columns: minmax(0, 1fr); max-width: 1100px; margin-inline: auto; }

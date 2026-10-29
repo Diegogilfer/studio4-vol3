@@ -105,7 +105,7 @@ def listar() -> list[dict[str, Any]]:
             continue
         salida.append({"id": p["id"], "titulo": p["titulo"], "creado": p["creado"], "paso": paso_actual(p),
                        "frases": len(p["frases"]), "con_clip": sum(1 for x in p["frases"] if con_imagen(x)),
-                       "final": bool(p.get("final")), "canal": p.get("canal", "")})
+                       "final": bool(p.get("final")), "terminado": bool(p.get("terminado")), "canal": p.get("canal", "")})
     return salida
 
 
@@ -2266,9 +2266,9 @@ def automatico(mid: str, pago_ok: bool = False) -> None:
             except Exception as e:  # noqa: BLE001 - el vídeo y el Short ya están; la miniatura se rehace a mano
                 logger.warning("Miniatura automática: %s", e)
         _avisar(mid, "Carpeta de entrega y .zip", 99)
-        from . import paquete   # todo el proyecto en una carpeta ordenada (y su .zip) para saber dónde va cada cosa
+        from . import paquete   # todo el proyecto en una carpeta ordenada (y su .zip) y la edición cerrada
         try:
-            paquete.preparar(mid)
+            paquete.terminar(mid)
         except Exception as e:  # noqa: BLE001 - el vídeo ya está; el paquete se rehace con su botón
             logger.warning("Paquete de entrega: %s", e)
     _en_fondo(mid, "Automático", fase)

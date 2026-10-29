@@ -3625,3 +3625,20 @@ def test_paquete_de_entrega_carpeta_ordenada_y_zip(aislado, monkeypatch):
     assert montaje.cargar(mid)["paquete"]["carpeta"] == str(destino)
     paquete.preparar(mid)   # rehacerla no falla ni duplica
     assert len(list(destino.parent.iterdir())) == 1
+
+
+def test_terminar_edicion_cierra_e_invita_a_otro(aislado, monkeypatch):
+    """Terminar = carpeta al día + vídeo cerrado (la lista lo marca); «Seguir editando» lo reabre."""
+    from studio4 import montaje, paquete
+    monkeypatch.setattr(carpetas, "RAIZ_USUARIO", aislado / "Videos")
+    mid = montaje.crear("Los fareros de Escocia (1900)", "Tres fareros desaparecieron. Nadie volvió a verlos.")
+    (montaje.carpeta(mid) / "final_16x9.mp4").write_bytes(b"x")
+    montaje.modificar(mid, lambda p: p.update(final={"archivo": "final_16x9.mp4", "hecho": "hoy"}))
+    destino = paquete.terminar(mid)
+    p = montaje.cargar(mid)
+    assert p["terminado"]["hecho"] and p["paquete"]["carpeta"] == str(destino)
+    assert next(v for v in montaje.listar() if v["id"] == mid)["terminado"]
+    paquete.reabrir(mid)
+    assert "terminado" not in montaje.cargar(mid) and montaje.cargar(mid)["final"]   # vuelve con todo su trabajo
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert "Hacer un nuevo vídeo" in js and "/api/m/terminar" in js and "/api/m/reabrir" in js

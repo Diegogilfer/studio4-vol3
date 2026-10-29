@@ -77,7 +77,7 @@ const tarjetaVideo = (v) => `
   <article class="tarjeta" data-abrir="${esc(v.id)}">
     <b>${esc(v.titulo)}</b>
     <div class="puntos">${[1, 2, 3, 4, 5].map((n) => `<i class="${n < v.paso || v.final ? "si" : ""}"></i>`).join("")}</div>
-    <small>${v.final ? "Terminado" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
+    <small>${v.terminado ? "Terminado ✓" : v.final ? "Montado · falta cerrar" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
     ${v.final ? "" : `<button class="archivar" type="button" data-archivar="${esc(v.id)}" title="No lo voy a terminar: sacarlo de la lista">Archivar</button>`}
   </article>`;
 
@@ -678,8 +678,29 @@ function guionGraficoHTML(v) {
   return `<section class="guion-grafico"><span class="etiqueta">Guion gráfico · ${v.frases.length} escenas</span>${filas}</section>`;
 }
 
+// el vídeo terminado: la edición se cierra y se invita a hacer el siguiente
+function cierreHTML(v) {
+  const t = v.textos || {};
+  return `<section class="paso cierre"><span class="etiqueta">Edición terminada${v.terminado?.hecho ? ` · ${esc(v.terminado.hecho)}` : ""}</span>
+    <h2>¡Tu vídeo está listo!</h2>
+    <p class="meta">«${esc((t.titulos || [])[0] || v.titulo)}» ya está en su carpeta, con los 3 formatos, miniaturas, subtítulos, textos para publicar y el LÉEME que dice dónde va cada cosa.</p>
+    <video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final?.hecho || "")}"></video>
+    <div class="fila">${v.paquete ? `<a class="boton" href="/m/${esc(v.id)}/paquete.zip?v=${encodeURIComponent(v.paquete.hecho)}" download="${esc(v.titulo)} (proyecto).zip">Descargar proyecto (.zip)</a>
+      <button class="boton" type="button" id="abrir-paquete">Abrir carpeta</button>` : ""}
+      <button class="boton" type="button" id="reabrir">Seguir editando</button></div>
+    <div class="cierre-nuevo"><div><b>¿Hacemos el siguiente?</b><p class="meta">Cuéntale al chat de inicio una idea o pídele temas en tendencia.</p></div>
+      <a class="primario grande" href="#inicio" id="nuevo-tras-cierre">Hacer un nuevo vídeo →</a></div></section>`;
+}
+
 function pintarVideo() {
   const v = datos.video, paso = datos.paso;
+  if (v.terminado && v.final) {
+    $("vista").innerHTML = `<div class="lienzo solo"><div class="lienzo-main"><a class="volver" href="#videos">← Tus vídeos</a>
+      <div class="cabeza"><h1>${esc(v.titulo)}</h1></div>${cierreHTML(v)}</div></div>`;
+    if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
+    $("reabrir").onclick = () => { pasoVisto = 5; enviar("/api/m/reabrir"); };
+    return;
+  }
   const p = pasoVisto || paso;
   const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
   const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen).length;
@@ -1000,7 +1021,8 @@ function pasoFinal(v) {
       <p class="meta">Una carpeta ordenada con los 3 vídeos, miniaturas, subtítulos, textos para publicar, guion y voz, y un LÉEME que dice dónde va cada cosa.${v.paquete ? ` Hecha el ${esc(v.paquete.hecho)} · ${esc(v.paquete.carpeta)}` : ""}</p>
       <div class="fila">${v.paquete ? `<a class="boton primario" href="/m/${esc(v.id)}/paquete.zip?v=${encodeURIComponent(v.paquete.hecho)}" download="${esc(v.titulo)} (proyecto).zip">Descargar proyecto (.zip)</a>
         <button class="boton" type="button" id="abrir-paquete">Abrir carpeta</button>` : ""}
-        <button class="boton" type="button" id="hacer-paquete">${v.paquete ? "Rehacer carpeta" : "Preparar carpeta del proyecto"}</button></div></div>
+        <button class="boton" type="button" id="hacer-paquete">${v.paquete ? "Rehacer carpeta" : "Preparar carpeta del proyecto"}</button>
+        <button class="primario" type="button" id="terminar-edicion">Terminar edición ✓</button></div></div>
     <div class="dos">
       <div class="textos"><span class="etiqueta">Short vertical</span>
         <div class="fila"><input class="campo corto-t" id="s-desde" value="${reloj(v.short?.desde ?? 0)}">
@@ -1188,6 +1210,7 @@ function enlazarVideo(p) {
       $("corregir-sub").onclick = () => enviar("/api/m/corregir-subtitulo", { de: $("sub-de").value, a: $("sub-a").value });
     }
     if ($("hacer-paquete")) $("hacer-paquete").onclick = () => enviar("/api/m/paquete");
+    if ($("terminar-edicion")) $("terminar-edicion").onclick = () => enviar("/api/m/terminar");
     if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
     if ($("ver-minis")) $("ver-minis").onclick = () => enviar("/api/m/miniaturas", { texto: $("mini-texto")?.value || "" });
     document.querySelectorAll("[data-mini]").forEach((b) => { b.onclick = () => enviar("/api/m/miniatura/elegir", { archivo: b.dataset.mini }); });

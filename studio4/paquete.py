@@ -110,3 +110,15 @@ def preparar(mid: str) -> Path:
                 z.write(f, Path(destino.name) / f.relative_to(destino))
     montaje.modificar(mid, lambda q: q.update(paquete={"carpeta": str(destino), "zip": "paquete.zip", "hecho": time.strftime("%Y-%m-%d %H:%M")}))
     return destino
+
+
+def terminar(mid: str) -> Path:
+    """Cierra la edición: carpeta y .zip al día y el vídeo marcado como terminado (el panel invita a otro)."""
+    destino = preparar(mid)
+    montaje.modificar(mid, lambda q: q.update(terminado={"hecho": time.strftime("%Y-%m-%d %H:%M")}))
+    return destino
+
+
+def reabrir(mid: str) -> None:
+    """Seguir editando un vídeo ya cerrado: vuelve al paso 5 con todo su trabajo."""
+    montaje.modificar(mid, lambda q: q.pop("terminado", None))
