@@ -2265,6 +2265,12 @@ def automatico(mid: str, pago_ok: bool = False) -> None:
                 miniatura(mid, texto, fotos)
             except Exception as e:  # noqa: BLE001 - el vídeo y el Short ya están; la miniatura se rehace a mano
                 logger.warning("Miniatura automática: %s", e)
+        _avisar(mid, "Carpeta de entrega y .zip", 99)
+        from . import paquete   # todo el proyecto en una carpeta ordenada (y su .zip) para saber dónde va cada cosa
+        try:
+            paquete.preparar(mid)
+        except Exception as e:  # noqa: BLE001 - el vídeo ya está; el paquete se rehace con su botón
+            logger.warning("Paquete de entrega: %s", e)
     _en_fondo(mid, "Automático", fase)
 
 

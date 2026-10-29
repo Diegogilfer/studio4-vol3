@@ -3593,3 +3593,35 @@ def test_imagenes_y_clips_reales_por_frase_con_el_3d_de_apoyo(aislado, monkeypat
     assert p["frases"][0]["video"]["credito"] == "Vídeo: ana (Pixabay)" and (montaje.carpeta(mid) / "videos" / p["frases"][0]["video"]["archivo"]).exists()
     assert p["frases"][1]["imagen"]["credito"].startswith("Foto:") and not montaje.con_imagen(p["frases"][3])   # la 4.ª, para el 3D
     assert not imagenes_libres.licencia_ok({"licencia": "CC BY-NC 2.0"}) and imagenes_libres.licencia_ok({"licencia": "CC BY-SA 4.0"})
+
+
+def test_paquete_de_entrega_carpeta_ordenada_y_zip(aislado, monkeypatch):
+    """El vídeo terminado sale en UNA carpeta con nombres que dicen dónde va cada cosa, LÉEME y su .zip."""
+    import zipfile
+    from studio4 import montaje, paquete
+    monkeypatch.setattr(carpetas, "RAIZ_USUARIO", aislado / "Videos")
+    mid = montaje.crear("El barco sin nadie a bordo (1872)", "Un barco apareció navegando solo. Nadie supo por qué.")
+    with pytest.raises(ValueError, match="terminado"):
+        paquete.preparar(mid)
+    base = montaje.carpeta(mid)
+    for f in ("final_16x9.mp4", "short_9x16.mp4", "miniatura.jpg", "miniatura_c1.jpg", "voz.wav"):
+        (base / f).write_bytes(b"x")
+    (base / "subtitulos.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nhola\n", encoding="utf-8")
+    (base / "Fuentes y créditos.txt").write_text("Foto: ana, CC BY 4.0", encoding="utf-8")
+    montaje.modificar(mid, lambda p: p.update(final={"archivo": "final_16x9.mp4", "hecho": "hoy"},
+                                              miniatura_candidatos=[{"archivo": "miniatura_c1.jpg"}],
+                                              textos={"titulos": ["Título A"], "descripcion": "Desc", "capitulos": ["0:00 Inicio"], "hashtags": ["#misterio"]}))
+    destino = paquete.preparar(mid)
+    nombres = {str(f.relative_to(destino)).replace("\\", "/") for f in destino.rglob("*") if f.is_file()}
+    assert {"1 Vídeo final · YouTube (16x9).mp4", "2 Short · YouTube Shorts, TikTok y Reels (9x16).mp4", "LÉEME.txt",
+            "Miniaturas/miniatura elegida.jpg", "Miniaturas/opción 1.jpg", "Subtítulos/subtítulos.es.srt",
+            "Textos para publicar.txt", "Proyecto (para reeditar)/guion.txt", "Proyecto (para reeditar)/voz.wav"} <= nombres
+    assert not any("Cuadrado" in n for n in nombres)   # lo que no se hizo no aparece vacío
+    textos = (destino / "Textos para publicar.txt").read_text(encoding="utf-8")
+    assert "Título A" in textos and "0:00 Inicio" in textos and "CC BY 4.0" in textos
+    assert destino.parent.parent == aislado / "Videos" and "El barco sin nadie a bordo (1872)" in destino.name
+    with zipfile.ZipFile(base / "paquete.zip") as z:
+        assert f"{destino.name}/LÉEME.txt" in z.namelist()
+    assert montaje.cargar(mid)["paquete"]["carpeta"] == str(destino)
+    paquete.preparar(mid)   # rehacerla no falla ni duplica
+    assert len(list(destino.parent.iterdir())) == 1

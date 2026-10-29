@@ -17,7 +17,7 @@ from typing import Any
 
 from . import canales, escaleta, escenas, extractor, linea, montaje, musica, radar
 
-MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura(_c\d)?\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg)$")
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura(_c\d)?\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg|paquete\.zip)$")
 
 
 class NoExiste(Exception):
@@ -183,6 +183,15 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/musica/etiquetar":
         return "json", {"ok": True, "pista": musica.etiquetar(str(d.get("archivo", "")), d.get("animo"), d.get("atribucion"),
                                                                d.get("titulo"), d.get("artista"))}
+    if ruta == "/api/m/paquete":   # todo el vídeo terminado en una carpeta ordenada + su .zip para descargar
+        from . import paquete
+        return "json", {"ok": True, "carpeta": str(paquete.preparar(mid)), "zip": f"/m/{mid}/paquete.zip"}
+    if ruta == "/api/m/paquete/abrir":   # la carpeta de entrega en el Explorador
+        destino = (montaje.cargar(mid).get("paquete") or {}).get("carpeta", "")
+        if not destino or not Path(destino).is_dir():
+            raise ValueError("Aún no hay carpeta de entrega: pulsa «Preparar carpeta».")
+        os.startfile(destino)  # noqa: S606 - el Explorador en tu PC
+        return "json", {"ok": True}
     if ruta == "/api/m/musica/carpeta":
         os.startfile(str(musica.carpeta()))  # noqa: S606 - el Explorador en tu PC
         return "json", {"ok": True}

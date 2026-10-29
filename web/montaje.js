@@ -996,6 +996,11 @@ function pasoFinal(v) {
     ${subsRapidosHTML(v)}
     <div class="fila"><a class="boton" href="/m/${esc(v.id)}/subtitulos.srt" download="${esc(v.titulo)}.srt">Subtítulos .srt para YouTube</a>
       <a class="boton" href="/m/${esc(v.id)}/final_16x9.mp4" download="${esc(v.titulo)}.mp4">Descargar vídeo</a></div>
+    <div class="textos"><span class="etiqueta">Proyecto completo</span>
+      <p class="meta">Una carpeta ordenada con los 3 vídeos, miniaturas, subtítulos, textos para publicar, guion y voz, y un LÉEME que dice dónde va cada cosa.${v.paquete ? ` Hecha el ${esc(v.paquete.hecho)} · ${esc(v.paquete.carpeta)}` : ""}</p>
+      <div class="fila">${v.paquete ? `<a class="boton primario" href="/m/${esc(v.id)}/paquete.zip?v=${encodeURIComponent(v.paquete.hecho)}" download="${esc(v.titulo)} (proyecto).zip">Descargar proyecto (.zip)</a>
+        <button class="boton" type="button" id="abrir-paquete">Abrir carpeta</button>` : ""}
+        <button class="boton" type="button" id="hacer-paquete">${v.paquete ? "Rehacer carpeta" : "Preparar carpeta del proyecto"}</button></div></div>
     <div class="dos">
       <div class="textos"><span class="etiqueta">Short vertical</span>
         <div class="fila"><input class="campo corto-t" id="s-desde" value="${reloj(v.short?.desde ?? 0)}">
@@ -1182,6 +1187,8 @@ function enlazarVideo(p) {
       $("aplicar-subs").onclick = () => enviar("/api/m/subtitulos-rapido", { cambios: elegido });
       $("corregir-sub").onclick = () => enviar("/api/m/corregir-subtitulo", { de: $("sub-de").value, a: $("sub-a").value });
     }
+    if ($("hacer-paquete")) $("hacer-paquete").onclick = () => enviar("/api/m/paquete");
+    if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
     if ($("ver-minis")) $("ver-minis").onclick = () => enviar("/api/m/miniaturas", { texto: $("mini-texto")?.value || "" });
     document.querySelectorAll("[data-mini]").forEach((b) => { b.onclick = () => enviar("/api/m/miniatura/elegir", { archivo: b.dataset.mini }); });
     if ($("hacer-short")) $("hacer-short").onclick = () => enviar("/api/m/short", { desde: segundos($("s-desde").value), hasta: segundos($("s-hasta").value) });
