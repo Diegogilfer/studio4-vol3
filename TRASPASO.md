@@ -157,3 +157,5 @@
   · El Automático acaba con `paquete.terminar`: el panel cierra la edición («¡Tu vídeo está listo!») e invita a
     hacer uno nuevo; «Seguir editando» lo reabre (`/api/m/reabrir`). Paso 5: «Terminar edición ✓».
   · Pendiente: `tres.py` (Three.js) sin probar ni commitear.
+- 2026-10-28 · Claude · **Inicio en carrusel glass** · carrusel `/api/m/presentacion` (montaje.presentacion) con imágenes
+  de los vídeos del canal; capa de cristal global al final de montaje.css (variables --vidrio*).
