@@ -33,7 +33,7 @@ QUÉ SUBIR Y DÓNDE
 · 1 Vídeo final (16x9)  → YouTube (vídeo normal). Pega los textos de «Textos para publicar.txt».
 · 2 Short (9x16)        → YouTube Shorts, TikTok e Instagram Reels.
 · 3 Cuadrado (1x1)      → publicaciones de Instagram y Facebook.
-· Miniaturas            → en YouTube, «Miniatura» → sube «miniatura elegida.jpg» (o la opción que prefieras).
+· Miniaturas            → en YouTube, «Miniatura» → sube «miniatura elegida.jpg» si ya elegiste una, o la opción que prefieras.
 · Subtítulos            → en YouTube, «Subtítulos» → «Subir archivo» → el .srt (con tiempos).
 
 PARA REEDITAR
