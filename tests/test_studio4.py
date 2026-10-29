@@ -3642,3 +3642,23 @@ def test_terminar_edicion_cierra_e_invita_a_otro(aislado, monkeypatch):
     assert "terminado" not in montaje.cargar(mid) and montaje.cargar(mid)["final"]   # vuelve con todo su trabajo
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
     assert "Hacer un nuevo vídeo" in js and "/api/m/terminar" in js and "/api/m/reabrir" in js
+
+
+def test_presentacion_de_inicio_con_imagenes_de_tus_videos(aislado):
+    """El carrusel de Inicio: portada con abanico de miniaturas, los últimos vídeos hechos del canal, ideas y Sofi."""
+    from studio4 import canales, montaje
+    hechos = []
+    for k in range(4):
+        mid = montaje.crear(f"Vídeo {k}", "Una frase. Otra frase.")
+        (montaje.carpeta(mid) / "miniatura_c1.jpg").write_bytes(b"x")
+        montaje.modificar(mid, lambda p: p.update(final={"archivo": "final_16x9.mp4", "hecho": "hoy"}))
+        hechos.append(mid)
+    montaje.modificar(hechos[-1], lambda p: p.update(terminado={"hecho": "hoy"}))   # el más reciente sale primero
+    otro = montaje.crear("Sin terminar", "Nada aún.")
+    d = montaje.presentacion(canales.activo())
+    assert d[0]["chat"] and len(d[0]["abanico"]) == 3 and "4 vídeos hechos" in d[0]["texto"]
+    vistos = [x for x in d if x.get("href", "").startswith("#v=")]
+    assert len(vistos) == 3 and all(x["imagen"].endswith("miniatura_c1.jpg") for x in vistos)
+    assert otro not in " ".join(x.get("href", "") for x in d)
+    assert d[-1]["href"] == "/sofi" and d[-1]["orbe"]
+    assert "Terminado ✓" in [x["etiqueta"] for x in d] and "Montado · falta cerrar" in [x["etiqueta"] for x in d]

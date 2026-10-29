@@ -96,6 +96,47 @@ def modificar(mid: str, cambio: Callable[[dict[str, Any]], Any]) -> dict[str, An
         return p
 
 
+def _portada(mid: str) -> str:
+    """La mejor imagen de un vídeo para enseñarlo: su miniatura (elegida o la primera opción) o el storyboard."""
+    base = carpeta(mid)
+    for f in ("miniatura.jpg", "miniatura_c1.jpg", "miniatura_c2.jpg", "storyboard.jpg"):
+        if (base / f).exists():
+            return f"/m/{mid}/{f}"
+    return ""
+
+
+def _fotos_reales(mid: str, n: int = 3) -> list[str]:
+    """Fotos reales puestas en las frases (archivo, stock libre): fondos para la presentación."""
+    d = carpeta(mid) / "imagenes"
+    return [f"/m/{mid}/imagenes/{f.name}" for f in sorted(d.glob("[0-9][0-9][0-9]_*.jpg"))[:n]] if d.is_dir() else []
+
+
+def presentacion(canal: dict[str, Any]) -> list[dict[str, Any]]:
+    """Las diapositivas del carrusel de Inicio para el canal activo, con imágenes de sus propios vídeos."""
+    suyos = [v for v in listar() if (v.get("canal") or "fourlevel") == canal["id"]]
+    hechos = [v for v in suyos if v["final"]]
+    portadas = [(v, im) for v, im in ((v, _portada(v["id"])) for v in hechos) if im]
+    fotos = [f for v in suyos[:12] for f in _fotos_reales(v["id"])]
+    fondo = lambda k: fotos[k % len(fotos)] if fotos else (portadas[k % len(portadas)][1] if portadas else "")  # noqa: E731
+    n = len(hechos)
+    total = f"Llevas {n} vídeo{'s' if n != 1 else ''} hecho{'s' if n != 1 else ''}"
+    diapos = [{"etiqueta": f"Studio 4 · {canal['nombre']}", "titulo": "Del tema al vídeo terminado",
+               "texto": f"Guion, voz, imágenes reales, subtítulos y los 3 formatos, en una carpeta lista para subir. {total}.",
+               "imagen": portadas[0][1] if portadas else fondo(0), "abanico": [im for _v, im in portadas[:3]],
+               "accion": "Hacer un nuevo vídeo", "chat": True}]
+    for v, im in portadas[:3]:
+        diapos.append({"etiqueta": "Terminado ✓" if v.get("terminado") else "Montado · falta cerrar", "titulo": v["titulo"],
+                       "texto": f"{v['frases']} escenas · creado el {v['creado'][:10]}", "imagen": im,
+                       "accion": "Ver vídeo", "href": f"#v={v['id']}"})
+    diapos.append({"etiqueta": "Ideas", "titulo": "¿Qué cuento hoy?", "imagen": fondo(1),
+                   "texto": "Tendencias del canal y guiones con fuentes reales: elige uno y Studio 4 lo hace.",
+                   "accion": "Buscar guiones", "href": "#biblioteca"})
+    diapos.append({"etiqueta": "Sofi", "titulo": "Tu asistente de voz", "imagen": fondo(2), "orbe": True,
+                   "texto": "Investiga, trae datos reales y maneja tu PC. Lo delicado siempre te lo pregunta.",
+                   "accion": "Hablar con Sofi", "href": "/sofi"})
+    return diapos
+
+
 def listar() -> list[dict[str, Any]]:
     salida = []
     for f in sorted(raiz().glob("*/proyecto.json"), reverse=True) if raiz().exists() else []:

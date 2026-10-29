@@ -33,6 +33,8 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"videos": suyos, "canal": activo,
                         "banco": [{k: f[k] for k in ("id", "nombre", "titulo", "url")} | {"planos": len(f["planos"])}
                                   for f in montaje.banco()]}
+    if ruta == "/api/m/presentacion":   # el carrusel de Inicio: el canal y sus vídeos, con sus imágenes
+        return "json", {"diapos": montaje.presentacion(canales.activo())}
     if ruta == "/api/m/musica":   # tu música de la Biblioteca de audio de YouTube, catalogada
         return "json", {"carpeta": str(musica.carpeta()), "pistas": musica.catalogo(), "animos": list(musica.ANIMOS)}
     m = re.fullmatch(r"/api/m/voces-guardadas/([0-9a-f]{16})\.wav", ruta)   # escuchar una voz de tu biblioteca

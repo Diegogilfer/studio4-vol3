@@ -91,6 +91,7 @@ async function vistaInicio() {
   // se pinta enseguida con tus vídeos; el canal (YouTube tarda) y las ideas se rellenan al llegar
   const m = await api("/api/m");
   $("vista").innerHTML = `
+    <section class="carrusel" id="carrusel" aria-label="Presentación"><div class="carrusel-pista" id="carrusel-pista"></div></section>
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
     <section class="inicio-chat" id="inicio-chat"><div class="cargando-chat meta">Cargando el chat…</div></section>
@@ -124,6 +125,7 @@ async function vistaInicio() {
     try { location.hash = `v=${(await api("/api/m/desde-url", { url: $("url-input").value })).id}/2`; }
     catch (e) { aviso(e); b.disabled = false; b.textContent = "Traer vídeo"; }
   };
+  seguro("/api/m/presentacion").then((d) => pintarCarrusel(d?.diapos || []));
   seguro("/api/ideas/diarias").then((d) => { if ($("i-ideas")) { $("i-ideas").innerHTML = pintarIdeas(d); enlazarIdeas(); } });
   seguro("/api/m/radar").then((r) => { if ($("i-radar")) $("i-radar").innerHTML = pintarRadar(r); });
   seguro("/api/panel").then((panel) => {
@@ -226,6 +228,42 @@ document.addEventListener("click", (ev) => {   // «Nuevo vídeo» = ir al chat 
   sessionStorage.setItem("s4-al-chat", "1");
   if (location.hash === "#inicio" || location.hash === "") { pintarInicioChat(); } else { location.hash = "inicio"; }
 });
+
+// ============================================================ Presentación en carrusel (cristal sobre imagen)
+let carruselTimer = 0;
+function pintarCarrusel(diapos) {
+  const caja = $("carrusel"), pista = $("carrusel-pista");
+  if (!caja || !diapos.length) { if (caja) caja.hidden = true; return; }
+  pista.innerHTML = diapos.map((d, k) => `
+    <article class="diapo" style="${d.imagen ? `--img:url('${esc(d.imagen)}')` : ""}" aria-label="${k + 1} de ${diapos.length}">
+      <div class="diapo-fondo"></div>${d.orbe ? `<div class="diapo-orbe"></div>` : ""}
+      <div class="diapo-cristal"><span class="etiqueta">${esc(d.etiqueta)}</span><h2>${esc(d.titulo)}</h2><p>${esc(d.texto)}</p>
+        ${d.chat ? `<button class="primario" type="button" data-al-chat>${esc(d.accion)} →</button>`
+        : `<a class="primario" href="${esc(d.href)}">${esc(d.accion)} →</a>`}</div>
+      ${(d.abanico || []).length > 1 ? `<div class="diapo-abanico">${d.abanico.map((im) => `<img src="${esc(im)}" alt="" loading="lazy">`).join("")}</div>`
+        : d.imagen && !d.orbe ? `<img class="diapo-mini" src="${esc(d.imagen)}" alt="" loading="lazy">` : ""}
+    </article>`).join("");
+  caja.insertAdjacentHTML("beforeend", `<button class="carrusel-flecha izq" type="button" aria-label="Anterior">‹</button>
+    <button class="carrusel-flecha der" type="button" aria-label="Siguiente">›</button>
+    <div class="carrusel-puntos">${diapos.map((_, k) => `<button type="button" data-ir="${k}" aria-label="Diapositiva ${k + 1}"></button>`).join("")}</div>`);
+  const actual = () => Math.round(pista.scrollLeft / pista.clientWidth);
+  const ir = (k) => pista.scrollTo({ left: ((k + diapos.length) % diapos.length) * pista.clientWidth, behavior: "smooth" });
+  const marcar = () => caja.querySelectorAll("[data-ir]").forEach((b, k) => b.classList.toggle("activo", k === actual()));
+  caja.querySelector(".izq").onclick = () => ir(actual() - 1);
+  caja.querySelector(".der").onclick = () => ir(actual() + 1);
+  caja.querySelectorAll("[data-ir]").forEach((b) => { b.onclick = () => ir(Number(b.dataset.ir)); });
+  pista.addEventListener("scroll", () => requestAnimationFrame(marcar), { passive: true });
+  marcar();
+  // pasa sola cada 6 s; se para mientras el ratón o el dedo están encima
+  let quieto = false;
+  caja.onmouseenter = caja.ontouchstart = () => { quieto = true; };
+  caja.onmouseleave = caja.ontouchend = () => { quieto = false; };
+  clearInterval(carruselTimer);
+  carruselTimer = setInterval(() => {
+    if (!$("carrusel")) { clearInterval(carruselTimer); return; }
+    if (!quieto && !document.hidden) ir(actual() + 1);
+  }, 6000);
+}
 
 function pintarRadar(r) {
   const s = r?.senales || [];

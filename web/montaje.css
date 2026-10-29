@@ -488,3 +488,72 @@ button.chip-radar:hover { outline: 1px solid var(--cian); }
 .primario.grande { padding: 16px 30px; font-size: 17px; }
 .cierre a.boton, .cierre a.primario { text-decoration: none; }
 .lienzo.solo { grid-template-columns: minmax(0, 1fr); max-width: 1100px; margin-inline: auto; }
+
+/* ===================== Cristal (glass): fondo de color vivo difuminado y paneles esmerilados ===================== */
+:root { --vidrio: rgba(255, 255, 255, .07); --vidrio-2: rgba(255, 255, 255, .12); --vidrio-borde: rgba(255, 255, 255, .16);
+  --vidrio-brillo: inset 0 1px 0 rgba(255, 255, 255, .22), 0 20px 60px -24px rgba(0, 0, 0, .55); --desenfoque: blur(22px) saturate(160%); }
+@media (prefers-color-scheme: light) {
+  :root { --vidrio: rgba(255, 255, 255, .55); --vidrio-2: rgba(255, 255, 255, .72); --vidrio-borde: rgba(255, 255, 255, .85);
+    --vidrio-brillo: inset 0 1px 0 rgba(255, 255, 255, .9), 0 20px 50px -26px rgba(60, 40, 120, .35); }
+}
+body::before { content: ""; position: fixed; inset: -10%; z-index: -1; pointer-events: none; filter: blur(70px); opacity: .55;
+  background: radial-gradient(28% 32% at 12% 18%, var(--rosa), transparent 70%), radial-gradient(30% 34% at 88% 12%, var(--cian), transparent 70%),
+              radial-gradient(34% 30% at 70% 85%, var(--violeta), transparent 70%), radial-gradient(26% 26% at 20% 88%, var(--naranja), transparent 70%);
+  animation: derivar 28s ease-in-out infinite alternate; }
+@keyframes derivar { to { transform: translate3d(3%, -2%, 0) rotate(6deg) scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
+.paso, .tarjeta, .inicio-chat, .url-magica, .canal-hero, .chat-lado, .resumen-ia, .guion-grafico, .cierre-nuevo {
+  background: var(--vidrio); border: 1px solid var(--vidrio-borde); box-shadow: var(--vidrio-brillo);
+  -webkit-backdrop-filter: var(--desenfoque); backdrop-filter: var(--desenfoque); }
+.boton { background: var(--vidrio-2); border-color: var(--vidrio-borde); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.barra { background: color-mix(in srgb, var(--fondo) 55%, transparent); -webkit-backdrop-filter: var(--desenfoque); backdrop-filter: var(--desenfoque); }
+
+/* --- carrusel de presentación en Inicio --- */
+.carrusel { position: relative; margin-bottom: 40px; border-radius: 30px; overflow: hidden; border: 1px solid var(--vidrio-borde);
+  box-shadow: var(--vidrio-brillo); background: #0b0b14; }
+.carrusel-pista { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.carrusel-pista::-webkit-scrollbar { display: none; }
+.diapo { position: relative; flex: 0 0 100%; scroll-snap-align: start; min-height: clamp(360px, 42vw, 500px); display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 36px; padding: clamp(22px, 4vw, 56px) clamp(22px, 5vw, 76px);
+  overflow: hidden; isolation: isolate; }
+.diapo-fondo { position: absolute; inset: -40px; z-index: -1; background: var(--img, var(--grad)) center / cover no-repeat;
+  filter: blur(26px) saturate(150%) brightness(.7); transform: scale(1.1); }
+.diapo-fondo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, rgba(7, 7, 12, .55), rgba(7, 7, 12, .1) 70%); }
+.diapo-cristal { display: grid; gap: 14px; justify-items: start; padding: clamp(22px, 3vw, 36px); border-radius: 26px; color: #fff;
+  background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .24); -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 30px 70px -30px rgba(0, 0, 0, .7); }
+.diapo-cristal .etiqueta { color: rgba(255, 255, 255, .75); }
+.diapo-cristal h2 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: clamp(30px, 3.8vw, 52px); line-height: 1.02; }
+.diapo-cristal p { margin: 0; color: rgba(255, 255, 255, .82); font-size: 16px; max-width: 46ch; }
+.diapo-cristal .primario { text-decoration: none; margin-top: 6px; }
+.diapo-mini { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 22px; border: 1px solid rgba(255, 255, 255, .3);
+  box-shadow: 0 30px 80px -24px rgba(0, 0, 0, .75); transform: perspective(1200px) rotateY(-8deg) rotateX(3deg); transition: transform .6s; }
+.diapo:hover .diapo-mini { transform: perspective(1200px) rotateY(-2deg); }
+.diapo-orbe { grid-column: 2; grid-row: 1; justify-self: center; width: clamp(150px, 20vw, 240px); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff, var(--cian) 22%, var(--violeta) 55%, var(--rosa) 80%);
+  box-shadow: 0 0 80px rgba(46, 230, 255, .55), inset -18px -22px 50px rgba(0, 0, 0, .35); animation: latir 3.2s ease-in-out infinite; }
+.diapo-orbe ~ .diapo-cristal { grid-column: 1; grid-row: 1; }
+.carrusel-flecha { position: absolute; top: 50%; translate: 0 -50%; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; z-index: 2;
+  color: #fff; font-size: 26px; line-height: 1; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .3);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); transition: background .2s, transform .2s; }
+.carrusel-flecha:hover { background: rgba(255, 255, 255, .26); transform: scale(1.06); }
+.carrusel-flecha.izq { left: 14px; } .carrusel-flecha.der { right: 14px; }
+.carrusel-puntos { position: absolute; left: 50%; bottom: 16px; translate: -50% 0; display: flex; gap: 8px; padding: 7px 10px; border-radius: 999px;
+  background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .22); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.carrusel-puntos button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; cursor: pointer; background: rgba(255, 255, 255, .45); transition: width .3s, background .3s; }
+.carrusel-puntos button.activo { width: 26px; background: #fff; }
+.diapo-abanico { position: relative; aspect-ratio: 16 / 10; }
+.diapo-abanico img { position: absolute; width: 78%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, .3); box-shadow: 0 26px 70px -22px rgba(0, 0, 0, .8); transition: transform .6s; }
+.diapo-abanico img:nth-child(1) { left: 0; top: 4%; transform: rotate(-7deg); z-index: 1; }
+.diapo-abanico img:nth-child(2) { right: 0; top: 0; transform: rotate(6deg); z-index: 2; }
+.diapo-abanico img:nth-child(3) { left: 11%; bottom: 0; transform: rotate(-1deg); z-index: 3; }
+.diapo:hover .diapo-abanico img:nth-child(1) { transform: rotate(-10deg) translateX(-4%); }
+.diapo:hover .diapo-abanico img:nth-child(2) { transform: rotate(9deg) translateX(4%); }
+@media (max-width: 760px) {
+  .diapo { grid-template-columns: minmax(0, 1fr); align-content: end; gap: 18px; padding: 18px 18px 56px; min-height: 540px; }
+  .diapo-mini, .diapo-abanico { grid-row: 1; transform: none; }
+  .diapo-orbe { grid-column: 1; grid-row: 1; width: 140px; }
+  .diapo-orbe ~ .diapo-cristal { grid-column: 1; grid-row: 2; }
+  .carrusel-flecha { display: none; }
+}
