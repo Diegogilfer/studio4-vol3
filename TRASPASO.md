@@ -150,3 +150,10 @@
   · Auditoría de 11 repos de skills en `C:\Users\Lenovo\auditoria-skills` (nada malicioso; trading descartado por mover
     dinero real; head-of-content necesita APIs de pago). Skill `~/.claude/skills/fourlevel-empaque` con lo mejor.
   · Pendiente: clonar la voz propia para guiones nuevos (Chatterbox local, falta el sí de Diego).
+- 2026-10-28 · Claude · **Entrega en carpeta y cierre del vídeo** (commits d8c9326, 1d57e35, d98e007)
+  · `paquete.py`: el vídeo terminado sale en `Vídeos\STUDIO 4\<canal>\<fecha · título>` con los 3 formatos
+    (nombres que dicen dónde subir cada uno), Miniaturas, Subtítulos, Textos para publicar, Proyecto (para reeditar),
+    LÉEME y `paquete.zip` (en la carpeta del vídeo, ruta `/m/<id>/paquete.zip`).
+  · El Automático acaba con `paquete.terminar`: el panel cierra la edición («¡Tu vídeo está listo!») e invita a
+    hacer uno nuevo; «Seguir editando» lo reabre (`/api/m/reabrir`). Paso 5: «Terminar edición ✓».
+  · Pendiente: `tres.py` (Three.js) sin probar ni commitear.
