@@ -3558,3 +3558,38 @@ def test_sincronizar_con_cifras_y_wikipedia_reintenta(monkeypatch):
     monkeypatch.setattr(investigacion.requests, "get", lambda *a, **k: R(next(respuestas)))
     monkeypatch.setattr("time.sleep", lambda s: esperas.append(s))
     assert investigacion._wiki_get("https://es.wikipedia.org/w/api.php", {}).status_code == 200 and len(esperas) == 2
+
+
+def test_imagenes_y_clips_reales_por_frase_con_el_3d_de_apoyo(aislado, monkeypatch, tmp_path):
+    """Cada frase sin imagen recibe un clip (si pide movimiento) o una foto real con su crédito; una de cada 4 se
+    deja para el 3D isométrico (apoyo y variedad). Las licencias no comerciales se descartan."""
+    import requests
+    from studio4 import deepseek, imagenes_libres, montaje
+    mid = montaje.crear("Historia", "Aquella mañana el mar del norte estaba completamente en calma. "
+                        "A mediodía llegó por fin el barco de relevo al pequeño muelle. "
+                        "Nadie bajó a recibirlo ni contestó a las señales del capitán. "
+                        "El faro llevaba días apagado y la puerta estaba cerrada por dentro. "
+                        "Más de un siglo después, nadie sabe todavía qué ocurrió allí.")
+    n = [f["n"] for f in montaje.cargar(mid)["frases"]]
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"frases": [
+        {"n": n[0], "busqueda": "calm sea", "tipo": "video"}, {"n": n[1], "busqueda": "old ship", "tipo": "foto"},
+        {"n": n[2], "busqueda": "empty dock", "tipo": "foto"}, {"n": n[3], "busqueda": "lighthouse", "tipo": "foto"}]})
+    monkeypatch.setattr(imagenes_libres, "videos_pixabay", lambda q, n=4: [{"url": "https://v/1.mp4", "autor": "ana", "pagina": "https://p/1"}])
+    monkeypatch.setattr(imagenes_libres, "buscar", lambda q, por_fuente=3: [
+        {"url": f"https://i/{q}.jpg", "ancho": 1920, "alto": 1080, "autor": "x", "titulo": q, "licencia": "CC BY 4.0", "fuente": "Commons"}])
+    from PIL import Image
+    import io
+    buf = io.BytesIO(); Image.new("RGB", (1920, 1080), (20, 40, 60)).save(buf, "JPEG")
+
+    class R:
+        status_code, content = 200, buf.getvalue()
+
+        def raise_for_status(self):
+            pass
+    monkeypatch.setattr(requests, "get", lambda *a, **k: R())
+    cuenta = montaje._ilustrar_reales(mid, cada_iso=4)
+    p = montaje.cargar(mid)
+    assert cuenta == {"videos": 1, "fotos": 2}
+    assert p["frases"][0]["video"]["credito"] == "Vídeo: ana (Pixabay)" and (montaje.carpeta(mid) / "videos" / p["frases"][0]["video"]["archivo"]).exists()
+    assert p["frases"][1]["imagen"]["credito"].startswith("Foto:") and not montaje.con_imagen(p["frases"][3])   # la 4.ª, para el 3D
+    assert not imagenes_libres.licencia_ok({"licencia": "CC BY-NC 2.0"}) and imagenes_libres.licencia_ok({"licencia": "CC BY-SA 4.0"})

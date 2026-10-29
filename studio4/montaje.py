@@ -121,7 +121,7 @@ def archivar(mid: str) -> None:
 
 def con_imagen(f: dict[str, Any]) -> bool:
     """La frase ya tiene qué enseñar: un plano de vídeo, un panel de texto o una imagen."""
-    return bool(f.get("clip") or f.get("panel") or f.get("imagen") or f.get("isometrico"))
+    return bool(f.get("clip") or f.get("panel") or f.get("imagen") or f.get("isometrico") or f.get("video"))
 
 
 def paso_actual(p: dict[str, Any]) -> int:
@@ -1007,6 +1007,78 @@ def _ilustrar_isometrico(mid: str, todas: bool = False) -> int:
     return len(frases)
 
 
+SISTEMA_VISUALES = """Para cada frase de un guion de vídeo, escribe UNA búsqueda corta en INGLÉS (2-4 palabras) de lo
+que se debería VER mientras se dice: algo concreto y fotografiable (lugares, objetos, épocas, paisajes, máquinas),
+nunca conceptos abstractos ni personajes de videojuegos o películas. Indica si va mejor un vídeo (movimiento: mar,
+ciudad, fuego, máquinas, multitudes) o una foto (personas históricas, documentos, objetos concretos, edificios
+antiguos). Devuelve JSON: {"frases": [{"n": 1, "busqueda": "...", "tipo": "video|foto"}]}"""
+
+
+def _ilustrar_reales(mid: str, cada_iso: int = 4) -> dict[str, int]:
+    """Un clip o una foto REAL para cada frase sin imagen (Pixabay vídeo/foto, Commons, NASA, Openverse), con su
+    crédito. El 3D isométrico queda de apoyo: una de cada `cada_iso` frases (y las que no tengan nada real) se dejan
+    para él. Devuelve cuántas de cada tipo se pusieron."""
+    import base64
+    import requests
+    from . import deepseek, imagenes_libres
+    p = cargar(mid)
+    frases = [f for f in p["frases"] if not con_imagen(f)]
+    if not frases:
+        return {"videos": 0, "fotos": 0}
+    lista = "\n".join(f"{f['n']}. {f['texto']}" for f in frases)
+    plan = {int(x["n"]): x for x in (deepseek.generar_json(SISTEMA_VISUALES, f"TEMA: {p['titulo']}\n\n{lista}", temperatura=0.3,
+                                                         detalle="búsquedas de imágenes", produccion=mid).get("frases") or [])
+            if str(x.get("n", "")).isdigit()}
+    carpeta_v = carpeta(mid) / "videos"
+    carpeta_v.mkdir(exist_ok=True)
+    usados_url: set[str] = set()
+    cuenta = {"videos": 0, "fotos": 0}
+    for k, f in enumerate(frases):
+        if cada_iso and k % cada_iso == cada_iso - 1:
+            continue   # la deja para el 3D (apoyo y variedad)
+        x = plan.get(f["n"]) or {}
+        q = str(x.get("busqueda") or "").strip()[:60]
+        if not q:
+            continue
+        _avisar(mid, f"Buscando imagen real {k + 1} de {len(frases)}: {q}", 5 + int(90 * k / len(frases)))
+        puesto = False
+        if x.get("tipo") == "video":
+            for c in imagenes_libres.videos_pixabay(q, 4):
+                if c["url"] in usados_url:
+                    continue
+                try:
+                    datos = requests.get(c["url"], headers=imagenes_libres.UA, timeout=90).content
+                except requests.RequestException:
+                    continue
+                nombre = f"{f['n']:03d}.mp4"
+                (carpeta_v / nombre).write_bytes(datos)
+                usados_url.add(c["url"])
+                modificar(mid, lambda q2, n=f["n"], v={"archivo": nombre, "credito": f"Vídeo: {c['autor']} (Pixabay)", "url": c["pagina"]}:
+                          next(z for z in q2["frases"] if z["n"] == n).update(video=v))
+                cuenta["videos"] += 1
+                puesto = True
+                break
+        if not puesto:
+            for c in imagenes_libres.buscar(q, por_fuente=3):
+                if c["url"] in usados_url or (c["ancho"] and c["ancho"] < 900):
+                    continue
+                try:
+                    r = requests.get(c["url"], headers=imagenes_libres.UA, timeout=60)
+                    r.raise_for_status()
+                    poner_imagen(mid, f["n"], datos_b64=base64.b64encode(r.content).decode(), credito=imagenes_libres.credito(c))
+                except Exception:  # noqa: BLE001 - una imagen que no baja: se prueba la siguiente
+                    continue
+                usados_url.add(c["url"])
+                cuenta["fotos"] += 1
+                break
+        time.sleep(0.5)
+    return cuenta
+
+
+def ilustrar_reales(mid: str, cada_iso: int = 4) -> None:
+    _en_fondo(mid, "Imágenes reales", lambda: _ilustrar_reales(mid, cada_iso))
+
+
 def ilustrar_isometrico(mid: str, todas: bool = False) -> None:
     _en_fondo(mid, "Isométrico", lambda: _ilustrar_isometrico(mid, todas))
 
@@ -1489,6 +1561,17 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             if nuevo_bloque:   # la pausa larga antes del panel no queda vacía
                 eventos.append((cursor - 0.9, "subida", 0.5))
             eventos += [(cursor + 0.8 + j * 0.42, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
+        elif f.get("video"):   # un clip de vídeo real (stock libre): a la duración exacta de la frase, con entrada suave
+            seg = cache / f"{huella('video', f['video']['archivo'], round(d, 3))}.mp4"
+            if not seg.exists():
+                medios.ffmpeg("-stream_loop", "-1", "-i", str(carpeta(mid) / "videos" / f["video"]["archivo"]), "-t", f"{d:.3f}", "-an",
+                              "-vf", f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={config.FPS},"
+                              f"setsar=1,fade=t=in:st=0:d=0.25", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                              "-pix_fmt", "yuv420p", str(seg))
+            en_uso.add(seg)
+            usados.append({"frase": f["n"], "fuente": f["video"].get("credito") or "Vídeo de stock", "canal": "",
+                           "url": f["video"].get("url", ""), "imagen": True})
+            eventos.append((cursor + 0.05, "whoosh", 0.3))
         elif f.get("isometrico"):   # maqueta isométrica animada, hecha con código a la duración exacta de la frase
             from . import isometrico
             iso = f["isometrico"]
