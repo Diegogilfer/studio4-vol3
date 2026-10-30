@@ -159,3 +159,6 @@
   · Pendiente: `tres.py` (Three.js) sin probar ni commitear.
 - 2026-10-28 · Claude · **Inicio en carrusel glass** · carrusel `/api/m/presentacion` (montaje.presentacion) con imágenes
   de los vídeos del canal; capa de cristal global al final de montaje.css (variables --vidrio*).
+- 2026-10-29 · Claude · **Temas con fondo Three.js** (web/fondo3d.js, una escena por tema; selector en la barra; temas de descanso
+  visual con ilustración, «Menos movimiento» y pausas 20-20-20). Sofi (C:\Users\Lenovo\sofi, fuera de git): oído con Whisper
+  local (/api/oir), memoria y aprendizaje (memoria.py + habilidades/*.md con las reglas y la info del proyecto).
