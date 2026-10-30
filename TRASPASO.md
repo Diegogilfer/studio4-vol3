@@ -162,3 +162,6 @@
 - 2026-10-29 · Claude · **Temas con fondo Three.js** (web/fondo3d.js, una escena por tema; selector en la barra; temas de descanso
   visual con ilustración, «Menos movimiento» y pausas 20-20-20). Sofi (C:\Users\Lenovo\sofi, fuera de git): oído con Whisper
   local (/api/oir), memoria y aprendizaje (memoria.py + habilidades/*.md con las reglas y la info del proyecto).
+- 2026-10-29 · Claude · Chats que proponen y lanzan (propuestas.py), plano por frase mirando el material (catalogo.py),
+  material solo del juego del vídeo, chat minimizable, Campañas (campanas.py). Plan de Black Friday en Claude Docs.
+  Pendiente: probar emparejar planos en un vídeo real; instalador, licencias y tienda (ver el plan).
