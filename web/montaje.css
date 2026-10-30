@@ -733,3 +733,18 @@ body { background-color: var(--fondo); color: var(--texto); }
 .chat-form .clip { position: static; align-self: end; height: auto; }   /* no es un clip de la línea de tiempo */
 .chat-lado { grid-template-rows: auto auto auto auto minmax(0, 1fr); }
 .propuesta .etiqueta { color: var(--texto); opacity: .7; }
+
+/* --- chat minimizable / cerrable --- */
+.chat-cab { align-items: center; gap: 8px; }
+.chat-cab small { flex: 1; text-align: right; }
+.chat-ventana { display: flex; gap: 4px; }
+.chat-ventana .boton.icono { padding: 4px 9px; min-width: 30px; }
+.lienzo.sin-chat { grid-template-columns: minmax(0, 1fr); }
+.chat-burbuja { position: fixed; right: 22px; bottom: 22px; z-index: 40; display: flex; align-items: center; gap: 8px; padding: 14px 22px;
+  border-radius: 999px; border: 1px solid var(--vidrio-borde); color: #fff; font-weight: 700; cursor: pointer; background: var(--grad);
+  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, .6); animation: subir .5s cubic-bezier(.2, .8, .2, 1) both; transition: transform .25s; }
+.chat-burbuja:hover { transform: translateY(-3px) scale(1.03); }
+.chat-burbuja i { width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(255, 255, 255, .3); animation: latir 1.4s infinite; }
+.inicio-chat.plegado { padding-block: 14px; }
+.inicio-chat.plegado .seccion-cab { margin: 0; }
+.inicio-chat { margin-bottom: 26px; }

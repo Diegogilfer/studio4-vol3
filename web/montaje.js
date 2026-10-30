@@ -210,15 +210,21 @@ async function pintarInicioChat() {
   if (!caja) return;
   const d = await seguro("/api/m/inicio-chat");
   const chat = d?.chat || [];
+  const plegado = estadoChat("s4-chat-inicio") === "minimizado";
+  caja.classList.toggle("plegado", plegado);
   caja.innerHTML = `<div class="seccion-cab fila-entre"><h2>¿Qué vídeo <em>hacemos</em> hoy?</h2>
-      ${chat.length ? `<button class="boton" type="button" id="inicio-limpiar">Empezar de nuevo</button>` : ""}</div>
+      <div class="fila">${chat.length && !plegado ? `<button class="boton" type="button" id="inicio-limpiar">Empezar de nuevo</button>` : ""}
+        <button class="boton icono" type="button" id="inicio-plegar" title="${plegado ? "Abrir el chat" : "Minimizar el chat"}" aria-label="${plegado ? "Abrir el chat" : "Minimizar el chat"}">${plegado ? "▾" : "—"}</button></div></div>
+    ${plegado ? "" : `
     <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Pregúntame lo que quieras o pídeme un vídeo: te digo qué haría y lo lanzas cuando quieras"></textarea>
       <button class="primario" type="submit">Enviar</button></form>
     <div class="chips-ia sugerencias">${SUGERENCIAS_INICIO.map((t) => `<button type="button" class="chip-ia" data-preguntar="${esc(t)}">${esc(t)}</button>`).join("")}</div>
     <div class="chat-msgs inicio-msgs" id="inicio-msgs">${pares(chat).map((x) => x.quien === "tú"
       ? `<div class="msg mio"><p>${esc(x.texto)}</p></div>`
       : `<div class="msg ia"><p>${esc(x.texto)}</p>${x.error ? `<small class="fallo">✕ ${esc(x.error)}</small>` : ""}${resultadoHTML(x.resultado)}</div>`).join("")
-      || `<p class="meta">Pregúntame lo que quieras: un nicho, ideas, lo que es tendencia o un vídeo. Primero te digo qué haría; nada largo arranca hasta que digas «lánzalo».</p>`}</div>`;
+      || `<p class="meta">Pregúntame lo que quieras: un nicho, ideas, lo que es tendencia o un vídeo. Primero te digo qué haría; nada largo arranca hasta que digas «lánzalo».</p>`}</div>`}`;
+  $("inicio-plegar").onclick = () => { estadoChat("s4-chat-inicio", plegado ? "abierto" : "minimizado"); pintarInicioChat(); };
+  if (plegado) return;
   if ($("inicio-texto") && sessionStorage.getItem("s4-al-chat")) { sessionStorage.removeItem("s4-al-chat"); $("inicio-texto").focus(); }
   caja.querySelectorAll("[data-lanzar-inicio]").forEach((b) => {
     b.onclick = async () => {
@@ -257,6 +263,7 @@ async function pintarInicioChat() {
 document.addEventListener("click", (ev) => {   // «Nuevo vídeo» = ir al chat de inicio
   if (!ev.target.closest("[data-al-chat]")) return;
   sessionStorage.setItem("s4-al-chat", "1");
+  estadoChat("s4-chat-inicio", "abierto");   // si estaba plegado, se abre
   if (location.hash === "#inicio" || location.hash === "") { pintarInicioChat(); } else { location.hash = "inicio"; }
 });
 
@@ -371,6 +378,11 @@ function pares(mensajes) {
   mensajes.forEach((m) => { if (m.quien === "tú" || !grupos.length) grupos.push([m]); else grupos[grupos.length - 1].push(m); });
   return grupos.reverse().flat();
 }
+
+// el panel de chat se puede minimizar (burbuja flotante) o cerrar (botón «Chat» arriba); se recuerda
+const estadoChat = (clave, valor) => {
+  try { if (valor) localStorage.setItem(clave, valor); return localStorage.getItem(clave) || "abierto"; } catch (e) { return valor || "abierto"; }
+};
 
 function pintarRadar(r) {
   const s = r?.senales || [];
@@ -751,7 +763,9 @@ function chatHTML(v) {
   const form = `<form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Pregunta o pide un cambio; lo largo te lo propongo y lo lanzas tú…"></textarea>
       <label class="boton clip" title="Adjuntar imagen, vídeo o guion">📎<input type="file" id="chat-adjunto" accept="image/*,video/*,.txt,.md" hidden></label>
       <button class="primario" type="submit">Enviar</button></form>`;
-  return `<aside class="chat-lado"><div class="chat-cab"><b>Chat</b><small class="meta">Conversa; lo largo lo lanzas tú</small></div>
+  return `<aside class="chat-lado"><div class="chat-cab"><b>Chat</b><small class="meta">Conversa; lo largo lo lanzas tú</small>
+      <span class="chat-ventana"><button type="button" class="boton icono" data-chat="minimizado" title="Minimizar" aria-label="Minimizar el chat">—</button>
+      <button type="button" class="boton icono" data-chat="cerrado" title="Cerrar" aria-label="Cerrar el chat">×</button></span></div>
     ${form}<span class="meta" id="chat-estado"></span>
     <div class="chips-ia sugerencias">${SUGERENCIAS.map((t) => `<button type="button" class="chip-ia" data-sugerencia="${esc(t)}">${esc(t)}</button>`).join("")}</div>
     <div class="chat-msgs" id="chat-msgs">${msgs.length ? pares(msgs).map((m) => `
@@ -862,11 +876,14 @@ function pintarVideo() {
   const p = pasoVisto || paso;
   const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
   const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen).length;
+  const chatVista = estadoChat("s4-chat-video");
+  const pendiente = (v.chat || []).some((m) => m.pendiente && !m.pendiente.lanzada);
   $("vista").innerHTML = `
-    <div class="lienzo"><div class="lienzo-main">
+    <div class="lienzo ${chatVista !== "abierto" ? "sin-chat" : ""}"><div class="lienzo-main">
     <a class="volver" href="#videos">← Tus vídeos</a>
     <div class="cabeza"><h1>${esc(v.titulo)}</h1>
-      <button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button></div>
+      <div class="fila"><button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button>
+      ${chatVista === "cerrado" ? `<button class="boton" type="button" data-chat="abierto">Chat</button>` : ""}</div></div>
     <nav class="pasos">${NOMBRES.map((n, k) => `<a href="#v=${esc(v.id)}/${k + 1}" class="${estado(k + 1)} ${p === k + 1 ? "visto" : ""}">
       <b>${estado(k + 1) === "hecho" ? "✓" : k + 1}</b><span>${n}</span></a>`).join("")}</nav>
     ${[pasoGuion, pasoMaterial, pasoMontaje, pasoPrevia, pasoFinal][p - 1](v, conClip)}
@@ -874,9 +891,12 @@ function pintarVideo() {
       ${p > 1 ? `<a class="boton" href="#v=${esc(v.id)}/${p - 1}">← ${NOMBRES[p - 2]}</a>` : "<span></span>"}
       ${p < 5 ? `<a class="primario" href="#v=${esc(v.id)}/${p + 1}">${NOMBRES[p]} →</a>` : ""}
     </div>
-    </div>${chatHTML(v)}</div>`;
+    </div>${chatVista === "abierto" ? chatHTML(v) : ""}</div>
+    ${chatVista === "minimizado" ? `<button class="chat-burbuja${pendiente ? " aviso" : ""}" type="button" data-chat="abierto" aria-label="Abrir el chat">
+      <span>Chat</span>${pendiente ? "<i></i>" : ""}</button>` : ""}`;
+  document.querySelectorAll("[data-chat]").forEach((b) => { b.onclick = () => { estadoChat("s4-chat-video", b.dataset.chat); firma = ""; pintarVideo(); }; });
   enlazarVideo(p);
-  enlazarChat(v);
+  if (chatVista === "abierto") enlazarChat(v);
 }
 
 const pasoCab = (n, titulo, texto) => `<div class="paso-cab"><span class="num">${n}</span><div><h2>${titulo}</h2><p>${texto}</p></div></div>`;
