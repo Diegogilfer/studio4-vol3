@@ -31,13 +31,16 @@ solas: si el usuario pide algo así, explica en "plan" qué harás exactamente y
   ritmo rapido|medio|lento, leyenda viral_dorado|viral_amarillo|viral_cian|viral_rosa|cine|minimal).
   Solo si el usuario ya eligió estilo; si no lo dijo, usa "preguntar_estilo".
 - "preguntar_estilo": el usuario quiere un vídeo pero no dijo el estilo (args: tema, duracion).
+- "campana": preparar el kit de campaña de una temporada de ventas (Black Friday, Cyber Monday, Navidad…) para un
+  producto del usuario: anuncios en vídeo, textos para redes, correos y calendario (args: producto, oferta, fechas,
+  temporada). Si no dijo qué vende o qué oferta tiene, pregúntaselo antes con "responder".
 - "responder": solo contestar (dudas, consejos), sin acción.
 Los temas son sobre lo que trata el canal (los juegos, los casos, los mitos), no sobre creadores reales poco conocidos.
 Estilos válidos (id: nombre): {estilos}
 Devuelve solo JSON: {{"respuesta": "lo que le dices", "accion": "nombre", "args": {{...}}, "plan": "si la acción es
 nicho, ideas o crear: qué harás al lanzarlo, en 1-2 frases, con el tiempo aproximado"}}"""
 
-PESADAS = {"nicho", "ideas", "crear"}   # tardan: se proponen y se lanzan al confirmar
+PESADAS = {"nicho", "ideas", "crear", "campana"}   # tardan: se proponen y se lanzan al confirmar
 
 
 def _archivo(cid: str):
@@ -83,6 +86,11 @@ def _ejecutar(cid: str, accion: str, args: dict[str, Any]) -> dict[str, Any]:
         from . import buscador
         r = buscador.conversar(cid, str(args.get("pedido") or "ideas para el canal"))
         return {"tipo": "ideas", "ideas": r["ideas"]}
+    if accion == "campana":   # el kit de una temporada de ventas para el producto del creador
+        from . import campanas
+        kit = campanas.crear_kit(cid, str(args.get("producto") or ""), str(args.get("oferta") or ""),
+                                 str(args.get("fechas") or ""), str(args.get("temporada") or "Black Friday"))
+        return {"tipo": "campana", "kit": kit}
     if accion == "estado":   # «¿cómo va el vídeo?»: lo que se monta ahora y lo último terminado
         from . import montaje
         en_curso, hechos = [], []

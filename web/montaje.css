@@ -748,3 +748,12 @@ body { background-color: var(--fondo); color: var(--texto); }
 .inicio-chat.plegado { padding-block: 14px; }
 .inicio-chat.plegado .seccion-cab { margin: 0; }
 .inicio-chat { margin-bottom: 26px; }
+
+/* --- kit de campaña --- */
+.campana { display: grid; gap: 10px; margin-top: 8px; }
+.campana-anuncios { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.campana details { padding: 10px 14px; border-radius: var(--r-chico); background: var(--vidrio); border: 1px solid var(--vidrio-borde); }
+.campana summary { cursor: pointer; font-weight: 700; }
+.campana details .historia { margin-top: 8px; }
+.campana small { white-space: pre-line; }
+.campana > .etiqueta { color: var(--texto); opacity: .7; }

@@ -179,7 +179,7 @@ function enlazarCanal() {
 }
 
 // ============================================================ Chat de Inicio: se empieza hablando, nunca con un guion
-const SUGERENCIAS_INICIO = ["Busca un nicho poco saturado para mi canal", "Dame 5 ideas de Shorts para esta semana",
+const SUGERENCIAS_INICIO = ["Prepárame la campaña de Black Friday de mi producto", "Busca un nicho poco saturado para mi canal", "Dame 5 ideas de Shorts para esta semana",
   "¿Qué es tendencia hoy en mi nicho?", "Hazme un Short de 1 minuto sobre algo que esté sonando"];
 function nichoHTML(n) {
   const color = n.veredicto.startsWith("Hueco") ? "ok" : n.veredicto.startsWith("Saturado") || n.veredicto.startsWith("Poca") ? "bajo" : "medio";
@@ -199,6 +199,7 @@ function resultadoHTML(r) {
   if (r.tipo === "tendencias") return `<div class="chips">${r.senales.map((s) => `<button type="button" class="chip-radar" data-preguntar="Dame ideas de guiones sobre ${esc(s.tema)} (${esc((s.titulares || [])[0] || "")})">${esc(s.tema)} <b>${s.n_fuentes}</b></button>`).join("") || `<span class="meta">El radar aún no tiene señales de hoy.</span>`}</div>`;
   if (r.tipo === "estilo") return `<div class="estilos-ia chips-ia">${r.estilos.map((e) => `<button type="button" class="chip-ia${e.hecho_por === "claude" ? " por-claude" : ""}" title="${esc(e.para)} · ${esc(e.imagen)}" data-preguntar="Hazlo en estilo ${esc(e.nombre)} (${esc(e.id)})">${esc(e.nombre)}</button>`).join("")}</div>
     <p class="meta">✦ = lo hace Claude con código, gratis. El resto necesita un modelo de imagen o vídeo.</p>`;
+  if (r.tipo === "campana") return campanaHTML(r.kit);
   if (r.tipo === "propuesta") return `<div class="propuesta${r.lanzada ? " lanzada" : ""}"><span class="etiqueta">${r.lanzada ? "Lanzado ✓" : "Listo para lanzar"}</span>
     <p>${esc(r.plan)}</p>${r.lanzada ? "" : `<div class="fila"><button class="primario" type="button" data-lanzar-inicio>Lanzar</button>
     <span class="meta">o escribe «lánzalo». Si quieres cambiar algo, dímelo antes.</span></div>`}</div>`;
@@ -378,6 +379,30 @@ function pares(mensajes) {
   mensajes.forEach((m) => { if (m.quien === "tú" || !grupos.length) grupos.push([m]); else grupos[grupos.length - 1].push(m); });
   return grupos.reverse().flat();
 }
+
+// el kit de campaña: anuncios (cada uno se convierte en vídeo), publicaciones, correos y calendario
+function campanaHTML(k) {
+  const copiar = (t) => `<button type="button" class="chip" data-copiar="${esc(t)}">Copiar</button>`;
+  return `<div class="campana"><span class="etiqueta">${esc(k.temporada)} · ${esc(k.titulo)}</span>
+    ${k.mensaje ? `<p class="gancho">«${esc(k.mensaje)}»</p>` : ""}
+    <div class="campana-anuncios">${k.anuncios.map((a, n) => `<div class="historia"><b>Anuncio ${a.duracion} s · ${esc(a.titulo)}</b>
+      <small class="meta">${esc(a.guion)}</small><div class="fila"><button class="primario" type="button" data-anuncio="${n}" data-kit="${esc(k.id)}">Hacer este anuncio</button>${copiar(a.guion)}</div></div>`).join("")}</div>
+    <details><summary>Publicaciones para redes (${k.publicaciones.length})</summary>${k.publicaciones.map((p) => `<div class="historia"><b>${esc(p.cuando)} · ${esc(p.red)}</b>
+      <small>${esc(p.texto)} ${esc((p.hashtags || []).join(" "))}</small>${copiar(`${p.texto}\n\n${(p.hashtags || []).join(" ")}`)}</div>`).join("")}</details>
+    <details><summary>Correos (${k.correos.length})</summary>${k.correos.map((c) => `<div class="historia"><b>${esc(c.cuando)} · ${esc(c.asunto)}</b>
+      <small>${esc(c.cuerpo)}</small>${copiar(`${c.asunto}\n\n${c.cuerpo}`)}</div>`).join("")}</details>
+    <details><summary>Calendario</summary><ul>${k.calendario.map((c) => `<li><b>${esc(c.cuando)}</b> · ${esc(c.que)}</li>`).join("")}</ul></details></div>`;
+}
+document.addEventListener("click", async (ev) => {
+  const c = ev.target.closest("[data-copiar]");
+  if (c) { try { await navigator.clipboard.writeText(c.dataset.copiar); c.textContent = "Copiado ✓"; } catch (e) { aviso("No pude copiar: selecciónalo a mano."); } return; }
+  const a = ev.target.closest("[data-anuncio]");
+  if (a) {
+    a.disabled = true; a.textContent = "Creando…";
+    try { location.hash = `v=${(await api("/api/m/campana/video", { kit: a.dataset.kit, n: Number(a.dataset.anuncio) })).id}/1`; }
+    catch (e) { aviso(e); a.disabled = false; a.textContent = "Hacer este anuncio"; }
+  }
+});
 
 // el panel de chat se puede minimizar (burbuja flotante) o cerrar (botón «Chat» arriba); se recuerda
 const estadoChat = (clave, valor) => {

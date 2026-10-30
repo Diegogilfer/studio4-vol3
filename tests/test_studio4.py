@@ -3790,3 +3790,29 @@ def test_planos_por_lo_que_se_ve_y_material_solo_del_juego(aislado, tmp_path, mo
     assert montaje.fuente("fuenteA")["planos"][2]["util"] is False
     alias = material.alias_de("Grand Theft Auto V")
     assert material.del_juego("GTA 5 Mount Chiliad no commentary", alias) and not material.del_juego("Silent Hill 2 Remake walkthrough", alias)
+
+
+def test_campana_de_black_friday_propuesta_lanzada_y_anuncio_a_video(aislado, monkeypatch):
+    """El chat propone la campaña; al lanzarla sale el kit (anuncios, redes, correos, calendario) y cada anuncio
+    se convierte en un vídeo listo para montar."""
+    from studio4 import asistente, campanas, deepseek, montaje
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    kit = {"titulo": "Black Friday del curso", "mensaje": "Aprende a editar en una semana",
+           "anuncios": [{"duracion": 15, "titulo": "Corto", "guion": "¿Editas tus vídeos a mano? Mi curso te enseña en una semana.\n\nDel 27 al 30 de noviembre, 30 % menos."},
+                        {"duracion": 30, "titulo": "Largo", "guion": "Editar no tiene que costarte horas cada día de la semana.\n\nMi curso te lo enseña paso a paso con ejemplos reales.\n\nDel 27 al 30 de noviembre, 30 % menos."}],
+           "publicaciones": [{"cuando": "27 nov", "red": "Instagram", "texto": "Abre el Black Friday", "hashtags": ["#BlackFriday", "sin almohadilla"]}],
+           "correos": [{"cuando": "26 nov", "asunto": "Mañana abre", "cuerpo": "Hola…"}], "calendario": [{"cuando": "27 nov", "que": "Apertura"}]}
+    pide = {"respuesta": "Te preparo el kit.", "accion": "campana", "plan": "Kit de Black Friday (1-2 min).",
+            "args": {"producto": "Curso de edición", "oferta": "30 % menos", "fechas": "27-30 nov"}}
+    r = asistente.responder("arigab", "prepárame la campaña de black friday de mi curso", pensar=lambda *a: pide)
+    assert r["resultado"]["tipo"] == "propuesta" and not campanas.leer("arigab")
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: kit)
+    r = asistente.responder("arigab", "lánzalo", pensar=lambda *a: pytest.fail("no se pregunta"))
+    k = r["resultado"]["kit"]
+    assert r["resultado"]["tipo"] == "campana" and len(k["anuncios"]) == 2 and k["publicaciones"][0]["hashtags"] == ["#BlackFriday"]
+    assert campanas.leer("arigab")[0]["id"] == k["id"]
+    mid = campanas.video_de_anuncio("arigab", k["id"], 0)
+    p = montaje.cargar(mid)
+    assert p["campana"]["temporada"] == "Black Friday" and p["formato_principal"] == "9:16" and len({f["bloque"] for f in p["frases"]}) == 2
+    with pytest.raises(ValueError):
+        campanas.crear_kit("arigab", "")

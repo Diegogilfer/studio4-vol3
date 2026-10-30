@@ -129,6 +129,9 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         from . import entrega
         entrega.entregar(mid, d.get("opciones") or {})
         return "json", {"ok": True}
+    if ruta == "/api/m/campana/video":   # un anuncio del kit de campaña → vídeo nuevo listo para montar
+        from . import campanas
+        return "json", {"ok": True, "id": campanas.video_de_anuncio(canales.activo()["id"], str(d.get("kit", "")), int(d.get("n", 0)))}
     if ruta == "/api/m/chat/lanzar":   # «Lanzar»: la acción larga que el chat propuso
         from . import chat
         return "json", chat.lanzar(mid)
