@@ -40,7 +40,8 @@ Devuelve solo JSON:
 {"juego_principal": "título exacto del juego del vídeo", "alias": ["otras formas de escribirlo: siglas, número en
 cifra y en romano, p. ej. GTA V, GTA 5, Grand Theft Auto V"], "escenas": [{"juego": "...", "que": "escena, misión o
 momento concreto", "busqueda": "consulta para YouTube"}]}
-Reglas: TODO el material es del JUEGO DEL VÍDEO. Nunca metas otros juegos «parecidos» o «del mismo género» (si el
+Reglas: el juego del vídeo es el que dice el TEMA; si el lugar, personaje o leyenda existe en varios juegos y el tema
+no dice cuál (Monte Chiliad está en GTA San Andreas y en GTA V), elige el MÁS RECIENTE. TODO el material es del JUEGO DEL VÍDEO. Nunca metas otros juegos «parecidos» o «del mismo género» (si el
 vídeo es de GTA V, nada de Silent Hill ni Alan Wake); otro juego solo si el TEMA lo nombra para compararlo. 4-10 escenas, en el orden en que el vídeo las necesitaría. La consulta busca material original: el tráiler
 oficial («<juego> official trailer») o gameplay sin comentario («<juego> <misión> gameplay no commentary»), en inglés.
 Nunca busques análisis, reacciones, listas ni vídeos de otros creadores. Si el tema es inventado (una secuela

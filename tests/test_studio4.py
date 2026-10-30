@@ -3832,3 +3832,19 @@ def test_sofi_queda_en_proximamente():
     html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
     assert 'href="/sofi"' not in html and 'href="#proximamente"' in html and "proximamente: vistaProximamente" in js
+
+
+def test_google_revisa_y_retoca_las_imagenes(monkeypatch):
+    """Una imagen borrosa, con marca de agua o que no enseña la frase no entra; lo que entra se amplía y se enfoca."""
+    import io
+    from PIL import Image
+    from studio4 import calidad_imagen, gemini
+    b = io.BytesIO(); Image.new("RGB", (800, 500), (90, 120, 160)).save(b, "JPEG")
+    respuestas = iter(['{"nota": 1, "encaja": true, "motivo": "borrosa con marca de agua"}',
+                       '```json\n{"nota": 4, "encaja": false, "motivo": "no es el lugar"}\n```',
+                       '{"nota": 4, "encaja": true, "motivo": "nítida"}'])
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: next(respuestas))
+    assert [calidad_imagen.aprobada(calidad_imagen.revisar(b.getvalue(), "frase")) for _ in range(3)] == [False, False, True]
+    monkeypatch.setattr(gemini, "generar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sin cupo")))
+    assert calidad_imagen.aprobada(calidad_imagen.revisar(b.getvalue(), "frase"))   # sin Google, no se frena el vídeo
+    assert calidad_imagen.retocar(Image.open(io.BytesIO(b.getvalue())).convert("RGB")).size == (1920, 1200)

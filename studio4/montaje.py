@@ -1116,12 +1116,18 @@ def _ilustrar_reales(mid: str, cada_iso: int = 4) -> dict[str, int]:
                 puesto = True
                 break
         if not puesto:
+            from . import calidad_imagen
             for c in imagenes_libres.buscar(q, por_fuente=3):
-                if c["url"] in usados_url or (c["ancho"] and c["ancho"] < 900):
+                if c["url"] in usados_url or (c["ancho"] and c["ancho"] < 1200):
                     continue
                 try:
                     r = requests.get(c["url"], headers=imagenes_libres.UA, timeout=60)
                     r.raise_for_status()
+                    revision = calidad_imagen.revisar(r.content, f["texto"])   # Google la mira: calidad y si enseña la frase
+                    if not calidad_imagen.aprobada(revision):
+                        logger.info("Imagen descartada (%s/5, %s): %s", revision["nota"], revision["motivo"], c["url"])
+                        usados_url.add(c["url"])
+                        continue
                     poner_imagen(mid, f["n"], datos_b64=base64.b64encode(r.content).decode(), credito=imagenes_libres.credito(c))
                 except Exception:  # noqa: BLE001 - una imagen que no baja: se prueba la siguiente
                     continue
@@ -1163,7 +1169,8 @@ def poner_imagen(mid: str, n: int, url: str = "", datos_b64: str = "", credito: 
         raise ValueError("Eso no es una imagen que se pueda abrir (prueba con JPG, PNG o WEBP).") from e
     if min(im.size) < 360:
         raise ValueError(f"La imagen es muy pequeña ({im.width}x{im.height}): a pantalla completa se vería mal.")
-    im = im.convert("RGB")
+    from . import calidad_imagen
+    im = calidad_imagen.retocar(im.convert("RGB"))   # ampliar si es pequeña, enfocar y ajustar el color (sin IA, gratis)
     im.thumbnail((3840, 3840))
     nombre = f"{n:03d}_{hashlib.sha1(crudo).hexdigest()[:8]}.jpg"
     im.save(carpeta_imagenes(mid) / nombre, quality=92)

@@ -23,8 +23,9 @@ LOTE = 16   # miniaturas por petición a Gemini
 SISTEMA_VER = """Eres documentalista de vídeo. Te doy miniaturas numeradas de planos de un vídeo («{titulo}»). Para cada
 una di en UNA frase corta en español qué se ve: personaje o persona, vehículo, lugar, acción y momento (día/noche).
 Sé concreto («Trevor pilota un caza sobre el desierto de noche»), no interpretes. Marca util=false si es un menú,
-una pantalla de carga, un logo, texto a pantalla completa, negro o algo borroso. Devuelve solo JSON:
-{{"planos": [{{"i": 1, "ve": "…", "util": true}}]}}"""
+una pantalla de carga, un logo, texto a pantalla completa, negro o algo borroso. Puntúa la calidad de 1 a 5 para verse
+a pantalla completa (5 = nítido y limpio; 1 = borroso, pixelado, con marca de agua, webcam o texto de otro creador
+encima). Devuelve solo JSON: {{"planos": [{{"i": 1, "ve": "…", "util": true, "calidad": 4}}]}}"""
 
 SISTEMA_EMPAREJAR = """Eres montador de vídeo. Te doy las frases de un guion y los planos disponibles, cada uno con su id y
 lo que se ve. Para cada frase elige el plano que MEJOR enseña lo que dice la frase (mismo personaje, vehículo, lugar
@@ -61,6 +62,7 @@ def catalogar(fid: str, avisar: Callable[[str], None] = lambda _t: None) -> int:
             if x and str(x.get("ve", "")).strip():
                 pl["ve"] = str(x["ve"]).strip()[:160]
                 pl["util"] = x.get("util") is not False
+                pl["calidad"] = int(x["calidad"]) if str(x.get("calidad", "")).isdigit() else 3
                 hechos += 1
         ruta.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
     return hechos
@@ -80,7 +82,7 @@ def emparejar(mid: str, todas: bool = False, avisar: Callable[[str], None] = lam
     for fid in p["fuentes"]:
         for pl in montaje.fuente(fid)["planos"]:
             pid = f"{fid}:{pl['n']}"
-            if pl.get("ve") and pl.get("util", True) and not pl.get("pobre") and pid not in usados:
+            if pl.get("ve") and pl.get("util", True) and pl.get("calidad", 3) >= 3 and not pl.get("pobre") and pid not in usados:
                 planos[pid] = pl["ve"]
     frases = [f for f in p["frases"] if todas or not montaje.con_imagen(f)]
     if not frases or not planos:
