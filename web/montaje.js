@@ -265,6 +265,75 @@ function pintarCarrusel(diapos) {
   }, 6000);
 }
 
+// ============================================================ Temas del panel (cada uno con su paleta y su fondo)
+const TEMAS = [
+  { id: "cristal", nombre: "Cristal", nota: "El de siempre", colores: ["#ff8a3d", "#ff3ea5", "#2ee6ff"], fondo: "#07070c" },
+  { id: "aurora", nombre: "Aurora boreal", nota: "Verdes y violetas del norte", colores: ["#3dffb4", "#22d3c5", "#8b6bff"], fondo: "#050b14" },
+  { id: "oro", nombre: "Oro negro", nota: "Negro y dorado, de archivo", colores: ["#f3d58a", "#d4a64a", "#8a6a2c"], fondo: "#0a0907" },
+  { id: "oceano", nombre: "Océano profundo", nota: "Azules y aguamarina", colores: ["#5eead4", "#38bdf8", "#6366f1"], fondo: "#040a18" },
+  { id: "atardecer", nombre: "Atardecer", nota: "Naranja, coral y ciruela", colores: ["#ffb35c", "#ff6b6b", "#c04cfd"], fondo: "#120712" },
+  { id: "neon", nombre: "Neón Tokio", nota: "Magenta y cian eléctricos", colores: ["#ff2bd6", "#7a5cff", "#00f0ff"], fondo: "#05030a" },
+  { id: "grafito", nombre: "Grafito", nota: "Negro y plata, sobrio", colores: ["#e5e7eb", "#9ca3af", "#4b5563"], fondo: "#09090b" },
+  { id: "perla", nombre: "Perla", nota: "Claro, suave y luminoso", colores: ["#ffb4a2", "#c7b8ff", "#9be7d8"], fondo: "#f6f3f1" },
+  // descanso visual: poco contraste, sin brillos ni movimiento, colores cálidos y una ilustración tranquila de fondo
+  { id: "papel", nombre: "Papel", nota: "Cálido y claro, como leer en papel", colores: ["#e8d5b5", "#c9a77c", "#a3b18a"], fondo: "#f3ecdf", calma: true },
+  { id: "bosque", nombre: "Bosque", nota: "Verdes apagados, oscuro suave", colores: ["#3f6b5c", "#6f9a7f", "#2a4a40"], fondo: "#0f1a17", calma: true },
+  { id: "noche", nombre: "Noche cálida", nota: "Sin luz azul, para la noche", colores: ["#ffcf8a", "#d08b4a", "#5a3a22"], fondo: "#140d08", calma: true },
+];
+function ponerTema(id, animar = true) {
+  const raiz = document.documentElement;
+  if (animar) { raiz.classList.add("cambiando-tema"); setTimeout(() => raiz.classList.remove("cambiando-tema"), 700); }
+  raiz.dataset.tema = id;
+  raiz.classList.toggle("calma", !!TEMAS.find((t) => t.id === id)?.calma);
+  try { localStorage.setItem("s4-tema", id); } catch (e) { /* sin almacenamiento: el tema dura esta visita */ }
+  document.querySelectorAll("[data-tema-elegir]").forEach((b) => b.classList.toggle("activo", b.dataset.temaElegir === id));
+}
+function montarTemas() {
+  const caja = $("temas"), boton = $("tema-boton");
+  if (!caja || !boton) return;
+  const op = (t) => `<button type="button" class="tema-op" data-tema-elegir="${t.id}"
+      style="--m1:${t.colores[0]};--m2:${t.colores[1]};--m3:${t.colores[2]};--mf:${t.fondo}">
+      <span class="tema-muestra"><i></i><i></i><i></i></span><b>${esc(t.nombre)}</b><small>${esc(t.nota)}</small></button>`;
+  $("temas-rejilla").innerHTML = TEMAS.filter((t) => !t.calma).map(op).join("")
+    + `<span class="etiqueta temas-grupo">Descanso visual</span>` + TEMAS.filter((t) => t.calma).map(op).join("")
+    + `<div class="temas-opciones">
+        <label><input type="checkbox" id="op-quieto"> Menos movimiento</label>
+        <label><input type="checkbox" id="op-pausas"> Recordarme descansar la vista (cada 20 min)</label></div>`;
+  const leer = (k) => { try { return localStorage.getItem(k) === "1"; } catch (e) { return false; } };
+  const guardar = (k, v) => { try { localStorage.setItem(k, v ? "1" : "0"); } catch (e) { /* solo esta visita */ } };
+  $("op-quieto").checked = leer("s4-quieto"); document.documentElement.classList.toggle("quieto", $("op-quieto").checked);
+  $("op-quieto").onchange = (ev) => { guardar("s4-quieto", ev.target.checked); document.documentElement.classList.toggle("quieto", ev.target.checked); };
+  $("op-pausas").checked = leer("s4-pausas"); pausasVista($("op-pausas").checked);
+  $("op-pausas").onchange = (ev) => { guardar("s4-pausas", ev.target.checked); pausasVista(ev.target.checked); };
+  boton.onclick = (ev) => { ev.stopPropagation(); caja.hidden = !caja.hidden; };
+  caja.onclick = (ev) => { const b = ev.target.closest("[data-tema-elegir]"); if (b) ponerTema(b.dataset.temaElegir); };
+  document.addEventListener("click", (ev) => { if (!caja.hidden && !caja.contains(ev.target) && ev.target !== boton) caja.hidden = true; });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") caja.hidden = true; });
+  ponerTema(document.documentElement.dataset.tema || "cristal", false);
+}
+// regla 20-20-20: cada 20 min mirando la pantalla, 20 s mirando algo lejano (a unos 6 metros)
+let pausaTimer = 0, pausaActivo = 0;
+function pausasVista(si) {
+  clearInterval(pausaTimer); pausaActivo = 0;
+  if (!si) return;
+  pausaTimer = setInterval(() => {   // solo cuenta el tiempo con el panel a la vista
+    if (document.hidden || $("pausa-vista")) return;
+    pausaActivo += 30;
+    if (pausaActivo >= 20 * 60) { pausaActivo = 0; mostrarPausa(); }
+  }, 30000);
+}
+function mostrarPausa() {
+  document.body.insertAdjacentHTML("beforeend", `<div class="pausa-vista" id="pausa-vista" role="dialog" aria-label="Descanso visual">
+    <div class="pausa-caja"><span class="etiqueta">Descanso visual</span><h2>Mira algo lejano</h2>
+      <p>Aparta la vista de la pantalla y mira algo a unos 6 metros. Parpadea despacio.</p>
+      <b class="pausa-cuenta" id="pausa-cuenta">20</b><button class="boton" type="button" id="pausa-saltar">Seguir ahora</button></div></div>`);
+  let n = 20;
+  const cerrar = () => { clearInterval(t); $("pausa-vista")?.classList.add("saliendo"); setTimeout(() => $("pausa-vista")?.remove(), 400); };
+  const t = setInterval(() => { n -= 1; if ($("pausa-cuenta")) $("pausa-cuenta").textContent = n; if (n <= 0) cerrar(); }, 1000);
+  $("pausa-saltar").onclick = cerrar;
+}
+montarTemas();
+
 function pintarRadar(r) {
   const s = r?.senales || [];
   if (!s.length) return r?.actualizando ? `<section class="bloque-inicio"><div class="seccion-cab"><h2>En <em>tendencia</em> ahora</h2>

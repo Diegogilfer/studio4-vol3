@@ -3662,3 +3662,18 @@ def test_presentacion_de_inicio_con_imagenes_de_tus_videos(aislado):
     assert otro not in " ".join(x.get("href", "") for x in d)
     assert d[-1]["href"] == "/sofi" and d[-1]["orbe"]
     assert "Terminado ✓" in [x["etiqueta"] for x in d] and "Montado · falta cerrar" in [x["etiqueta"] for x in d]
+
+
+def test_cada_tema_tiene_paleta_y_escena_3d():
+    """Los temas del selector: cada uno con su paleta en CSS y su escena de Three.js; el panel carga el fondo vivo."""
+    import re as _re
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    temas = _re.findall(r'\{ id: "(\w+)", nombre:', js[js.index("const TEMAS"):js.index("function ponerTema")])
+    assert len(temas) >= 11 and "papel" in temas and "noche" in temas
+    css = (config.WEB / "montaje.css").read_text(encoding="utf-8")
+    fondo = (config.WEB / "fondo3d.js").read_text(encoding="utf-8")
+    for t in temas:
+        assert t == "cristal" or f':root[data-tema="{t}"]' in css, t
+        assert _re.search(rf"\n  {t}\(\) {{", fondo), t
+    html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
+    assert "/web/fondo3d.js" in html and '"three": "/web/vendor/three/three.module.js"' in html

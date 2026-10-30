@@ -6,6 +6,7 @@
 <title>Studio 4</title>
 <link rel="icon" href="/web/studio4.ico">
 <link rel="stylesheet" href="/web/montaje.css">
+<script>try { document.documentElement.dataset.tema = localStorage.getItem("s4-tema") || "cristal"; } catch (e) { document.documentElement.dataset.tema = "cristal"; }</script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -43,6 +44,8 @@
     <a href="/sofi" target="_blank" rel="noopener"><svg><use href="#i-voz"/></svg><span>Sofi</span></a>
   </nav>
   <span class="canal" id="canal"></span>
+  <button class="tema-boton" type="button" id="tema-boton" aria-label="Cambiar el tema" title="Tema del panel"><i></i></button>
+  <div class="temas" id="temas" hidden><span class="etiqueta">Tema del panel</span><div class="temas-rejilla" id="temas-rejilla"></div></div>
 </header>
 
 <main id="vista"></main>
@@ -67,5 +70,7 @@
 <div class="aviso" id="aviso" role="alert" hidden></div>
 
 <script src="/web/montaje.js"></script>
+<script type="importmap">{ "imports": { "three": "/web/vendor/three/three.module.js" } }</script>
+<script type="module" src="/web/fondo3d.js"></script>
 </body>
 </html>

@@ -97,12 +97,13 @@ def modificar(mid: str, cambio: Callable[[dict[str, Any]], Any]) -> dict[str, An
 
 
 def _portada(mid: str) -> str:
-    """La mejor imagen de un vídeo para enseñarlo: su miniatura (elegida o la primera opción) o el storyboard."""
+    """La mejor imagen de un vídeo para enseñarlo: su miniatura (elegida o la primera opción) o una foto real de sus
+    frases (la hoja del storyboard no: es una rejilla de planos, no una portada)."""
     base = carpeta(mid)
-    for f in ("miniatura.jpg", "miniatura_c1.jpg", "miniatura_c2.jpg", "storyboard.jpg"):
+    for f in ("miniatura.jpg", "miniatura_c1.jpg", "miniatura_c2.jpg"):
         if (base / f).exists():
             return f"/m/{mid}/{f}"
-    return ""
+    return next(iter(_fotos_reales(mid, 1)), "")
 
 
 def _fotos_reales(mid: str, n: int = 3) -> list[str]:
