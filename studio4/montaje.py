@@ -35,6 +35,9 @@ logger = logging.getLogger("studio4.montaje")
 ANCHO, ALTO = (1280, 720) if config.MODO_LIGERO else (1920, 1080)   # PC flojo: 720p
 ANCHO_PREVIA, ALTO_PREVIA = 960, 540
 TRANSICION = 1.6        # segundos del cambio de bloque: el vídeo se encoge, entra la tarjeta nueva y crece
+# modo cine: más contraste, sombras frías y luces cálidas (el «teal & orange» de las películas), algo menos saturado
+CINE_COLOR = ("eq=contrast=1.08:saturation=0.9:gamma=0.97,"
+              "colorbalance=rs=-0.04:gs=-0.01:bs=0.05:rh=0.05:gh=0.01:bh=-0.04")
 ENTRADA = 0.25          # respiro antes de la primera palabra
 PAUSA_FRASE = 0.35      # silencio que se añade a la voz al acabar una oración (la voz de Google casi no respira)
 PAUSA_BLOQUE = 0.9      # y al cambiar de bloque, donde entra la transición
@@ -1088,7 +1091,11 @@ def _ilustrar_reales(mid: str, cada_iso: int = 4) -> dict[str, int]:
             if str(x.get("n", "")).isdigit()}
     carpeta_v = carpeta(mid) / "videos"
     carpeta_v.mkdir(exist_ok=True)
-    usados_url: set[str] = set()
+    usados_url: set[str] = set(p.get("descartadas") or [])   # lo que Google rechazó en este vídeo no se vuelve a probar
+
+    def vetar(url: str) -> None:
+        usados_url.add(url)
+        modificar(mid, lambda q: q.update(descartadas=sorted(set(q.get("descartadas") or []) | {url})[-500:]))
     cuenta = {"videos": 0, "fotos": 0}
     for k, f in enumerate(frases):
         if cada_iso and k % cada_iso == cada_iso - 1:
@@ -1110,6 +1117,13 @@ def _ilustrar_reales(mid: str, cada_iso: int = 4) -> dict[str, int]:
                 nombre = f"{f['n']:03d}.mp4"
                 (carpeta_v / nombre).write_bytes(datos)
                 usados_url.add(c["url"])
+                from . import calidad_imagen   # Google mira un fotograma del clip, igual que con las fotos
+                foto = fotograma_de(carpeta_v / nombre)   # vacío = clip roto o a medio bajar: fuera
+                if not foto or not calidad_imagen.aprobada(calidad_imagen.revisar(foto, f["texto"])):
+                    logger.info("Clip descartado tras la revisión: %s", c["pagina"])
+                    vetar(c["url"])
+                    (carpeta_v / nombre).unlink(missing_ok=True)
+                    continue
                 modificar(mid, lambda q2, n=f["n"], v={"archivo": nombre, "credito": f"Vídeo: {c['autor']} (Pixabay)", "url": c["pagina"]}:
                           next(z for z in q2["frases"] if z["n"] == n).update(video=v))
                 cuenta["videos"] += 1
@@ -1126,7 +1140,7 @@ def _ilustrar_reales(mid: str, cada_iso: int = 4) -> dict[str, int]:
                     revision = calidad_imagen.revisar(r.content, f["texto"])   # Google la mira: calidad y si enseña la frase
                     if not calidad_imagen.aprobada(revision):
                         logger.info("Imagen descartada (%s/5, %s): %s", revision["nota"], revision["motivo"], c["url"])
-                        usados_url.add(c["url"])
+                        vetar(c["url"])
                         continue
                     poner_imagen(mid, f["n"], datos_b64=base64.b64encode(r.content).decode(), credito=imagenes_libres.credito(c))
                 except Exception:  # noqa: BLE001 - una imagen que no baja: se prueba la siguiente
@@ -1136,6 +1150,18 @@ def _ilustrar_reales(mid: str, cada_iso: int = 4) -> dict[str, int]:
                 break
         time.sleep(0.5)
     return cuenta
+
+
+def fotograma_de(video: Path, segundo: float = 1.5) -> bytes:
+    """Un fotograma JPG de un clip (para que Google lo revise como una foto). Vacío si el clip no se puede leer."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as t:
+        salida = Path(t) / "f.jpg"
+        try:
+            medios.ffmpeg("-ss", f"{segundo:.2f}", "-i", str(video), "-frames:v", "1", "-q:v", "3", str(salida))
+        except Exception:  # noqa: BLE001 - un clip roto: no hay fotograma
+            return b""
+        return salida.read_bytes() if salida.exists() else b""
 
 
 def ilustrar_reales(mid: str, cada_iso: int = 4) -> None:
@@ -1854,6 +1880,14 @@ def _pasada_imagen(p: dict[str, Any], trabajo: Path, cuerpo: Path, mezcla: Path,
     cierre_v = f"fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8"
     entradas = ["-i", str(cuerpo), "-i", str(mezcla)]
     filtros, mezcla_v = [], "[0:v]"
+    if p.get("cine"):   # modo cinematográfico: color de película, viñeta, grano y (en horizontal) bandas 2,39:1
+        cine = (CINE_COLOR + f",vignette=angle=PI/5,noise=alls={max(3, int(5 * escala))}:allf=t")
+        if ancho > alto:
+            banda = max(2, int((alto - ancho / 2.39) / 2))
+            cine += (f",drawbox=x=0:y=0:w=iw:h={banda}:color=black:t=fill"
+                     f",drawbox=x=0:y=ih-{banda}:w=iw:h={banda}:color=black:t=fill")
+        filtros.append(f"{mezcla_v}{cine}[vc]")
+        mezcla_v = "[vc]"
     if logo:   # el logo del canal, discreto arriba a la derecha en todo el vídeo
         entradas += ["-loop", "1", "-i", str(logo)]
         lado = int(130 * escala)

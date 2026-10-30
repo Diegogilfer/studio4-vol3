@@ -3588,6 +3588,7 @@ def test_imagenes_y_clips_reales_por_frase_con_el_3d_de_apoyo(aislado, monkeypat
         {"n": n[0], "busqueda": "calm sea", "tipo": "video"}, {"n": n[1], "busqueda": "old ship", "tipo": "foto"},
         {"n": n[2], "busqueda": "empty dock", "tipo": "foto"}, {"n": n[3], "busqueda": "lighthouse", "tipo": "foto"}]})
     monkeypatch.setattr(imagenes_libres, "videos_pixabay", lambda q, n=4: [{"url": "https://v/1.mp4", "autor": "ana", "pagina": "https://p/1"}])
+    monkeypatch.setattr(montaje, "fotograma_de", lambda v, segundo=1.5: b"fotograma")   # el clip falso «se ve»; sin Gemini, pasa
     monkeypatch.setattr(imagenes_libres, "buscar", lambda q, por_fuente=3: [
         {"url": f"https://i/{q}.jpg", "ancho": 1920, "alto": 1080, "autor": "x", "titulo": q, "licencia": "CC BY 4.0", "fuente": "Commons"}])
     from PIL import Image
@@ -3848,3 +3849,19 @@ def test_google_revisa_y_retoca_las_imagenes(monkeypatch):
     monkeypatch.setattr(gemini, "generar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sin cupo")))
     assert calidad_imagen.aprobada(calidad_imagen.revisar(b.getvalue(), "frase"))   # sin Google, no se frena el vídeo
     assert calidad_imagen.retocar(Image.open(io.BytesIO(b.getvalue())).convert("RGB")).size == (1920, 1200)
+
+
+def test_modo_cine_en_la_pasada_final(aislado, tmp_path, monkeypatch):
+    """Con «cine», la última pasada lleva color de película, viñeta, grano y, en horizontal, bandas 2,39:1."""
+    from studio4 import chat, montaje
+    filtros = []
+    monkeypatch.setattr(montaje.medios, "ffmpeg", lambda *a, **k: filtros.append(a[a.index("-filter_complex") + 1]))
+    monkeypatch.setattr(montaje, "logo_de", lambda c: None)
+    p = {"canal": "arigab", "cine": True, "subtitulos": {"activos": False}}
+    montaje._pasada_imagen(p, tmp_path, tmp_path / "c.mp4", tmp_path / "m.wav", tmp_path / "d.mp4", [], 1920, 1080, 1.0, 10.0, True)
+    montaje._pasada_imagen(p, tmp_path, tmp_path / "c.mp4", tmp_path / "m.wav", tmp_path / "d.mp4", [], 1080, 1920, 1.0, 10.0, True)
+    assert "vignette" in filtros[0] and "colorbalance" in filtros[0] and "drawbox" in filtros[0]
+    assert "vignette" in filtros[1] and "drawbox" not in filtros[1]   # en vertical, sin bandas
+    mid = montaje.crear("P", "Una frase con seis palabras justas aqui.")
+    chat.ACCIONES["modo_cine"]["fn"](mid, {"activo": True})
+    assert montaje.cargar(mid)["cine"] is True

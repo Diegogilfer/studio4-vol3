@@ -21,8 +21,10 @@ NOTA_MINIMA = 3
 SISTEMA = """Eres el editor de fotografía de un canal de vídeo. Te doy UNA imagen y la frase que se dirá mientras se ve.
 Puntúa la imagen de 1 a 5 para usarla A PANTALLA COMPLETA en un vídeo 1080p: 5 = nítida, bien expuesta, limpia;
 3 = aceptable; 1 = borrosa, pixelada, diminuta, con marca de agua, con texto o logos encima, collage, captura de una
-web o de un móvil, meme. Di si ENSEÑA lo que dice la frase (mismo lugar, objeto, época o acción; algo genérico que no
-tiene que ver = false). Devuelve solo JSON: {"nota": 1, "encaja": true, "motivo": "muy corto"}"""
+web o de un móvil, meme. Di si ENCAJA con la frase como imagen de referencia: true si enseña la misma CLASE de cosa
+(un estadio de fútbol de noche, un dron, un árbitro, un barco antiguo) aunque no sea el sitio exacto; false si es otra
+cosa (otro deporte, otra época, otro objeto) o si es un lugar FAMOSO y reconocible distinto del que nombra la frase
+(no se hace pasar un sitio conocido por otro). Devuelve solo JSON: {"nota": 1, "encaja": true, "motivo": "muy corto"}"""
 
 
 def revisar(imagen: bytes, frase: str) -> dict[str, Any]:
