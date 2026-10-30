@@ -14,7 +14,7 @@ import re
 import time
 from typing import Any, Callable
 
-from . import config, deepseek, gemini, montaje, musica
+from . import config, deepseek, gemini, montaje, musica, propuestas
 
 logger = logging.getLogger("studio4.chat")
 
@@ -52,8 +52,8 @@ ACCIONES: dict[str, dict[str, Any]] = {
                         "fn": lambda mid, a: (montaje.buscar_material(mid), "Buscando material real…")[1]},
     "anadir_material": {"desc": "Añade como material el vídeo de un enlace", "args": "url", "fondo": True,
                         "fn": lambda mid, a: (montaje.anadir_fuente(mid, str(a.get("url", ""))), "Bajando ese material…")[1]},
-    "proponer_planos": {"desc": "Pone un plano a cada frase vacía", "args": "",
-                        "fn": lambda mid, a: f"Planos puestos en {montaje.proponer(mid)} frases."},
+    "proponer_planos": {"desc": "Mira el material y pone a cada frase vacía el plano que mejor enseña lo que dice", "args": "", "fondo": True,
+                        "fn": lambda mid, a: (montaje.proponer_en_fondo(mid), "Mirando los planos y eligiendo el de cada frase…")[1]},
     "planos_por_escenas": {"desc": "Elige el plano del tráiler donde ocurre lo que dice cada frase", "args": "todas (true|false)", "fondo": True,
                            "fn": lambda mid, a: (montaje.planos_por_escenas(mid, bool(a.get("todas"))), "Buscando la escena de cada frase…")[1]},
     "mover_escena": {"desc": "Sube (-1) o baja (+1) una escena", "args": "n, direccion",
@@ -87,12 +87,15 @@ ACCIONES: dict[str, dict[str, Any]] = {
                      "fn": lambda mid, a: (montaje.render_basico(mid, {}), "Render completo en marcha (los 3 formatos)…")[1]},
 }
 
-SISTEMA = """Eres el asistente de edición de STUDIO #4 dentro de un vídeo concreto. Hablas en español, breve y claro.
-Te doy el ESTADO del vídeo y la lista de ACCIONES que el estudio sabe hacer. Si lo que pide el usuario se resuelve con
-acciones, elígelas; si es una pregunta, contéstala con el estado. Nunca inventes acciones ni digas que hiciste algo que
-no está en tu lista. Como mucho UNA acción que trabaje en segundo plano por mensaje. Lo que cuesta dinero (voz de
-pago) no lo activas tú: dile al usuario que lo confirme en el panel.
-Devuelve solo JSON: {"respuesta": "lo que le dices", "acciones": [{"accion": "nombre", "args": {...}}]}"""
+SISTEMA = """Eres el asistente de edición de STUDIO #4 dentro de un vídeo concreto. Hablas en español, cercano y
+claro. CONVERSA DE VERDAD: contesta las preguntas con el ESTADO del vídeo y con criterio de editor (qué falla, qué
+mejorarías, por qué), pregunta lo que falte. Te doy la lista de ACCIONES que el estudio sabe hacer. Los cambios
+rápidos (voz, música, subtítulos, guion, mover o quitar planos) se aplican al momento. Las acciones LARGAS (las
+marcadas «tarda») NO se lanzan solas: explica en "plan" qué harás y cuánto tarda más o menos, y el usuario dirá
+«lánzalo» o pulsará el botón. Nunca digas que algo largo ya está hecho o en marcha. Nunca inventes acciones. Como
+mucho UNA acción larga por mensaje. Lo que cuesta dinero (voz de pago) no lo activas tú: que lo confirme en el panel.
+Devuelve solo JSON: {"respuesta": "lo que le dices", "acciones": [{"accion": "nombre", "args": {...}}],
+"plan": "si hay una acción larga: qué harás al lanzarla, en 1-2 frases, con el tiempo aproximado"}"""
 
 
 def _estado(p: dict[str, Any]) -> str:
@@ -111,8 +114,9 @@ def _estado(p: dict[str, Any]) -> str:
 
 
 def _pensar(p: dict[str, Any], mensaje: str, mid: str) -> dict[str, Any]:
-    catalogo = "\n".join(f"- {k}: {v['desc']}" + (f" (args: {v['args']})" if v["args"] else "") for k, v in ACCIONES.items())
-    historia = "\n".join(f"{m['quien']}: {m['texto']}" for m in (p.get("chat") or [])[-8:])
+    catalogo = "\n".join(f"- {k}: {v['desc']}" + (f" (args: {v['args']})" if v["args"] else "") + (" · tarda" if v.get("fondo") else "")
+                         for k, v in ACCIONES.items())
+    historia = "\n".join(f"{m['quien']}: {m['texto']}" for m in (p.get("chat") or [])[-14:])
     prompt = f"ESTADO:\n{_estado(p)}\n\nACCIONES:\n{catalogo}\n\nCONVERSACIÓN:\n{historia}\n\nUSUARIO: {mensaje}"
     if deepseek.disponible():
         try:
@@ -125,31 +129,68 @@ def _pensar(p: dict[str, Any], mensaje: str, mid: str) -> dict[str, Any]:
     return json.loads(m.group(0) if m else crudo)
 
 
+def _pendiente(p: dict[str, Any]) -> dict[str, Any] | None:
+    ultimo = next((m for m in reversed(p.get("chat") or []) if m["quien"] == "IA"), None)
+    pend = (ultimo or {}).get("pendiente")
+    return pend if pend and not pend.get("lanzada") else None
+
+
+def lanzar(mid: str, mensaje: str = "") -> dict[str, Any]:
+    """Arranca la acción larga propuesta (botón «Lanzar» o «lánzalo» en el chat)."""
+    p = montaje.cargar(mid)
+    pend = _pendiente(p)
+    if not pend:
+        raise ValueError("No hay nada pendiente de lanzar: dime qué quieres hacer.")
+    hechas, errores = [], []
+    if p["trabajo"].get("ocupado"):
+        errores.append("Espera a que termine el trabajo en marcha y vuelve a pulsar «Lanzar».")
+    else:
+        try:
+            hechas.append(ACCIONES[pend["accion"]]["fn"](mid, pend.get("args") or {}))
+        except (ValueError, RuntimeError, KeyError, TypeError) as e:
+            errores.append(f"{pend['accion']}: {e}")
+    respuesta = f"En marcha: {pend.get('plan') or pend['accion']}" if hechas else "No pude lanzarlo."
+    ahora = time.strftime("%H:%M")
+
+    def cambio(q):
+        chat = q.get("chat") or []
+        for m in reversed(chat):
+            if m["quien"] == "IA" and m.get("pendiente") and not errores:
+                m["pendiente"]["lanzada"] = True
+                break
+        q["chat"] = (chat + ([{"quien": "tú", "texto": mensaje, "hora": ahora}] if mensaje else [])
+                     + [{"quien": "IA", "texto": respuesta, "hora": ahora, "hechas": hechas, "errores": errores}])[-MAX_HISTORIA:]
+    montaje.modificar(mid, cambio)
+    return {"respuesta": respuesta, "hechas": hechas, "errores": errores}
+
+
 def responder(mid: str, mensaje: str, pensar: Callable[[dict[str, Any], str, str], dict[str, Any]] = _pensar) -> dict[str, Any]:
-    mensaje = (mensaje or "").strip()[:2000]
+    mensaje = (mensaje or "").strip()[:4000]
     if not mensaje:
         raise ValueError("Escribe qué quieres hacer con el vídeo.")
     p = montaje.cargar(mid)
+    if _pendiente(p) and propuestas.es_confirmacion(mensaje):   # «lánzalo», «dale», «actualiza»…
+        return lanzar(mid, mensaje)
     d = pensar(p, mensaje, mid)
-    hechas, errores, en_fondo = [], [], False
+    hechas, errores, pendiente = [], [], None
     for a in (d.get("acciones") or [])[:5]:
         nombre, args = str((a or {}).get("accion", "")), (a or {}).get("args") or {}
         accion = ACCIONES.get(nombre)
         if not accion:
             errores.append(f"«{nombre}» no es una acción del estudio.")
             continue
-        if accion.get("fondo"):
-            if en_fondo or montaje.cargar(mid)["trabajo"].get("ocupado"):
-                errores.append(f"{nombre}: espera a que termine el trabajo en marcha.")
-                continue
-            en_fondo = True
+        if accion.get("fondo"):   # larga: se propone; arranca al confirmar
+            if not pendiente:
+                pendiente = {"accion": nombre, "args": args if isinstance(args, dict) else {},
+                             "plan": str(d.get("plan") or accion["desc"]).strip()[:400]}
+            continue
         try:
             hechas.append(accion["fn"](mid, args if isinstance(args, dict) else {}))
         except (ValueError, RuntimeError, KeyError, TypeError) as e:
             errores.append(f"{nombre}: {e}")
-    respuesta = str(d.get("respuesta") or "").strip() or ("Hecho." if hechas else "No entendí qué hacer.")
+    respuesta = str(d.get("respuesta") or "").strip() or ("Hecho." if hechas else "Dime qué necesitas.")
     ahora = time.strftime("%H:%M")
     montaje.modificar(mid, lambda q: q.update(chat=((q.get("chat") or []) + [
         {"quien": "tú", "texto": mensaje, "hora": ahora},
-        {"quien": "IA", "texto": respuesta, "hora": ahora, "hechas": hechas, "errores": errores}])[-MAX_HISTORIA:]))
-    return {"respuesta": respuesta, "hechas": hechas, "errores": errores}
+        {"quien": "IA", "texto": respuesta, "hora": ahora, "hechas": hechas, "errores": errores, "pendiente": pendiente}])[-MAX_HISTORIA:]))
+    return {"respuesta": respuesta, "hechas": hechas, "errores": errores, "pendiente": pendiente}

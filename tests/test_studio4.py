@@ -2992,11 +2992,17 @@ def test_chat_ejecuta_acciones_reales_y_rechaza_inventadas(aislado, tmp_path, mo
         {"accion": "borrar_disco", "args": {}}]}
     r = chat.responder(mid, "pon planos, voz Charon, subtítulos cine arriba y baja la primera escena", pensar=lambda *a: respuesta)
     p = montaje.cargar(mid)
-    assert len(r["hechas"]) == 4 and any("borrar_disco" in e for e in r["errores"])
-    assert all(f.get("clip") for f in p["frases"]) and p["voz_nombre"] == "Charon"
+    # lo rápido se aplica al momento; lo largo (proponer planos) se queda propuesto hasta «lánzalo»
+    assert len(r["hechas"]) == 3 and any("borrar_disco" in e for e in r["errores"]) and r["pendiente"]["accion"] == "proponer_planos"
+    assert not any(f.get("clip") for f in p["frases"]) and p["voz_nombre"] == "Charon"
     assert p["subtitulos"]["estilo"] == "cine" and p["subtitulos"]["posicion"] == "arriba"
     assert p["frases"][1]["n"] == n1   # la escena bajó
     assert [m["quien"] for m in p["chat"][-2:]] == ["tú", "IA"]
+    lanzado = chat.responder(mid, "lánzalo", pensar=lambda *a: pytest.fail("«lánzalo» no se le pregunta a la IA"))
+    assert lanzado["hechas"] and _esperar_montaje(mid) and all(f.get("clip") for f in montaje.cargar(mid)["frases"])
+    assert montaje.cargar(mid)["chat"][-3]["pendiente"]["lanzada"]
+    with pytest.raises(ValueError, match="nada pendiente"):
+        chat.lanzar(mid)
     # voz inexistente / de pago: error, no se cambia
     r2 = chat.responder(mid, "pon la voz de pago", pensar=lambda *a: {"respuesta": "ok", "acciones": [{"accion": "cambiar_voz", "args": {"nombre": "Rachel"}}]})
     assert r2["errores"] and montaje.cargar(mid)["voz_nombre"] == "Charon"
@@ -3009,7 +3015,9 @@ def test_chat_solo_un_trabajo_en_segundo_plano_por_mensaje(aislado, monkeypatch)
     monkeypatch.setitem(chat.ACCIONES, "hacer_previa", {**chat.ACCIONES["hacer_previa"], "fn": lambda m, a: lanzados.append("previa") or "previa"})
     monkeypatch.setitem(chat.ACCIONES, "buscar_material", {**chat.ACCIONES["buscar_material"], "fn": lambda m, a: lanzados.append("material") or "material"})
     r = chat.responder(mid, "todo", pensar=lambda *a: {"respuesta": "", "acciones": [{"accion": "hacer_previa"}, {"accion": "buscar_material"}]})
-    assert lanzados == ["previa"] and r["errores"]
+    assert lanzados == [] and r["pendiente"]["accion"] == "hacer_previa"   # nada largo arranca sin confirmar
+    chat.lanzar(mid)
+    assert lanzados == ["previa"]
 
 
 def test_formatos_diarios_recorta_negro_y_saca_los_3(tmp_path):
@@ -3415,15 +3423,20 @@ def test_chat_de_inicio_empieza_sin_guion_y_pregunta_el_estilo(aislado, monkeypa
         {"respuesta": "¿En qué estilo?", "accion": "crear", "args": {"tema": "El mecanismo de Anticitera", "duracion": 60}},
         {"respuesta": "Creándolo.", "accion": "crear", "args": {"tema": "El mecanismo de Anticitera", "estilo": "collage", "duracion": 60}},
     ])
+    monkeypatch.setattr(nichos, "historias_reales", lambda temas, canal=None: {})
     pensar = lambda canal, historia, mensaje: next(respuestas)   # noqa: E731
     r = asistente.responder(cid, "busca un nicho de misterios", pensar=pensar)
+    assert r["resultado"]["tipo"] == "propuesta"   # analizar tarda: se propone y se lanza al confirmar
+    r = asistente.responder(cid, "lánzalo", pensar=pensar)
     assert r["resultado"]["tipo"] == "nicho" and r["resultado"]["nichos"][0]["veredicto"].startswith("Hueco")
     r = asistente.responder(cid, "hazme un short del mecanismo de Anticitera", pensar=pensar)
     assert r["resultado"]["tipo"] == "estilo" and not creados   # sin estilo no crea: pregunta
     r = asistente.responder(cid, "en collage", pensar=pensar)
+    assert r["resultado"]["tipo"] == "propuesta" and not creados
+    r = asistente.responder(cid, "dale", pensar=pensar)
     assert r["resultado"] == {"tipo": "video", "id": "vid-9", "estilo": "Collage documental"}
     assert creados[0][1]["estilo"] == "collage"
-    assert [m["quien"] for m in asistente.leer(cid)] == ["tú", "IA"] * 3
+    assert [m["quien"] for m in asistente.leer(cid)] == ["tú", "IA"] * 5
     assert nichos.veredicto({"mediana_vistas": 5000, "pequenos_que_explotan": 0, "top3_cuota": 0.9, "grandes_1M": 0}) == "Poca demanda"
     asistente.limpiar(cid)
     assert asistente.leer(cid) == []
@@ -3723,3 +3736,57 @@ def test_ideas_y_nichos_de_arigab_son_historias_reales(aislado, monkeypatch):
 def test_biblioteca_lleva_chatgpt_en_su_logo():
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
     assert 'class="chatgpt-logo" href="https://chatgpt.com/auth/login?next=%2Fg%2Fg-IgKhQ7IgB"' in js and "<svg viewBox=\"0 0 24 24\"" in js
+
+
+def test_chat_de_inicio_propone_y_solo_lanza_al_confirmar(aislado, monkeypatch):
+    """Pedir un vídeo no lo crea: queda propuesto con su plan; «dale» (o el botón) lo lanza. Una pregunta solo responde."""
+    from studio4 import asistente, deepseek, montaje
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    creados = []
+    monkeypatch.setattr(montaje, "crear_con_ia", lambda tema, o: creados.append(tema) or "vid-1")
+    estilo = next(iter(asistente.estilos.ESTILOS))
+    pide = {"respuesta": "Te lo preparo así.", "accion": "crear", "plan": "Investigo, escribo 1 minuto y monto (unos 15 min).",
+            "args": {"tema": "El barco sin nadie a bordo (1872)", "estilo": estilo, "duracion": 60}}
+    r = asistente.responder("arigab", "hazme un Short del Mary Celeste", pensar=lambda *a: pide)
+    assert r["resultado"]["tipo"] == "propuesta" and "15 min" in r["resultado"]["plan"] and creados == []
+    r2 = asistente.responder("arigab", "¿cuánto tarda más o menos?", pensar=lambda *a: {"respuesta": "Unos 15 minutos.", "accion": "responder"})
+    assert r2["resultado"]["tipo"] == "texto" and creados == []
+    with pytest.raises(ValueError, match="nada pendiente"):   # la pregunta de en medio cerró la propuesta
+        asistente.lanzar("arigab")
+    asistente.responder("arigab", "hazme un Short del Mary Celeste", pensar=lambda *a: pide)
+    r3 = asistente.responder("arigab", "dale", pensar=lambda *a: pytest.fail("«dale» no se le pregunta a la IA"))
+    assert creados == ["El barco sin nadie a bordo (1872)"] and r3["resultado"] == {"tipo": "video", "id": "vid-1", "estilo": asistente.estilos.ESTILOS[estilo]["nombre"]}
+    assert asistente.leer("arigab")[-3]["resultado"]["lanzada"]
+
+
+def test_planos_por_lo_que_se_ve_y_material_solo_del_juego(aislado, tmp_path, monkeypatch):
+    """Studio 4 mira cada plano (Gemini) y elige el de cada frase; si ninguno encaja, la frase queda para elegir a mano.
+    El material de otro juego se descarta."""
+    import json as _json
+    from studio4 import catalogo, gemini, material, montaje
+    _banco_falso(tmp_path, monkeypatch, n=4)
+    for n in range(1, 5):   # miniaturas para que haya qué mirar
+        (montaje.extractor.CACHE / "fuenteA_planos").mkdir(parents=True, exist_ok=True)
+        (montaje.extractor.CACHE / "fuenteA_planos" / f"{n:03d}.jpg").write_bytes(b"\xff\xd8x")
+    meta = _json.loads((montaje.extractor.CACHE / "fuenteA.banco.json").read_text(encoding="utf-8"))
+    for pl in meta["planos"]:
+        pl["pobre"] = False   # colores lisos: el banco los daría por pobres; aquí hacen de planos de verdad
+    (montaje.extractor.CACHE / "fuenteA.banco.json").write_text(_json.dumps(meta), encoding="utf-8")
+    mid = montaje.crear("P", "Trevor roba un caza en la base militar de noche.\n\nLa policía persigue un coche amarillo por la ciudad.\n\nUn pez nada en un acuario japonés tranquilo.")
+    montaje.usar_fuente(mid, "fuenteA")
+    vistas = {"planos": [{"i": 1, "ve": "Un caza despega de una base militar de noche", "util": True},
+                         {"i": 2, "ve": "Coche amarillo huye de la policía por la ciudad", "util": True},
+                         {"i": 3, "ve": "Menú de pausa del juego", "util": False}, {"i": 4, "ve": "Avioneta sobre el mar", "util": True}]}
+    def falso(prompt, **k):
+        if k.get("imagenes"):
+            return _json.dumps(vistas)
+        assert "Menú de pausa" not in prompt   # un plano que no sirve no se ofrece
+        return _json.dumps({"asignaciones": [{"n": 1, "plano": "P1"}, {"n": 2, "plano": "P2"}]})
+    monkeypatch.setattr(gemini, "generar", falso)
+    r = catalogo.emparejar(mid)
+    frases = montaje.cargar(mid)["frases"]
+    assert r == {"puestas": 2, "sin_plano": 1}
+    assert [f.get("clip", {}).get("plano") for f in frases] == [1, 2, None]   # el pez no tiene plano: mejor vacío
+    assert montaje.fuente("fuenteA")["planos"][2]["util"] is False
+    alias = material.alias_de("Grand Theft Auto V")
+    assert material.del_juego("GTA 5 Mount Chiliad no commentary", alias) and not material.del_juego("Silent Hill 2 Remake walkthrough", alias)

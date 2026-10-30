@@ -199,6 +199,9 @@ function resultadoHTML(r) {
   if (r.tipo === "tendencias") return `<div class="chips">${r.senales.map((s) => `<button type="button" class="chip-radar" data-preguntar="Dame ideas de guiones sobre ${esc(s.tema)} (${esc((s.titulares || [])[0] || "")})">${esc(s.tema)} <b>${s.n_fuentes}</b></button>`).join("") || `<span class="meta">El radar aún no tiene señales de hoy.</span>`}</div>`;
   if (r.tipo === "estilo") return `<div class="estilos-ia chips-ia">${r.estilos.map((e) => `<button type="button" class="chip-ia${e.hecho_por === "claude" ? " por-claude" : ""}" title="${esc(e.para)} · ${esc(e.imagen)}" data-preguntar="Hazlo en estilo ${esc(e.nombre)} (${esc(e.id)})">${esc(e.nombre)}</button>`).join("")}</div>
     <p class="meta">✦ = lo hace Claude con código, gratis. El resto necesita un modelo de imagen o vídeo.</p>`;
+  if (r.tipo === "propuesta") return `<div class="propuesta${r.lanzada ? " lanzada" : ""}"><span class="etiqueta">${r.lanzada ? "Lanzado ✓" : "Listo para lanzar"}</span>
+    <p>${esc(r.plan)}</p>${r.lanzada ? "" : `<div class="fila"><button class="primario" type="button" data-lanzar-inicio>Lanzar</button>
+    <span class="meta">o escribe «lánzalo». Si quieres cambiar algo, dímelo antes.</span></div>`}</div>`;
   if (r.tipo === "video") return `<div class="fila"><a class="primario" href="#v=${esc(r.id)}/1">Abrir el vídeo (${esc(r.estilo)})</a><span class="meta">Se está investigando y escribiendo solo.</span></div>`;
   return "";
 }
@@ -209,15 +212,24 @@ async function pintarInicioChat() {
   const chat = d?.chat || [];
   caja.innerHTML = `<div class="seccion-cab fila-entre"><h2>¿Qué vídeo <em>hacemos</em> hoy?</h2>
       ${chat.length ? `<button class="boton" type="button" id="inicio-limpiar">Empezar de nuevo</button>` : ""}</div>
-    <div class="chat-msgs inicio-msgs" id="inicio-msgs">${chat.map((x) => x.quien === "tú"
+    <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Pregúntame lo que quieras o pídeme un vídeo: te digo qué haría y lo lanzas cuando quieras"></textarea>
+      <button class="primario" type="submit">Enviar</button></form>
+    <div class="chips-ia sugerencias">${SUGERENCIAS_INICIO.map((t) => `<button type="button" class="chip-ia" data-preguntar="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+    <div class="chat-msgs inicio-msgs" id="inicio-msgs">${pares(chat).map((x) => x.quien === "tú"
       ? `<div class="msg mio"><p>${esc(x.texto)}</p></div>`
       : `<div class="msg ia"><p>${esc(x.texto)}</p>${x.error ? `<small class="fallo">✕ ${esc(x.error)}</small>` : ""}${resultadoHTML(x.resultado)}</div>`).join("")
-      || `<p class="meta">Cuéntame qué quieres: un nicho, ideas, lo que es tendencia o un vídeo. No hace falta guion: lo escribo yo.</p>`}</div>
-    <div class="chips-ia sugerencias">${SUGERENCIAS_INICIO.map((t) => `<button type="button" class="chip-ia" data-preguntar="${esc(t)}">${esc(t)}</button>`).join("")}</div>
-    <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Ej.: «busca un nicho de misterios poco saturado» o «hazme un Short sobre el barco que apareció sin nadie a bordo (1872)»"></textarea>
-      <button class="primario" type="submit">Enviar</button></form>`;
-  const msgs = $("inicio-msgs");
-  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+      || `<p class="meta">Pregúntame lo que quieras: un nicho, ideas, lo que es tendencia o un vídeo. Primero te digo qué haría; nada largo arranca hasta que digas «lánzalo».</p>`}</div>`;
+  if ($("inicio-texto") && sessionStorage.getItem("s4-al-chat")) { sessionStorage.removeItem("s4-al-chat"); $("inicio-texto").focus(); }
+  caja.querySelectorAll("[data-lanzar-inicio]").forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = "Lanzando…";
+      try {
+        const r = await api("/api/m/inicio-chat/lanzar", {});
+        if (r.resultado?.tipo === "video") { location.hash = `v=${r.resultado.id}/1`; return; }
+        await pintarInicioChat();
+      } catch (e) { aviso(e); b.disabled = false; b.textContent = "Lanzar"; }
+    };
+  });
   const enviarInicio = async (texto) => {
     if (!texto.trim()) return;
     const b = $("inicio-form").querySelector("button");
@@ -352,6 +364,13 @@ function mostrarPausa() {
   $("pausa-saltar").onclick = cerrar;
 }
 montarTemas();
+
+// los chats con la barra arriba: cada pregunta con su respuesta, lo más nuevo primero
+function pares(mensajes) {
+  const grupos = [];
+  mensajes.forEach((m) => { if (m.quien === "tú" || !grupos.length) grupos.push([m]); else grupos[grupos.length - 1].push(m); });
+  return grupos.reverse().flat();
+}
 
 function pintarRadar(r) {
   const s = r?.senales || [];
@@ -729,21 +748,32 @@ const SUGERENCIAS = ["Escribe el guion con IA", "Pon un plano en cada frase", "S
   "Cambia la voz a Charon", "Haz la previa", "Hazlo todo: los 3 formatos"];
 function chatHTML(v) {
   const msgs = v.chat || [];
-  return `<aside class="chat-lado"><div class="chat-cab"><b>Chat</b><small class="meta">Pídele cambios: los hace</small></div>
-    <div class="chat-msgs" id="chat-msgs">${msgs.length ? msgs.map((m) => `
+  const form = `<form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Pregunta o pide un cambio; lo largo te lo propongo y lo lanzas tú…"></textarea>
+      <label class="boton clip" title="Adjuntar imagen, vídeo o guion">📎<input type="file" id="chat-adjunto" accept="image/*,video/*,.txt,.md" hidden></label>
+      <button class="primario" type="submit">Enviar</button></form>`;
+  return `<aside class="chat-lado"><div class="chat-cab"><b>Chat</b><small class="meta">Conversa; lo largo lo lanzas tú</small></div>
+    ${form}<span class="meta" id="chat-estado"></span>
+    <div class="chips-ia sugerencias">${SUGERENCIAS.map((t) => `<button type="button" class="chip-ia" data-sugerencia="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+    <div class="chat-msgs" id="chat-msgs">${msgs.length ? pares(msgs).map((m) => `
       <div class="msg ${m.quien === "tú" ? "mio" : "ia"}"><p>${esc(m.texto)}</p>
         ${(m.hechas || []).map((h) => `<small class="hecho">✓ ${esc(h)}</small>`).join("")}
-        ${(m.errores || []).map((h) => `<small class="fallo">✕ ${esc(h)}</small>`).join("")}</div>`).join("")
-      : `<p class="meta">Escribe lo que quieres: «hazlo más dinámico», «pon subtítulos estilo cine», «escribe un guion de 1 minuto»…</p>`}</div>
+        ${(m.errores || []).map((h) => `<small class="fallo">✕ ${esc(h)}</small>`).join("")}
+        ${m.pendiente ? `<div class="propuesta${m.pendiente.lanzada ? " lanzada" : ""}"><span class="etiqueta">${m.pendiente.lanzada ? "Lanzado ✓" : "Listo para lanzar"}</span>
+          <p>${esc(m.pendiente.plan)}</p>${m.pendiente.lanzada ? "" : `<button class="primario" type="button" data-lanzar-video>Lanzar</button>`}</div>` : ""}</div>`).join("")
+      : `<p class="meta">Pregúntame por el vídeo o pide cambios: «¿qué le falta?», «pon subtítulos estilo cine», «escribe un guion de 1 minuto»…</p>`}</div>
     ${(v.adjuntos || []).length ? `<div class="adjuntos">${v.adjuntos.map((a) => `<img src="/m/${esc(v.id)}/adjuntos/${esc(a.archivo)}" alt="${esc(a.nombre)}" title="${esc(a.nombre)} · pídele: «ponla en la miniatura» o «ponla en la frase 3»">`).join("")}</div>` : ""}
-    <div class="chips-ia sugerencias">${SUGERENCIAS.map((t) => `<button type="button" class="chip-ia" data-sugerencia="${esc(t)}">${esc(t)}</button>`).join("")}</div>
-    <form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Escribe un cambio o suelta aquí una imagen, un vídeo o un guion (.txt)…"></textarea>
-      <label class="boton clip" title="Adjuntar imagen, vídeo o guion">📎<input type="file" id="chat-adjunto" accept="image/*,video/*,.txt,.md" hidden></label>
-      <button class="primario" type="submit">Enviar</button></form><span class="meta" id="chat-estado"></span></aside>`;
+    </aside>`;
 }
 function enlazarChat(v) {
   const caja = $("chat-msgs");
-  if (caja) caja.scrollTop = caja.scrollHeight;
+  if (caja) caja.scrollTop = 0;   // lo nuevo va arriba, junto a la barra
+  document.querySelectorAll("[data-lanzar-video]").forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = "Lanzando…";
+      try { await api("/api/m/chat/lanzar", { id: v.id }); } catch (e) { aviso(e); }
+      firma = ""; await cargarVideo(v.id);
+    };
+  });
   const enviarChat = async (texto) => {
     if (!texto.trim()) return;
     const b = $("chat-form").querySelector("button");

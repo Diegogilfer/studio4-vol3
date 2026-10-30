@@ -770,6 +770,9 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
         dossier = "MATERIAL QUE YA TIENE EL VÍDEO (escribe sobre lo que se ve en él): " + "; ".join(
             m["titulo"] for m in metas) + "\n\n" + dossier
     inv: list[dict[str, Any]] = []
+    de_juegos = canales.es_de_juegos(canales.obtener(cargar(mid)["canal"]))
+    if not de_juegos:   # historias reales: su material son fotos y clips reales (después del guion), no gameplay
+        buscar_material = False
     if buscar_material:
         _avisar(mid, "Buscando material real del tema", 30)
         inv = materiales.inventario(tema, dossier, produccion=mid)
@@ -807,8 +810,11 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
                 modificar(mid, lambda q, i=meta["id"]: q["fuentes"].append(i) if i not in q["fuentes"] else None)
             except Exception as e:  # noqa: BLE001 - un vídeo que no baja no frena el resto
                 logger.warning("Material automático (%s): %s", v.get("url"), e)
+    if not de_juegos and not generador:
+        _avisar(mid, "Buscando una imagen o un clip real para cada frase", 80)
+        _ilustrar_reales(mid)
     if cargar(mid)["fuentes"]:
-        _avisar(mid, "Poniendo un plano en cada frase", 92)
+        _avisar(mid, "Mirando los planos y eligiendo el de cada frase", 88)
         proponer(mid)
     p = cargar(mid)
     modificar(mid, lambda q: q.update(
@@ -1228,14 +1234,31 @@ def _segmento_imagen(imagen: Path, d: float, ancho: int, alto: int, destino: Pat
                   "-t", f"{d:.3f}", "-an", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(destino))
 
 
-def proponer(mid: str) -> int:
-    """A cada frase sin plano, el siguiente plano sin usar de las fuentes del vídeo (por turnos entre fuentes).
-    Es un punto de partida: el autor cambia los que no encajen. Devuelve cuántas propuso."""
+def proponer(mid: str, rellenar: bool = False) -> int:
+    """A cada frase sin imagen, el plano que MEJOR enseña lo que dice (Studio 4 mira los planos: catalogo.py). Las
+    que no tienen ningún plano que encaje se quedan vacías para elegir a mano, salvo con `rellenar` (hacerlo todo en
+    un paso), que las completa por turnos solo con planos útiles. Devuelve cuántas frases recibieron plano."""
+    from . import catalogo
+    try:
+        hechas = catalogo.emparejar(mid, avisar=lambda t: _avisar(mid, t, 90))["puestas"]
+    except Exception as e:  # noqa: BLE001 - sin Gemini ni DeepSeek: el reparto por turnos de siempre
+        logger.warning("Emparejar planos: %s", e)
+        return _proponer_por_turnos(mid)
+    return hechas + (_proponer_por_turnos(mid) if rellenar else 0)
+
+
+def proponer_en_fondo(mid: str) -> None:
+    """Proponer tarda (Studio 4 mira cada plano la primera vez): en segundo plano, con su aviso de progreso."""
+    _en_fondo(mid, "Planos", lambda: proponer(mid))
+
+
+def _proponer_por_turnos(mid: str) -> int:
+    """El siguiente plano útil sin usar de las fuentes del vídeo (por turnos entre fuentes): solo como relleno."""
     p = cargar(mid)
     if not p["fuentes"]:
         raise ValueError("Primero añade material (paso 2).")
     usados = {(f["clip"]["fuente"], f["clip"]["plano"]) for f in p["frases"] if f.get("clip")}
-    colas = {fid: [pl["n"] for pl in fuente(fid)["planos"] if (fid, pl["n"]) not in usados and not pl.get("pobre")]
+    colas = {fid: [pl["n"] for pl in fuente(fid)["planos"] if (fid, pl["n"]) not in usados and not pl.get("pobre") and pl.get("util", True)]
              for fid in p["fuentes"]}
     hechas, turno = 0, 0
 
@@ -1248,7 +1271,7 @@ def proponer(mid: str) -> int:
                 fid = q["fuentes"][turno % len(q["fuentes"])]
                 turno += 1
                 if colas[fid]:
-                    f["clip"] = {"fuente": fid, "plano": colas[fid].pop(0)}
+                    f["clip"] = {"fuente": fid, "plano": colas[fid].pop(0), "elegido_por": "relleno"}
                     hechas += 1
                     break
         q.update(previa="", final=None, short=None)
@@ -2341,7 +2364,7 @@ def render_basico(mid: str, opciones: dict[str, Any] | None = None) -> None:
                                       voz_original=bool(o.get("voz_original", False))))
     p = cargar(mid)
     if p["fuentes"] and any(not con_imagen(f) and not f.get("panel") for f in p["frases"]):
-        proponer(mid)   # cada frase vacía recibe un plano, para poder hacerlo todo
+        proponer(mid, rellenar=True)   # cada frase vacía recibe un plano, para poder hacerlo todo
     automatico(mid, pago_ok=bool(o.get("pago_ok")))
 
 

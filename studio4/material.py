@@ -37,8 +37,11 @@ CANALES_OFICIALES = re.compile(r"^(rockstar games|playstation|xbox|nintendo|ubis
 SISTEMA = """Eres el documentalista visual de un canal de videojuegos. Para el tema que te den, di qué material
 de vídeo REAL hace falta para enseñarlo: qué juegos (título exacto y año) y qué escenas o misiones concretas.
 Devuelve solo JSON:
-{"escenas": [{"juego": "...", "que": "escena, misión o momento concreto", "busqueda": "consulta para YouTube"}]}
-Reglas: 4-10 escenas, en el orden en que el vídeo las necesitaría. La consulta busca material original: el tráiler
+{"juego_principal": "título exacto del juego del vídeo", "alias": ["otras formas de escribirlo: siglas, número en
+cifra y en romano, p. ej. GTA V, GTA 5, Grand Theft Auto V"], "escenas": [{"juego": "...", "que": "escena, misión o
+momento concreto", "busqueda": "consulta para YouTube"}]}
+Reglas: TODO el material es del JUEGO DEL VÍDEO. Nunca metas otros juegos «parecidos» o «del mismo género» (si el
+vídeo es de GTA V, nada de Silent Hill ni Alan Wake); otro juego solo si el TEMA lo nombra para compararlo. 4-10 escenas, en el orden en que el vídeo las necesitaría. La consulta busca material original: el tráiler
 oficial («<juego> official trailer») o gameplay sin comentario («<juego> <misión> gameplay no commentary»), en inglés.
 Nunca busques análisis, reacciones, listas ni vídeos de otros creadores. Si el tema es inventado (una secuela
 que no existe, un «qué pasaría si»), pide el material de los juegos reales de los que habla."""
@@ -84,15 +87,58 @@ def buscar(consulta: str, n: int = 8) -> list[dict[str, Any]]:
     return salida
 
 
+ROMANOS = {"1": "I", "2": "II", "3": "III", "4": "IV", "5": "V", "6": "VI", "7": "VII", "8": "VIII", "9": "IX", "10": "X"}
+
+
+def _norm(t: str) -> str:
+    import unicodedata
+    t = unicodedata.normalize("NFKD", t.lower()).encode("ascii", "ignore").decode()
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", t).split())
+
+
+def alias_de(juego: str, extra: list[str] | None = None) -> set[str]:
+    """Formas de escribir un juego: tal cual, siglas («Grand Theft Auto» → GTA) y el número en cifra o en romano."""
+    nombres = {juego, *(extra or [])}
+    for j in list(nombres):
+        siglas = re.sub(r"\bgrand theft auto\b", "gta", j, flags=re.I)
+        completo = re.sub(r"\bgta\b", "grand theft auto", j, flags=re.I)
+        nombres.update((siglas, completo))
+        for base in (j, siglas, completo):
+            for cifra, romano in ROMANOS.items():
+                nombres.add(re.sub(rf"\b{romano}\b", cifra, base))
+                nombres.add(re.sub(rf"\b{cifra}\b", romano, base))
+    return {_norm(n) for n in nombres if len(_norm(n)) >= 3}
+
+
+def del_juego(titulo: str, alias: set[str]) -> bool:
+    """¿El vídeo es del juego? Su título tiene que nombrarlo (si no hay alias, no se filtra)."""
+    t = f" {_norm(titulo)} "
+    return not alias or any(f" {a} " in t for a in alias)
+
+
 def escenas(tema: str, dossier: str = "", produccion: str = "") -> list[dict[str, str]]:
-    """Qué juegos y escenas pide el tema (Gemini, gratis). Si no responde, una búsqueda con el tema tal cual."""
+    """Qué escenas del juego pide el tema (Gemini, gratis). Si no responde, una búsqueda con el tema tal cual.
+    Cada escena lleva los `alias` del juego del vídeo (o del que el tema nombra para comparar) para filtrar."""
     try:
         crudo = gemini.generar(f"TEMA: {tema}\n\nLO QUE SE SABE DEL TEMA:\n{dossier[:6000]}\n\nResponde solo con el JSON.",
                                sistema=SISTEMA, temperatura=0.3, detalle="material del tema", produccion=produccion)
         m = re.search(r"\{.*\}", crudo, re.DOTALL)
-        lista = json.loads(m.group(0) if m else crudo).get("escenas") or []
-        lista = [{"juego": str(e.get("juego", "")).strip()[:80], "que": str(e.get("que", "")).strip()[:160],
-                  "busqueda": str(e.get("busqueda", "")).strip()[:120]} for e in lista if isinstance(e, dict) and e.get("busqueda")]
+        d = json.loads(m.group(0) if m else crudo)
+        principal = str(d.get("juego_principal") or "").strip()
+        alias_principal = alias_de(principal, [str(a) for a in d.get("alias") or []]) if principal else set()
+        tema_norm = f" {_norm(tema)} "
+        lista = []
+        for e in d.get("escenas") or []:
+            if not isinstance(e, dict) or not e.get("busqueda"):
+                continue
+            juego = str(e.get("juego", "")).strip()[:80]
+            alias = alias_de(juego) if juego else alias_principal
+            # otro juego solo si el tema lo nombra (una comparación pedida); si no, es material que no toca
+            if juego and alias_principal and not (alias & alias_principal) and not any(f" {a} " in tema_norm for a in alias):
+                logger.info("Material de otro juego descartado: %s", juego)
+                continue
+            lista.append({"juego": juego or principal, "que": str(e.get("que", "")).strip()[:160],
+                          "busqueda": str(e.get("busqueda", "")).strip()[:120], "alias": sorted(alias or alias_principal)})
         if lista:
             return lista[:10]
     except (RuntimeError, ValueError) as e:
@@ -111,7 +157,9 @@ def inventario(tema: str, dossier: str = "", produccion: str = "", por_escena: i
         except Exception as err:  # noqa: BLE001 - una búsqueda caída no tumba el resto
             logger.warning("Búsqueda «%s»: %s", e["busqueda"], err)
             resultados = []
-        buenos = sorted((v for v in resultados if apto(v) and v["id"] not in vistos), key=lambda v: -puntos(v))[:por_escena]
+        alias = set(e.get("alias") or [])
+        buenos = sorted((v for v in resultados if apto(v) and v["id"] not in vistos and del_juego(v["titulo"], alias)),
+                        key=lambda v: -puntos(v))[:por_escena]
         vistos.update(v["id"] for v in buenos)
         salida.append({**e, "videos": buenos})
     return salida

@@ -36,10 +36,14 @@ el Viejo Oeste, piratas, exploradores, curiosidades de la historia, la naturalez
 historia real detrás de películas famosas (nunca sus escenas ni personajes)."""
 
 
+def es_de_juegos(canal: dict[str, Any]) -> bool:
+    """Canal de videojuegos (su material es gameplay) o de historias (su material son fotos y clips reales)."""
+    return bool(re.search(r"fourlevel|juego|gta|gaming|gamer", f"{canal.get('id', '')} {canal.get('nicho', '')}".lower()))
+
+
 def reglas_contenido(canal: dict[str, Any]) -> str:
     """Qué tipo de temas valen en el canal: los de videojuegos hablan del juego; el resto, de historias reales."""
-    texto = f"{canal.get('id', '')} {canal.get('nicho', '')}".lower()
-    return REGLAS_JUEGOS if re.search(r"fourlevel|juego|gta|gaming|gamer", texto) else REGLAS_HISTORIAS
+    return REGLAS_JUEGOS if es_de_juegos(canal) else REGLAS_HISTORIAS
 
 
 def _archivo():

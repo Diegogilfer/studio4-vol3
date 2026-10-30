@@ -720,3 +720,16 @@ body { background-color: var(--fondo); color: var(--texto); }
 .chatgpt-logo svg { width: 28px; height: 28px; fill: currentColor; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
 .chatgpt-logo:hover { transform: translateY(-2px); box-shadow: var(--vidrio-brillo), 0 16px 40px -18px #10a37f; }
 .chatgpt-logo:hover svg { transform: rotate(90deg); color: #10a37f; }
+
+/* --- chats: barra arriba, propuestas que se lanzan con un botón --- */
+.chat-lado { grid-template-rows: auto auto auto auto minmax(0, 1fr); }
+.chat-lado #chat-estado:empty { display: none; }
+.propuesta { display: grid; gap: 8px; margin-top: 8px; padding: 12px 14px; border-radius: var(--r-chico);
+  background: var(--vidrio-2); border: 1px solid color-mix(in srgb, var(--naranja) 45%, var(--vidrio-borde)); }
+.propuesta p { margin: 0; }
+.propuesta.lanzada { border-color: var(--vidrio-borde); opacity: .75; }
+.propuesta.lanzada .etiqueta { color: var(--ok); }
+.chat-lado .chat-form { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; }
+.chat-form .clip { position: static; align-self: end; height: auto; }   /* no es un clip de la línea de tiempo */
+.chat-lado { grid-template-rows: auto auto auto auto minmax(0, 1fr); }
+.propuesta .etiqueta { color: var(--texto); opacity: .7; }

@@ -11,13 +11,17 @@ import threading
 import time
 from typing import Any
 
-from . import canales, config, deepseek, estilos
+from . import canales, config, deepseek, estilos, propuestas
 
 MAX_HISTORIA = 30
 _cerrojo = threading.Lock()
 
-SISTEMA = """Eres el productor de STUDIO 4 en la pantalla de inicio. Hablas en español, breve y cercano. El usuario
-NUNCA necesita traer un guion: tú propones y Studio lo escribe. Elige UNA acción por mensaje:
+SISTEMA = """Eres el productor de STUDIO 4 en la pantalla de inicio. Hablas en español, cercano y claro. CONVERSA DE
+VERDAD: contesta las preguntas con lo que sabes (consejos, explicaciones, opiniones con criterio), pregunta lo que
+falte y ayuda a decidir; tus respuestas pueden tener varias frases si hace falta. El usuario puede pegar su guion o
+pedir que Studio lo escriba. IMPORTANTE: las acciones nicho, ideas y crear tardan (de 1 a 20 minutos) y NO se lanzan
+solas: si el usuario pide algo así, explica en "plan" qué harás exactamente y cuánto tarda más o menos, y él dirá
+«lánzalo» o pulsará el botón. Nunca digas que ya está hecho o en marcha. Elige UNA acción por mensaje:
 - "nicho": analizar si unos temas están saturados en YouTube (args: temas = lista de 1-5 temas cortos en español).
 - "ideas": proponer guiones con fuentes para el canal (args: pedido = qué ideas busca, en una frase).
 - "tendencias": enseñar lo que es tendencia hoy en el canal (sin args).
@@ -30,7 +34,10 @@ NUNCA necesita traer un guion: tú propones y Studio lo escribe. Elige UNA acci�
 - "responder": solo contestar (dudas, consejos), sin acción.
 Los temas son sobre lo que trata el canal (los juegos, los casos, los mitos), no sobre creadores reales poco conocidos.
 Estilos válidos (id: nombre): {estilos}
-Devuelve solo JSON: {{"respuesta": "lo que le dices", "accion": "nombre", "args": {{...}}}}"""
+Devuelve solo JSON: {{"respuesta": "lo que le dices", "accion": "nombre", "args": {{...}}, "plan": "si la acción es
+nicho, ideas o crear: qué harás al lanzarlo, en 1-2 frases, con el tiempo aproximado"}}"""
+
+PESADAS = {"nicho", "ideas", "crear"}   # tardan: se proponen y se lanzan al confirmar
 
 
 def _archivo(cid: str):
@@ -50,7 +57,7 @@ def _guardar(cid: str, mensajes: list[dict[str, Any]]) -> None:
 
 def _pensar(canal: dict[str, Any], historia: list[dict[str, Any]], mensaje: str) -> dict[str, Any]:
     lista = ", ".join(f"{k}: {e['nombre']}" for k, e in estilos.ESTILOS.items())
-    previos = "\n".join(f"{m['quien']}: {m['texto']}" for m in historia[-8:])
+    previos = "\n".join(f"{m['quien']}: {m['texto']}" for m in historia[-14:])
     contexto = (f"CANAL: {canal['nombre']} · nicho: {canal.get('nicho', '')} · estilo por defecto: "
                 f"{canal.get('estilo', '') or 'ninguno'}\n\nCONVERSACIÓN:\n{previos}\n\nUSUARIO: {mensaje}")
     return deepseek.generar_json(SISTEMA.format(estilos=lista), contexto, temperatura=0.4, detalle="chat de inicio")
@@ -103,22 +110,62 @@ def _ejecutar(cid: str, accion: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"tipo": "texto"}
 
 
+def _pendiente(historia: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """La última propuesta sin lanzar (si el último mensaje de la IA la dejó)."""
+    ultimo = next((m for m in reversed(historia) if m["quien"] == "IA"), None)
+    r = (ultimo or {}).get("resultado") or {}
+    return r if r.get("tipo") == "propuesta" and not r.get("lanzada") else None
+
+
+def lanzar(cid: str, mensaje: str = "") -> dict[str, Any]:
+    """Arranca la propuesta pendiente (botón «Lanzar» o «lánzalo» en el chat)."""
+    historia = leer(cid)
+    pend = _pendiente(historia)
+    if not pend:
+        raise ValueError("No hay nada pendiente de lanzar: dime qué quieres hacer.")
+    try:
+        resultado, error = _ejecutar(cid, pend["accion"], pend.get("args") or {}), ""
+    except (ValueError, RuntimeError) as e:
+        resultado, error = {"tipo": "texto"}, str(e)
+    respuesta = f"En marcha: {pend.get('plan') or 'lo que hablamos'}" if not error else "No pude lanzarlo."
+    ahora = time.strftime("%H:%M")
+    with _cerrojo:
+        mensajes = leer(cid)
+        for m in reversed(mensajes):   # la propuesta queda marcada como lanzada
+            if m["quien"] == "IA" and (m.get("resultado") or {}).get("tipo") == "propuesta":
+                m["resultado"]["lanzada"] = True
+                break
+        nuevos = ([{"quien": "tú", "texto": mensaje, "hora": ahora}] if mensaje else []) + [
+            {"quien": "IA", "texto": respuesta, "hora": ahora, "resultado": resultado, "error": error}]
+        _guardar(cid, mensajes + nuevos)
+    return {"respuesta": respuesta, "resultado": resultado, "error": error}
+
+
 def responder(cid: str, mensaje: str, pensar=_pensar) -> dict[str, Any]:
-    mensaje = (mensaje or "").strip()[:1500]
+    mensaje = (mensaje or "").strip()[:4000]
     if not mensaje:
         raise ValueError("Escribe qué vídeo quieres hacer.")
+    historia = leer(cid)
+    if _pendiente(historia) and propuestas.es_confirmacion(mensaje):   # «lánzalo», «dale», «actualiza»…
+        return lanzar(cid, mensaje)
     if not deepseek.disponible():
         raise ValueError("El chat necesita DeepSeek conectado.")
     canal = canales.obtener(cid)
-    historia = leer(cid)
     d = pensar(canal, historia, mensaje)
     accion = str(d.get("accion") or "responder")
-    try:
-        resultado = _ejecutar(cid, accion, d.get("args") if isinstance(d.get("args"), dict) else {})
-        error = ""
-    except (ValueError, RuntimeError) as e:
-        resultado, error = {"tipo": "texto"}, str(e)
-    respuesta = str(d.get("respuesta") or "").strip() or "Hecho."
+    args = d.get("args") if isinstance(d.get("args"), dict) else {}
+    error = ""
+    if accion == "crear" and args.get("estilo") not in estilos.ESTILOS:
+        accion = "preguntar_estilo"   # sin estilo no hay nada que lanzar: primero se elige
+    if accion in PESADAS:   # no se lanza: queda propuesta hasta que el autor confirme
+        plan = str(d.get("plan") or "").strip()[:400] or "Lo preparo en cuanto me digas «lánzalo»."
+        resultado = {"tipo": "propuesta", "accion": accion, "args": args, "plan": plan}
+    else:
+        try:
+            resultado = _ejecutar(cid, accion, args)
+        except (ValueError, RuntimeError) as e:
+            resultado, error = {"tipo": "texto"}, str(e)
+    respuesta = str(d.get("respuesta") or "").strip() or "Dime qué necesitas."
     ahora = time.strftime("%H:%M")
     with _cerrojo:
         _guardar(cid, leer(cid) + [{"quien": "tú", "texto": mensaje, "hora": ahora},

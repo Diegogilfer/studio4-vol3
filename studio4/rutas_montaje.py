@@ -129,7 +129,13 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         from . import entrega
         entrega.entregar(mid, d.get("opciones") or {})
         return "json", {"ok": True}
-    if ruta == "/api/m/chat":   # el chat del vídeo: DeepSeek elige acciones del estudio y se ejecutan
+    if ruta == "/api/m/chat/lanzar":   # «Lanzar»: la acción larga que el chat propuso
+        from . import chat
+        return "json", chat.lanzar(mid)
+    if ruta == "/api/m/inicio-chat/lanzar":
+        from . import asistente
+        return "json", asistente.lanzar(canales.activo()["id"])
+    if ruta == "/api/m/chat":   # el chat del vídeo: conversa; los cambios rápidos se aplican, los largos se proponen
         from . import chat
         return "json", chat.responder(mid, str(d.get("mensaje", "")))
     if ruta in ("/api/m/inicio-chat", "/api/m/inicio-chat/limpiar"):   # empezar hablando: nicho, ideas, tendencias o vídeo
@@ -183,7 +189,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         montaje.planos_por_escenas(mid, bool(d.get("todas")))
         return "json", {"ok": True}
     if ruta == "/api/m/proponer":
-        return "json", {"ok": True, "propuestas": montaje.proponer(mid)}
+        montaje.proponer_en_fondo(mid)   # mira los planos y elige: en segundo plano
+        return "json", {"ok": True}
     if ruta == "/api/m/musica/etiquetar":
         return "json", {"ok": True, "pista": musica.etiquetar(str(d.get("archivo", "")), d.get("animo"), d.get("atribucion"),
                                                                d.get("titulo"), d.get("artista"))}
