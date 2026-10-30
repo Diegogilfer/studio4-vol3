@@ -161,6 +161,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/guion-ia":   # un vídeo con material y sin guion → la IA lo escribe
         montaje.guion_con_ia(mid, d.get("opciones") or {})
         return "json", {"ok": True}
+    if ruta == "/api/m/desde-guion":   # pegas tu guion → limpio, pulido y partido en escenas
+        return "json", {"ok": True, "id": montaje.desde_guion_pegado(str(d.get("guion", "")), str(d.get("titulo", "")))}
     if ruta == "/api/m/desde-url":   # pega un enlace → vídeo nuevo con ese material bajándose
         return "json", {"ok": True, "id": montaje.desde_url(str(d.get("url", "")))}
     if ruta == "/api/m/desde-idea":   # una idea del día → Studio escribe el guion

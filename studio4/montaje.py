@@ -359,6 +359,15 @@ def crear(titulo: str, guion: str, canal: str = "", sin_guion: bool = False) -> 
     return mid
 
 
+def desde_guion_pegado(texto: str, titulo: str = "") -> str:
+    """Pegas tu guion (o una transcripción) → Studio 4 lo limpia y lo pule → vídeo nuevo listo para empezar."""
+    from . import pegar
+    r = pegar.preparar(texto, titulo)
+    mid = crear(r["titulo"], r["guion"])
+    modificar(mid, lambda p: p.update(guion_pegado={"cambios": r["cambios"], "pulido": r["pulido"], "original": texto[:60000]}))
+    return mid
+
+
 def desde_biblioteca(item_id: str) -> str:
     """Un guion de la Biblioteca (los de Agron) → un vídeo nuevo con su título, descripción y hashtags."""
     from . import biblioteca

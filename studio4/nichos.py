@@ -63,6 +63,35 @@ def analizar_tema(tema: str, meses: int = 6) -> dict[str, Any]:
     return r
 
 
+SISTEMA_HISTORIAS = """Para cada TEMA, elige de 2 a 3 HISTORIAS REALES de lo ENCONTRADO en las bases (Wikipedia, archivos):
+sucesos, personas o lugares que existieron, con fecha. Solo de esa lista: cita su url exacta y no inventes nada. Que
+cualquiera las entienda sin saber del tema. Título con la fórmula [quién u objeto] + [qué pasó, con gancho] + (lugar,
+año o época). Devuelve JSON: {"temas": [{"tema": "...", "historias": [{"titulo": "máx. 80 caracteres", "resumen": "qué
+pasó en 1-2 frases, con fecha y lugar", "fuente": "url"}]}]}"""
+
+
+def historias_reales(temas: list[str], canal: dict[str, Any] | None = None) -> dict[str, list[dict[str, str]]]:
+    """Historias reales (con fuente) para cada tema: de dónde sacar vídeos en ese nicho. Vacío si no hay DeepSeek."""
+    from . import buscador, deepseek
+    if not deepseek.disponible() or not temas:
+        return {}
+    hallado = buscador.buscar_en_bases([t[:80] for t in temas])
+    if not hallado:
+        return {}
+    lista = "\n".join(f"- {h['titulo']} — {h['resumen']} ({h['url']})" for h in hallado)
+    canal_txt = f"CANAL: {canal['nombre']} · {canal.get('nicho', '')}\n" if canal else ""
+    r = deepseek.generar_json(SISTEMA_HISTORIAS, f"{canal_txt}TEMAS: {', '.join(temas)}\n\nENCONTRADO:\n{lista}",
+                              temperatura=0.4, detalle="nichos: historias reales")
+    validas = {h["url"] for h in hallado}
+    salida: dict[str, list[dict[str, str]]] = {}
+    for t in r.get("temas") or []:
+        hs = [{"titulo": str(h.get("titulo", ""))[:90], "resumen": str(h.get("resumen", ""))[:260], "fuente": h["fuente"]}
+              for h in (t.get("historias") or []) if h.get("fuente") in validas and h.get("titulo")]
+        if hs:
+            salida[str(t.get("tema", ""))] = hs[:3]
+    return salida
+
+
 def analizar(temas: list[str]) -> list[dict[str, Any]]:
     """Varios temas a la vez, del que tiene más hueco al más saturado."""
     salida = [analizar_tema(t.strip()[:80]) for t in temas[:MAX_TEMAS] if t.strip()]

@@ -187,7 +187,8 @@ def conversar(cid: str, mensaje: str) -> dict[str, Any]:
     propias = [{"base": "tu canal", "titulo": u, "resumen": "fuente de confianza del canal", "url": u} for u in canal.get("fuentes") or []]
     encontrado = hallado + propias
     lista = "\n".join(f"- [{h['base']}] {h['titulo']} — {h['resumen']} ({h['url']})" for h in encontrado)
-    identidad = f"Canal {canal['nombre']}: {canal.get('nicho', '')}. Tono: {canal.get('tono', '')}. Público: {canal.get('publico', '')}."
+    identidad = (f"Canal {canal['nombre']}: {canal.get('nicho', '')}. Tono: {canal.get('tono', '')}. Público: {canal.get('publico', '')}."
+                 f"\nREGLAS DEL CANAL: {canales.reglas_contenido(canal)}")
     r = deepseek.generar_json(SISTEMA_IDEAS, f"{identidad}\n\nCONVERSACIÓN:\n{previos}\n\nPIDE: {mensaje}\n\n{bloque_ref}\n\nENCONTRADO EN LAS BASES:\n{lista}",
                               temperatura=0.7, detalle="biblioteca: propuestas")
     validas = {h["url"] for h in encontrado}

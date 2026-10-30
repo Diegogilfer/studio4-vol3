@@ -3677,3 +3677,49 @@ def test_cada_tema_tiene_paleta_y_escena_3d():
         assert _re.search(rf"\n  {t}\(\) {{", fondo), t
     html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
     assert "/web/fondo3d.js" in html and '"three": "/web/vendor/three/three.module.js"' in html
+
+
+def test_pegar_guion_limpia_pule_y_deja_el_video_listo(aislado, monkeypatch):
+    """Pegas un guion con tiempos, acotaciones y muletillas → limpio, pulido sin cambiar datos, partido en escenas."""
+    from studio4 import deepseek, montaje, pegar
+    pegado = ("1\n00:00:01,000 --> 00:00:04,000\nNARRADOR: Eh, bueno, en 1872 el barco Mary Celeste apareció navegando solo, ¿no?\n\n"
+              "[MÚSICA] [00:12] Este... no había nadie a bordo y la comida estaba intacta. (risas) Los botes salvavidas faltaban, ¿vale?")
+    r = pegar.limpiar(pegado)
+    assert "00:" not in r["guion"] and "NARRADOR" not in r["guion"] and "MÚSICA" not in r["guion"] and "risas" not in r["guion"]
+    assert not r["guion"].lower().startswith(("eh", "bueno")) and "¿no?" not in r["guion"] and "Este..." not in r["guion"]
+    assert "1872" in r["guion"] and "Mary Celeste" in r["guion"] and r["quitado"]["marcas"] >= 2
+    # el pulido se acepta si respeta la longitud; si se come media historia, se queda la limpieza
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    pulido = {"titulo": "El barco que apareció navegando sin nadie a bordo (1872)",
+              "guion": "En 1872 el barco Mary Celeste apareció navegando solo.\n\nNo había nadie a bordo y la comida estaba intacta. Los botes salvavidas faltaban.",
+              "cambios": ["puntuación"]}
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: pulido)
+    mid = montaje.desde_guion_pegado(pegado)
+    p = montaje.cargar(mid)
+    assert p["titulo"].startswith("El barco que apareció") and p["guion_pegado"]["pulido"] and len({f["bloque"] for f in p["frases"]}) == 2
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"guion": "Un barco.", "titulo": "X"})
+    corto = pegar.preparar(pegado)
+    assert not corto["pulido"] and "Mary Celeste" in corto["guion"]
+    with pytest.raises(ValueError):
+        pegar.preparar("[00:01] eh")
+
+
+def test_ideas_y_nichos_de_arigab_son_historias_reales(aislado, monkeypatch):
+    """ARIGAB (historias) no recibe las reglas de videojuegos; el buscador de nichos trae historias reales con fuente."""
+    from studio4 import buscador, canales, deepseek, ideas, nichos
+    arigab, fourlevel = canales.obtener("arigab"), canales.obtener("fourlevel")
+    assert "HISTORIAS REALES" in canales.reglas_contenido(arigab) and "JUEGO EN SÍ" in canales.reglas_contenido(fourlevel)
+    assert "JUEGO EN SÍ" not in ideas.SISTEMA and "REGLAS_DEL_CANAL" in ideas.SISTEMA
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    monkeypatch.setattr(buscador, "buscar_en_bases", lambda qs: [{"base": "Wikipedia", "titulo": "Mary Celeste", "resumen": "bergantín 1872",
+                                                                  "url": "https://es.wikipedia.org/wiki/Mary_Celeste"}])
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"temas": [{"tema": "barcos fantasma", "historias": [
+        {"titulo": "El barco que navegaba sin nadie (1872)", "resumen": "…", "fuente": "https://es.wikipedia.org/wiki/Mary_Celeste"},
+        {"titulo": "Inventada", "resumen": "…", "fuente": "https://inventada.com"}]}]})
+    h = nichos.historias_reales(["barcos fantasma"], arigab)
+    assert [x["titulo"] for x in h["barcos fantasma"]] == ["El barco que navegaba sin nadie (1872)"]   # la fuente inventada no pasa
+
+
+def test_biblioteca_lleva_chatgpt_en_su_logo():
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert 'class="chatgpt-logo" href="https://chatgpt.com/auth/login?next=%2Fg%2Fg-IgKhQ7IgB"' in js and "<svg viewBox=\"0 0 24 24\"" in js

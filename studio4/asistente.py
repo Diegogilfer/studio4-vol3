@@ -63,7 +63,15 @@ def _ejecutar(cid: str, accion: str, args: dict[str, Any]) -> dict[str, Any]:
         temas = [str(t) for t in (args.get("temas") or []) if str(t).strip()][:nichos.MAX_TEMAS]
         if not temas:
             raise ValueError("Dime sobre qué temas quieres que mire la saturación.")
-        return {"tipo": "nicho", "nichos": nichos.analizar(temas)}
+        resultado = nichos.analizar(temas)
+        try:   # además de si está saturado, historias reales con fuente para empezar (si no, el análisis sigue valiendo)
+            historias = nichos.historias_reales(temas, canales.obtener(cid))
+        except Exception:  # noqa: BLE001 - sin historias, el análisis de saturación sigue valiendo
+            historias = {}
+        for n in resultado:
+            n["historias"] = historias.get(n["tema"]) or next((v for k, v in historias.items() if k.lower() in n["tema"].lower()
+                                                               or n["tema"].lower() in k.lower()), [])
+        return {"tipo": "nicho", "nichos": resultado}
     if accion == "ideas":
         from . import buscador
         r = buscador.conversar(cid, str(args.get("pedido") or "ideas para el canal"))

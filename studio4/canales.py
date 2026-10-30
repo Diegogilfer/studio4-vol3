@@ -22,6 +22,25 @@ POR_DEFECTO = [
 ]
 _lock = threading.RLock()
 
+REGLAS_JUEGOS = """LA IDEA TRATA DEL JUEGO EN SÍ: sus mecánicas, secretos, misiones, personajes del juego, mundo, detalles,
+récords, comparaciones entre juegos o lo que pasa al jugarlo. NO de las personas reales que lo crearon (desarrolladores,
+directores, empresarios) salvo figuras que cualquier jugador reconoce (Miyamoto, Hideo Kojima), y aun así el foco es el juego."""
+
+REGLAS_HISTORIAS = """SOLO HISTORIAS REALES Y DOCUMENTADAS: personas, lugares y sucesos que existieron, con fecha y fuente
+comprobable. Nada inventado, nada de ficción presentada como hecho; una leyenda solo si se cuenta como leyenda y qué hay de
+verdad detrás. FÁCILES DE ENTENDER para cualquiera, sin saber nada antes: nada técnico ni nombres raros sin explicar.
+Título = [quién u objeto concreto] + [qué pasó, con gancho] + (lugar, año o época); ej.: «El barco que apareció navegando
+sin nadie a bordo (1872)». VARÍA los temas, no todo son misterios sin resolver: sucesos reales sorprendentes,
+desapariciones y rescates, naufragios, robos y estafas famosos, inventos y su origen, personajes con vidas increíbles,
+el Viejo Oeste, piratas, exploradores, curiosidades de la historia, la naturaleza y la ciencia contadas fácil, y la
+historia real detrás de películas famosas (nunca sus escenas ni personajes)."""
+
+
+def reglas_contenido(canal: dict[str, Any]) -> str:
+    """Qué tipo de temas valen en el canal: los de videojuegos hablan del juego; el resto, de historias reales."""
+    texto = f"{canal.get('id', '')} {canal.get('nicho', '')}".lower()
+    return REGLAS_JUEGOS if re.search(r"fourlevel|juego|gta|gaming|gamer", texto) else REGLAS_HISTORIAS
+
 
 def _archivo():
     return config.PRODUCCIONES / "canales.json"

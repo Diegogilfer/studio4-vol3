@@ -706,3 +706,17 @@ body { background-color: var(--fondo); color: var(--texto); }
 .fondo3d { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; opacity: .9; transition: opacity .8s; }
 .fondo3d.lento { opacity: .7; }
 :root[data-tema="perla"] .fondo3d { opacity: .75; }
+
+/* --- pegar guion, historias reales del nicho y acceso a ChatGPT --- */
+.pegar-form { display: grid; gap: 10px; }
+.pegar-form textarea { width: 100%; resize: vertical; min-height: 120px; field-sizing: content; }
+.pegar-form .fila { gap: 10px; } .pegar-form .fila .campo { flex: 1; }
+.historias-nicho { display: grid; gap: 8px; margin: 6px 0; }
+.historia { display: grid; gap: 4px; padding: 12px 14px; border-radius: var(--r-chico); background: var(--vidrio); border: 1px solid var(--vidrio-borde); }
+.historia .fila { gap: 6px; } .historia a.chip { text-decoration: none; }
+.chatgpt-logo { justify-self: start; display: inline-flex; align-items: center; gap: 10px; margin: -6px 0 18px; padding: 10px 18px 10px 12px;
+  border-radius: 999px; text-decoration: none; color: var(--texto); font-weight: 700; background: var(--vidrio-2); border: 1px solid var(--vidrio-borde);
+  box-shadow: var(--vidrio-brillo); transition: transform .3s, box-shadow .3s; }
+.chatgpt-logo svg { width: 28px; height: 28px; fill: currentColor; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
+.chatgpt-logo:hover { transform: translateY(-2px); box-shadow: var(--vidrio-brillo), 0 16px 40px -18px #10a37f; }
+.chatgpt-logo:hover svg { transform: rotate(90deg); color: #10a37f; }

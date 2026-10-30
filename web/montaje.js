@@ -95,6 +95,15 @@ async function vistaInicio() {
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
     <section class="inicio-chat" id="inicio-chat"><div class="cargando-chat meta">Cargando el chat…</div></section>
+    <section class="url-magica pegar-guion">
+      <div><span class="etiqueta">¿Ya tienes guion?</span><h2>Pega tu <em>guion</em></h2>
+        <p class="meta">Quita marcas de tiempo, acotaciones y muletillas, y lo parte en escenas listo para empezar.</p></div>
+      <form class="pegar-form" id="pegar-form">
+        <textarea class="campo" id="pegar-texto" rows="5" placeholder="Pega aquí tu guion o una transcripción (con o sin tiempos)…" required></textarea>
+        <div class="fila"><input class="campo" id="pegar-titulo" placeholder="Título (opcional: si no, lo propone Studio 4)">
+          <button class="primario" type="submit">Preparar guion</button></div>
+      </form>
+    </section>
     <section class="url-magica">
       <div><span class="etiqueta">Trae tu vídeo</span><h2>Pega un <em>enlace</em> o suelta un <em>archivo</em></h2>
         <p class="meta">Entra como material y lo editas: planos, 3 formatos, subtítulos.</p></div>
@@ -119,6 +128,12 @@ async function vistaInicio() {
     </section>`;
   $("archivo-input").onchange = (ev) => ev.target.files[0] && traerArchivo(ev.target.files[0]);
   pintarInicioChat();
+  $("pegar-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Limpiando y puliendo…";
+    try { location.hash = `v=${(await api("/api/m/desde-guion", { guion: $("pegar-texto").value, titulo: $("pegar-titulo").value })).id}/1`; }
+    catch (e) { aviso(e); b.disabled = false; b.textContent = "Preparar guion"; }
+  };
   $("url-form").onsubmit = async (ev) => {
     ev.preventDefault();
     const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Trayendo…";
@@ -171,6 +186,10 @@ function nichoHTML(n) {
   return `<div class="nicho-fila"><b>${esc(n.tema)}</b><span class="nota-titulo ${color}">${esc(n.veredicto)}</span>
     ${n.videos ? `<small class="meta">${corto(n.mediana_vistas)} vistas medianas · ${n.grandes_1M} canales de +1M · el top 3 se lleva el ${Math.round(n.top3_cuota * 100)} % · ${n.pequenos_que_explotan} canales pequeños que explotan</small>` : ""}
     ${n.ejemplo ? `<small class="meta">Ejemplo: ${esc(n.ejemplo)}</small>` : ""}
+    ${(n.historias || []).length ? `<div class="historias-nicho"><span class="etiqueta">Historias reales para empezar</span>
+      ${n.historias.map((h) => `<div class="historia"><b>${esc(h.titulo)}</b><small class="meta">${esc(h.resumen)}</small>
+        <div class="fila"><a class="chip" href="${esc(h.fuente)}" target="_blank" rel="noopener">Fuente</a>
+        <button class="chip" type="button" data-preguntar="Dame guiones sobre esta historia real: ${esc(h.titulo)}">Guiones de esta historia</button></div></div>`).join("")}</div>` : ""}
     <button class="chip" type="button" data-preguntar="Dame ideas de guiones sobre ${esc(n.tema)}">Ideas de este nicho</button></div>`;
 }
 function resultadoHTML(r) {
@@ -195,7 +214,7 @@ async function pintarInicioChat() {
       : `<div class="msg ia"><p>${esc(x.texto)}</p>${x.error ? `<small class="fallo">✕ ${esc(x.error)}</small>` : ""}${resultadoHTML(x.resultado)}</div>`).join("")
       || `<p class="meta">Cuéntame qué quieres: un nicho, ideas, lo que es tendencia o un vídeo. No hace falta guion: lo escribo yo.</p>`}</div>
     <div class="chips-ia sugerencias">${SUGERENCIAS_INICIO.map((t) => `<button type="button" class="chip-ia" data-preguntar="${esc(t)}">${esc(t)}</button>`).join("")}</div>
-    <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Ej.: «busca un nicho de misterios poco saturado» o «hazme un Short sobre el mecanismo de Anticitera»"></textarea>
+    <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Ej.: «busca un nicho de misterios poco saturado» o «hazme un Short sobre el barco que apareció sin nadie a bordo (1872)»"></textarea>
       <button class="primario" type="submit">Enviar</button></form>`;
   const msgs = $("inicio-msgs");
   if (msgs) msgs.scrollTop = msgs.scrollHeight;
@@ -402,7 +421,7 @@ async function vistaVideos() {
   $("n-cancelar").onclick = () => { $("nuevo-form").hidden = true; };
   $("nuevo-form").onsubmit = async (ev) => {
     ev.preventDefault();
-    try { location.hash = `v=${(await api("/api/m/nuevo", { titulo: $("n-titulo").value, guion: $("n-guion").value })).id}`; } catch (e) { aviso(e); }
+    try { location.hash = `v=${(await api("/api/m/desde-guion", { titulo: $("n-titulo").value, guion: $("n-guion").value })).id}/1`; } catch (e) { aviso(e); }
   };
   if (sessionStorage.getItem("s4-nuevo")) { sessionStorage.removeItem("s4-nuevo"); abrirNuevo(); }
 }
@@ -437,6 +456,8 @@ async function vistaBiblioteca() {
   guiones.forEach((g) => { if (!temas.has(g.codigo)) temas.set(g.codigo, []); temas.get(g.codigo).push(g); });
   $("vista").innerHTML = `
     ${cabecera("Biblioteca de <em>guiones</em>", `Pide guiones por chat: se buscan en las bases de ${esc(bc?.canal || "tu canal")} y en bases abiertas, con sus fuentes.`)}
+    <a class="chatgpt-logo" href="https://chatgpt.com/auth/login?next=%2Fg%2Fg-IgKhQ7IgB" target="_blank" rel="noopener" title="Abrir tu GPT en ChatGPT" aria-label="Abrir tu GPT en ChatGPT">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg><span>ChatGPT</span></a>
     <section class="bases">
       <span class="etiqueta">Bases de donde salen los guiones</span>
       <div class="bases-lista">${bases.canal.map((u) => `<span class="chip base-canal" title="Fuente de confianza del canal">${esc(u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""))}<button type="button" data-quitar-base="${esc(u)}" aria-label="Quitar">×</button></span>`).join("")}
