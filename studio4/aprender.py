@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import canales, config, deepseek, gemini, registro, tendencias, youtube
+from . import canales, config, deepseek, gemini, jsonia, registro, tendencias, youtube
 
 logger = logging.getLogger("studio4.aprender")
 _lock = threading.Lock()
@@ -71,8 +71,7 @@ def _generar_json(sistema: str, prompt: str, *, temperatura: float, detalle: str
             logger.warning("%s: uso Gemini de reserva.", e)
     crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=sistema, temperatura=temperatura,
                            detalle=f"{detalle} (reserva)", produccion=produccion, reserva=False)
-    m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    return json.loads(m.group(0) if m else crudo)
+    return jsonia.leer(crudo)
 
 
 def transcripcion(url: str) -> dict[str, Any] | None:

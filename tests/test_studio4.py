@@ -3673,7 +3673,7 @@ def test_presentacion_de_inicio_con_imagenes_de_tus_videos(aislado):
     vistos = [x for x in d if x.get("href", "").startswith("#v=")]
     assert len(vistos) == 3 and all(x["imagen"].endswith("miniatura_c1.jpg") for x in vistos)
     assert otro not in " ".join(x.get("href", "") for x in d)
-    assert d[-1]["href"] == "/sofi" and d[-1]["orbe"]
+    assert d[-1]["href"] == "#proximamente" and d[-1]["orbe"] and "Próximamente" in d[-1]["etiqueta"]   # Sofi, en beta
     assert "Terminado ✓" in [x["etiqueta"] for x in d] and "Montado · falta cerrar" in [x["etiqueta"] for x in d]
 
 
@@ -3816,3 +3816,19 @@ def test_campana_de_black_friday_propuesta_lanzada_y_anuncio_a_video(aislado, mo
     assert p["campana"]["temporada"] == "Black Friday" and p["formato_principal"] == "9:16" and len({f["bloque"] for f in p["frases"]}) == 2
     with pytest.raises(ValueError):
         campanas.crear_kit("arigab", "")
+
+
+def test_jsonia_lee_lo_que_devuelve_la_ia_aunque_venga_roto():
+    """El JSON de la IA llega en ```json, con texto alrededor, comas de más o cortado: se lee igual (antes tumbaba la escaleta)."""
+    from studio4 import jsonia
+    assert jsonia.leer('Claro:\n```json\n{"a": [1, 2,], "b": "x"}\n```') == {"a": [1, 2], "b": "x"}
+    assert jsonia.leer('{"escenas": [{"n": 1, "t": "hola"}, {"n": 2, "t": "cor') == {"escenas": [{"n": 1, "t": "hola"}, {"n": 2}]}
+    assert jsonia.leer('{"x": 1} y luego texto') == {"x": 1} and jsonia.leer("[1, 2") == [1, 2]
+    with pytest.raises(ValueError, match="no devolvió JSON"):
+        jsonia.leer("lo siento, no puedo")
+
+
+def test_sofi_queda_en_proximamente():
+    html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert 'href="/sofi"' not in html and 'href="#proximamente"' in html and "proximamente: vistaProximamente" in js

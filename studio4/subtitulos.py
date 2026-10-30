@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from typing import Any
 
+from . import jsonia
+
 # Colores ASS en formato &H00BBGGRR
 PALETAS = {
     "amarillo": {"nombre": "Amarillo viral", "resalte": "&H0000E5FF", "texto": "&H00FFFFFF"},
@@ -162,7 +164,7 @@ def traducir_srt(texto: str, idioma: str, generar) -> str:
                '{"t": ["traducción 1", "traducción 2", ...]}')
     crudo = generar(sistema + "\n\nLÍNEAS:\n" + json.dumps(originales, ensure_ascii=False))
     m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    traducidas = json.loads(m.group(0) if m else crudo).get("t", []) if m or crudo.strip().startswith("{") else []
+    traducidas = jsonia.leer(crudo).get("t", []) if m or crudo.strip().startswith("{") else []
     if len(traducidas) != len(cues):   # el modelo descuadró: mejor el original que un .srt roto
         raise ValueError(f"El traductor devolvió {len(traducidas)} líneas de {len(cues)}")
     partes = [f"{cab}\n{str(t).strip()}" for (cab, _orig), t in zip(cues, traducidas)]

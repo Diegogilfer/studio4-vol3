@@ -757,3 +757,18 @@ body { background-color: var(--fondo); color: var(--texto); }
 .campana details .historia { margin-top: 8px; }
 .campana small { white-space: pre-line; }
 .campana > .etiqueta { color: var(--texto); opacity: .7; }
+
+/* --- Próximamente --- */
+.pronto { margin-left: 4px; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--texto); background: var(--vidrio-2); border: 1px solid var(--vidrio-borde); }
+.proximos { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); margin-bottom: 40px; }
+.proximo { position: relative; display: grid; gap: 12px; align-content: start; padding: 26px; border-radius: var(--r);
+  background: var(--vidrio); border: 1px solid var(--vidrio-borde); box-shadow: var(--vidrio-brillo);
+  -webkit-backdrop-filter: var(--desenfoque); backdrop-filter: var(--desenfoque); }
+.proximo h2 { margin: 2px 0 0; font-family: var(--serif); font-weight: 400; font-size: 32px; }
+.proximo p { margin: 0; color: var(--suave); }
+.proximo ul { margin: 0; padding-left: 18px; color: var(--suave); }
+.proximo-cab { display: flex; align-items: center; gap: 16px; }
+.proximo-orbe { flex: none; width: 58px; height: 58px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff, var(--cian) 22%, var(--violeta) 55%, var(--rosa) 80%);
+  box-shadow: 0 0 34px rgba(46, 230, 255, .45); animation: latir 3.2s ease-in-out infinite; }

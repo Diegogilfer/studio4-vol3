@@ -13,7 +13,7 @@ import logging
 import re
 from typing import Any
 
-from . import extractor, gemini
+from . import extractor, gemini, jsonia
 
 logger = logging.getLogger("studio4.material")
 
@@ -122,8 +122,7 @@ def escenas(tema: str, dossier: str = "", produccion: str = "") -> list[dict[str
     try:
         crudo = gemini.generar(f"TEMA: {tema}\n\nLO QUE SE SABE DEL TEMA:\n{dossier[:6000]}\n\nResponde solo con el JSON.",
                                sistema=SISTEMA, temperatura=0.3, detalle="material del tema", produccion=produccion)
-        m = re.search(r"\{.*\}", crudo, re.DOTALL)
-        d = json.loads(m.group(0) if m else crudo)
+        d = jsonia.leer(crudo)
         principal = str(d.get("juego_principal") or "").strip()
         alias_principal = alias_de(principal, [str(a) for a in d.get("alias") or []]) if principal else set()
         tema_norm = f" {_norm(tema)} "

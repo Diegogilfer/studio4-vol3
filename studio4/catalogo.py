@@ -15,7 +15,7 @@ import logging
 import re
 from typing import Any, Callable
 
-from . import extractor, gemini
+from . import extractor, gemini, jsonia
 
 logger = logging.getLogger("studio4.catalogo")
 LOTE = 16   # miniaturas por petición a Gemini
@@ -52,8 +52,7 @@ def catalogar(fid: str, avisar: Callable[[str], None] = lambda _t: None) -> int:
             crudo = gemini.generar("Describe cada miniatura en orden. Responde solo con el JSON.",
                                    sistema=SISTEMA_VER.format(titulo=meta["titulo"][:90]), temperatura=0.2,
                                    detalle="catalogar planos", imagenes=[_miniatura(fid, pl["n"]) for pl in lote])
-            m = re.search(r"\{.*\}", crudo, re.DOTALL)
-            vistos = {int(x["i"]): x for x in json.loads(m.group(0) if m else crudo).get("planos") or [] if str(x.get("i", "")).isdigit()}
+            vistos = {int(x["i"]): x for x in jsonia.leer(crudo).get("planos") or [] if str(x.get("i", "")).isdigit()}
         except Exception as e:  # noqa: BLE001 - un lote que falla no frena el resto; se reintenta otro día
             logger.warning("Catalogar %s: %s", fid, e)
             continue
@@ -94,8 +93,7 @@ def emparejar(mid: str, todas: bool = False, avisar: Callable[[str], None] = lam
     lista_frases = "\n".join(f"{f['n']}. {f['texto']}" for f in frases)
     crudo = gemini.generar(f"FRASES:\n{lista_frases}\n\nPLANOS:\n{lista_planos}\n\nUsa los ids de plano tal cual (P1, P2…). Responde solo con el JSON.",
                            sistema=SISTEMA_EMPAREJAR, temperatura=0.2, detalle="emparejar planos", produccion=mid)
-    m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    asignaciones = json.loads(m.group(0) if m else crudo).get("asignaciones") or []
+    asignaciones = jsonia.leer(crudo).get("asignaciones") or []
     elegidos: dict[int, str] = {}
     tomados: set[str] = set()
     for a in asignaciones:

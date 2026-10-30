@@ -233,11 +233,11 @@ def _en_fondo(pid: str | list[str], nombre: str, fn: Callable[[], None], reinten
             fn()
         except Exception as e:  # noqa: BLE001 - el error se muestra en el panel
             logger.exception("%s falló", nombre)
+            legible, detalle = _error_legible(nombre, e), f"{type(e).__name__}: {e}"[:3000]   # `e` no vive fuera del except
             for uno in pids:   # se conserva en qué paso falló y el detalle técnico, para poder diagnosticarlo
-                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=_error_legible(nombre, e),
+                modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error=legible,
                                                              fase_fallida=p["trabajo"].get("fase", ""), fase=nombre,
-                                                             detalle=f"{type(e).__name__}: {e}"[:3000],
-                                                             reintentable=reintentable))
+                                                             detalle=detalle, reintentable=reintentable))
         else:
             for uno in pids:
                 modificar(uno, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100, reintentable=False))
@@ -810,7 +810,8 @@ def _fase_render(pid: str) -> None:
         modificar(pid, lambda q: q.update(entregas=res, entregas_error=""))
     except Exception as e:  # noqa: BLE001 - el vídeo completo ya está hecho; los recortes se pueden repetir
         logger.exception("Entregas tras el render")
-        modificar(pid, lambda q: q.update(entregas_error=str(e)))
+        motivo = str(e)
+        modificar(pid, lambda q: q.update(entregas_error=motivo))
 
 
 # --- Carpeta de la producción en tu PC -------------------------------------------------------------

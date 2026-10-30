@@ -22,7 +22,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from . import carpetas, extractor, medios, montaje
+from . import carpetas, extractor, jsonia, medios, montaje
 
 TOMAS = (4, 6, 8)   # duraciones que genera Veo
 ESTILO = "Cinematográfico realista"
@@ -55,8 +55,7 @@ def _enriquecer(p: dict[str, Any], escenas: list[dict[str, Any]]) -> dict[str, A
     lista = "\n".join(f"{e['n']}. [{e['capitulo']}] {e['narracion']}" for e in escenas)
     crudo = gemini.generar(f"Título: {p['titulo']}\n\nESCENAS:\n{lista}", sistema=SISTEMA, temperatura=0.5,
                            detalle="escaleta para Flow", produccion=p["id"])
-    m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    return json.loads(m.group(0) if m else crudo)
+    return jsonia.leer(crudo)
 
 
 def exportar(mid: str, estilo: str = ESTILO, con_ia: bool = True) -> dict[str, Any]:
@@ -195,6 +194,8 @@ def _importar(mid: str, p: dict[str, Any], carpeta_paq: Path, archivo_json: Path
 
     # cada frase recibe sus escenas: por la relación guardada al exportar; si no la hay, por orden
     relacion = {e["n"]: e["frase"] for e in (p.get("escaleta") or {}).get("escenas", [])}
+    if not relacion:   # el vídeo perdió su escaleta: vale la relación que viaja en el paquete exportado
+        relacion = {n: int(e["frase"]) for n, e in por_n.items() if str(e.get("frase", "")).isdigit()}
     plano_de = {pl["escena"]: pl["n"] for pl in planos}
     por_frase: dict[int, list[int]] = {}
     if relacion:

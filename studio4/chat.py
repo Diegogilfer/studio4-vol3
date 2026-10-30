@@ -14,7 +14,7 @@ import re
 import time
 from typing import Any, Callable
 
-from . import config, deepseek, gemini, montaje, musica, propuestas
+from . import config, deepseek, gemini, jsonia, montaje, musica, propuestas
 
 logger = logging.getLogger("studio4.chat")
 
@@ -125,8 +125,7 @@ def _pensar(p: dict[str, Any], mensaje: str, mid: str) -> dict[str, Any]:
             logger.warning("Chat: DeepSeek no respondió (%s); contesta Gemini.", e)
     crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.3,
                            detalle="chat del vídeo (reserva)", produccion=mid, reserva=False)
-    m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    return json.loads(m.group(0) if m else crudo)
+    return jsonia.leer(crudo)
 
 
 def _pendiente(p: dict[str, Any]) -> dict[str, Any] | None:

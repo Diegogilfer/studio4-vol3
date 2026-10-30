@@ -747,7 +747,7 @@ def main() -> None:
     ThreadingHTTPServer.daemon_threads = True
     servidor = ThreadingHTTPServer(("127.0.0.1", config.PUERTO), Panel)
     print(f"\n  STUDIO 4 listo  →  http://127.0.0.1:{config.PUERTO}")
-    print(f"  Vincular Flow   →  pulsa «Conectar Flow» en el panel\n")
+    print("  Vincular Flow   →  pulsa «Conectar Flow» en el panel\n")
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:

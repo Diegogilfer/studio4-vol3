@@ -16,7 +16,7 @@ from typing import Any
 import requests
 from google.genai import types
 
-from . import config, gemini, registro
+from . import config, gemini, jsonia, registro
 
 logger = logging.getLogger("studio4.investigacion")
 CABECERAS = {"User-Agent": "STUDIO4-Vol3/1.0 (investigacion de guiones; uso personal; https://github.com/)"}
@@ -89,8 +89,7 @@ def _con_wikipedia(idea: str, produccion: str) -> dict[str, Any]:
         f"Tema de un vídeo: {idea}\n\nDame las consultas para buscar en Wikipedia los artículos que más datos aportan. "
         'Responde solo JSON: {"es": ["consulta 1", "consulta 2"], "en": ["query 1", "query 2"]}. Consultas cortas (1-4 palabras).',
         temperatura=0.2, detalle="consultas de investigación", produccion=produccion)
-    m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    consultas = json.loads(m.group(0) if m else crudo)
+    consultas = jsonia.leer(crudo)
 
     articulos: list[dict[str, str]] = []
     for lang in ("es", "en"):
@@ -139,8 +138,7 @@ def _con_deepseek_web(idea: str, produccion: str) -> dict[str, Any]:
         f"Tema de un vídeo de videojuegos: {idea}\n\nDame 3 búsquedas web para encontrar datos oficiales y verificables "
         "(webs oficiales, wikis del juego, prensa de videojuegos). Responde solo JSON: {\"consultas\": [\"...\", \"...\", \"...\"]}",
         temperatura=0.2, detalle="consultas web", produccion=produccion)
-    m = re.search(r"\{.*\}", crudo, re.DOTALL)
-    consultas = (json.loads(m.group(0) if m else crudo).get("consultas") or [idea])[:3]
+    consultas = (jsonia.leer(crudo).get("consultas") or [idea])[:3]
     fuentes: list[dict[str, Any]] = []
     for q in consultas:
         res = _deepseek_tool("search", {"query": str(q)[:128], "count": 8, "need_content": True}, produccion)

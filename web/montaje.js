@@ -1565,7 +1565,22 @@ async function vistaPlanes() {
 }
 
 const VISTAS = { inicio: vistaInicio, videos: vistaVideos, biblioteca: vistaBiblioteca, tendencias: vistaTendencias,
-  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas, planes: vistaPlanes };
+  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas, planes: vistaPlanes, proximamente: vistaProximamente };
+
+// Próximamente: lo que se está configurando y aún no se ofrece (Sofi, la asistente de voz, en beta privada)
+const PROXIMAMENTE = [
+  { nombre: "Sofi", estado: "Beta privada", texto: "Tu asistente de voz: le hablas y maneja Studio 4 y tu PC, investiga en internet y te pregunta antes de hacer nada delicado.",
+    puntos: ["Hablar en vez de escribir, también desde el móvil", "Memoria: recuerda tus gustos y aprende de tus correcciones", "Solo se activa con tu voz"] },
+  { nombre: "IA incluida en tu plan", estado: "En camino", texto: "Imágenes, voz premium y vídeo con IA incluidos en el plan, sin tener que conectar tus propias claves.",
+    puntos: ["Cupos mensuales por plan", "Pasado el cupo, tus claves o un paquete"] },
+  { nombre: "Studio 4 en inglés", estado: "En camino", texto: "El panel, los guiones y las voces en inglés para canales en otros idiomas.", puntos: [] },
+];
+async function vistaProximamente() {
+  $("vista").innerHTML = `${cabecera("Próximamente", "Lo que estamos configurando para que funcione bien antes de abrirlo a todos.")}
+    <div class="proximos">${PROXIMAMENTE.map((p) => `<article class="proximo">
+      <div class="proximo-cab">${p.nombre === "Sofi" ? `<span class="proximo-orbe"></span>` : ""}<div><span class="etiqueta">${esc(p.estado)}</span><h2>${esc(p.nombre)}</h2></div></div>
+      <p>${esc(p.texto)}</p>${p.puntos.length ? `<ul>${p.puntos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</article>`).join("")}</div>`;
+}
 async function ir() {
   $("trabajo").hidden = true;
   $("selector").hidden = true;

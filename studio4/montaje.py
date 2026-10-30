@@ -28,7 +28,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from . import animacion, calidad, canales, config, extractor, medios, musica, sonido, subtitulos, voz
+from . import animacion, calidad, canales, config, extractor, jsonia, medios, musica, sonido, subtitulos, voz
 
 logger = logging.getLogger("studio4.montaje")
 
@@ -132,9 +132,9 @@ def presentacion(canal: dict[str, Any]) -> list[dict[str, Any]]:
     diapos.append({"etiqueta": "Ideas", "titulo": "¿Qué cuento hoy?", "imagen": fondo(1),
                    "texto": "Tendencias del canal y guiones con fuentes reales: elige uno y Studio 4 lo hace.",
                    "accion": "Buscar guiones", "href": "#biblioteca"})
-    diapos.append({"etiqueta": "Sofi", "titulo": "Tu asistente de voz", "imagen": fondo(2), "orbe": True,
-                   "texto": "Investiga, trae datos reales y maneja tu PC. Lo delicado siempre te lo pregunta.",
-                   "accion": "Hablar con Sofi", "href": "/sofi"})
+    diapos.append({"etiqueta": "Sofi · Próximamente", "titulo": "Tu asistente de voz", "imagen": fondo(2), "orbe": True,
+                   "texto": "Le hablas y maneja Studio 4 y tu PC. Está en beta privada mientras la dejamos fina.",
+                   "accion": "Ver qué viene", "href": "#proximamente"})
     return diapos
 
 
@@ -1307,8 +1307,7 @@ def planos_por_escenas(mid: str, todas: bool = False) -> None:
                               + (f" | {e['quien']}: {e['dice']}" if e["dice"] else "") for e in lista)
                  + "\n\nResponde solo con el JSON.")
         crudo = gemini.generar(texto, sistema=ESCENAS_SISTEMA, temperatura=0.2, detalle="planos por escenas", produccion=mid)
-        m = re.search(r"\{.*\}", crudo, re.DOTALL)
-        elegidas = {int(a["n"]): a["escena"] for a in json.loads(m.group(0) if m else crudo).get("asignaciones", [])
+        elegidas = {int(a["n"]): a["escena"] for a in jsonia.leer(crudo).get("asignaciones", [])
                     if isinstance(a, dict) and str(a.get("n", "")).isdigit()}
         por_id = {e["id"]: e for e in lista}
         _avisar(mid, "Poniendo cada plano en su frase", 80)
@@ -1367,7 +1366,8 @@ def _en_fondo(mid: str, nombre: str, fn: Callable[[], None]) -> None:
                 fn()
         except Exception as e:  # noqa: BLE001 - el motivo se ve en el panel
             logger.exception("%s falló", nombre)
-            modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error=f"{nombre}: {str(e)[:300]}"))
+            motivo = f"{nombre}: {str(e)[:300]}"   # fuera de la lambda: `e` deja de existir al salir del except
+            modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error=motivo))
         else:
             modificar(mid, lambda p: p["trabajo"].update(ocupado=False, error="", progreso=100, fase=f"{nombre}: listo"))
         finally:

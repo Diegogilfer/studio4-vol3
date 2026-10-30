@@ -401,7 +401,7 @@ def pista_de_efectos(escenas: list[dict[str, Any]], total: float, destino: Path)
     fx = efectos(destino.parent / "_fx")
     marcas = [m for m in sonidos_de(escenas) if m[0] < total]
     if not marcas:
-        medios.ffmpeg("-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo", "-t", f"{total:.3f}", str(destino))
+        medios.ffmpeg("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{total:.3f}", str(destino))
         return destino
     entradas, filtros = [], []
     for k, (t, tipo) in enumerate(marcas):

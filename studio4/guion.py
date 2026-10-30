@@ -11,7 +11,7 @@ import logging
 import re
 from typing import Any
 
-from . import config, deepseek, gemini, metodologia
+from . import config, deepseek, gemini, jsonia, metodologia
 
 logger = logging.getLogger("studio4.guion")
 
@@ -147,8 +147,7 @@ def completar(borrador: str, idea: str, dossier: str, segundos: int, produccion:
     if datos is None:
         crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.8,
                                detalle="guion completado (reserva)", produccion=produccion, reserva=False)
-        m = re.search(r"\{.*\}", crudo, re.DOTALL)
-        datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
+        datos, autor = jsonia.leer(crudo), "Gemini"
     texto = _limpiar(str(datos.get("guion", "")))
     if len(texto.split()) < len(borrador.split()):
         raise RuntimeError(f"{autor} no devolvió el guion completado. Vuelve a intentarlo.")
@@ -197,8 +196,7 @@ def escribir(idea: str, dossier: str, versiones: dict[str, int], produccion: str
     if datos is None:
         crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=SISTEMA, temperatura=0.9,
                                detalle="guion (reserva)", produccion=produccion, reserva=False)
-        m = re.search(r"\{.*\}", crudo, re.DOTALL)
-        datos, autor = json.loads(m.group(0) if m else crudo), "Gemini"
+        datos, autor = jsonia.leer(crudo), "Gemini"
 
     salida: dict[str, Any] = {"titulo_provisional": str(datos.get("titulo_provisional", "")).strip(), "autor": autor,
                               "reparto": [{"nombre": str(r.get("nombre", "")).strip()[:40], "ficha": str(r.get("ficha", "")).strip()[:600]}
@@ -228,8 +226,7 @@ def _ajustar_largo(texto: str, objetivo: int, produccion: str) -> str:
         else:
             crudo = gemini.generar(prompt + "\n\nResponde solo con el JSON.", sistema=sistema, temperatura=0.4,
                                    detalle="ajuste de largo", produccion=produccion)
-            m = re.search(r"\{.*\}", crudo, re.DOTALL)
-            nuevo = json.loads(m.group(0) if m else crudo)
+            nuevo = jsonia.leer(crudo)
         ajustado = _limpiar(str(nuevo.get("guion", "")))
     except Exception as e:  # noqa: BLE001 - si el ajuste falla, el guion original sigue valiendo
         logger.warning("No se pudo ajustar el largo del guion: %s", e)
