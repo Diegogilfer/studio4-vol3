@@ -3865,3 +3865,15 @@ def test_modo_cine_en_la_pasada_final(aislado, tmp_path, monkeypatch):
     mid = montaje.crear("P", "Una frase con seis palabras justas aqui.")
     chat.ACCIONES["modo_cine"]["fn"](mid, {"activo": True})
     assert montaje.cargar(mid)["cine"] is True
+
+
+def test_vigilante_no_abre_el_navegador_ni_da_por_caido_un_servidor_lento(monkeypatch):
+    """Un servidor que tarda (render pesado) pero escucha en el puerto está vivo; arrancar no usa iniciar.bat."""
+    import inspect
+    from studio4 import vigilante
+    monkeypatch.setattr(vigilante.urllib.request, "urlopen", lambda *a, **k: (_ for _ in ()).throw(TimeoutError()))
+    monkeypatch.setattr(vigilante, "_puerto_ocupado", lambda: True)
+    assert vigilante._servidor_vivo()
+    assert vigilante._arrancar_servidor()   # puerto ocupado: no lanza nada
+    codigo = inspect.getsource(vigilante._arrancar_servidor)
+    assert "iniciar.bat" not in codigo.lower().replace("antes usaba iniciar.bat", "") and "pythonw" in codigo

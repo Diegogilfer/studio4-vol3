@@ -4,7 +4,8 @@ Adaptado del guardián de SKAY, SIN su fallo: antes de arrancar el servidor comp
 `iniciar.bat` a su vez no abre otro si el puerto 8000 ya responde. Así nunca se multiplica (lo de las 282 copias de ia1).
 
 Qué hace cada ronda (nunca publica, nunca gasta en IA):
-- Servidor caído → lo arranca con iniciar.bat (que no duplica).
+- Servidor caído DE VERDAD (nadie escucha en el puerto) → lo arranca en silencio, sin abrir el navegador. Un servidor
+  lento (en pleno render) no cuenta como caído: antes se daba por muerto y se abría una pestaña nueva cada 10 min.
 - Render parado (mismo progreso) demasiado tiempo → avisa, para que no esperes horas como pasó.
 - Un vídeo terminó (final o previa) desde la ronda anterior → te avisa de que está listo.
 - Poco disco libre → avisa (los vídeos ocupan mucho).
@@ -26,7 +27,6 @@ from . import config, montaje
 logger = logging.getLogger("studio4.vigilante")
 
 ESTADO = config.PRODUCCIONES / "_vigilante.json"
-INICIAR = config.RAIZ / "iniciar.bat"
 PARADO_MIN = 20       # un render con el mismo progreso más de esto = atascado
 DISCO_MIN_GB = 5
 SILENCIO_MIN = 30     # el mismo aviso no se repite antes de esto
@@ -63,20 +63,39 @@ def notificar_windows(titulo: str, texto: str) -> bool:
         return False
 
 
-def _servidor_vivo() -> bool:
+def _puerto_ocupado() -> bool:
+    """¿Hay alguien escuchando en el puerto del panel? (aunque tarde en contestar)."""
+    import socket
     try:
-        urllib.request.urlopen(f"http://127.0.0.1:{config.PUERTO}/api/estado", timeout=5)
+        with socket.create_connection(("127.0.0.1", config.PUERTO), timeout=3):
+            return True
+    except OSError:
+        return False
+
+
+def _servidor_vivo() -> bool:
+    """Vivo si contesta o, al menos, si el puerto está ocupado: un render pesado puede hacer que tarde mucho."""
+    try:
+        urllib.request.urlopen(f"http://127.0.0.1:{config.PUERTO}/api/estado", timeout=20)
         return True
     except Exception:  # noqa: BLE001
-        return False
+        return _puerto_ocupado()
 
 
 def _arrancar_servidor() -> bool:
-    if not INICIAR.exists():
+    """Arranca el servidor en segundo plano y SIN abrir el navegador (antes usaba iniciar.bat, que abre una pestaña)."""
+    import sys
+    from pathlib import Path
+    if _puerto_ocupado():
+        return True
+    servidor = config.RAIZ / "servidor.py"
+    if not servidor.exists():
         return False
-    try:   # iniciar.bat no abre otro si el 8000 ya responde: nunca se duplica
-        subprocess.Popen(["cmd", "/c", str(INICIAR)], cwd=str(config.RAIZ), creationflags=SIN_VENTANA,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    exe = Path(sys.executable)
+    sin_consola = exe.with_name("pythonw.exe") if exe.with_name("pythonw.exe").exists() else exe
+    try:
+        subprocess.Popen([str(sin_consola), str(servidor)], cwd=str(config.RAIZ), creationflags=SIN_VENTANA | 0x00000008,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
         for _ in range(15):
             time.sleep(2)
             if _servidor_vivo():
