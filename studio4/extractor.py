@@ -24,6 +24,7 @@ from . import config, medios
 
 CACHE = config.PRODUCCIONES / "_fuentes_video"
 MAX_ALTO = 1080
+MIN_ALTO = 1080   # material por debajo de esto no se usa: a pantalla completa se ve pixelado
 
 
 def opciones_ytdlp(**extra: Any) -> dict[str, Any]:

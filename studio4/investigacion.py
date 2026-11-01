@@ -165,13 +165,97 @@ def _con_deepseek_web(idea: str, produccion: str) -> dict[str, Any]:
             "metodo": "DeepSeek (web)"}
 
 
-def investigar(idea: str, produccion: str = "") -> dict[str, Any]:
+# --- Fuentes profesionales: las wikis del juego (mucho más detalle que Wikipedia) y las fuentes del canal ---------
+WIKIS_FIJAS = {"gta": ["https://gta.fandom.com/api.php", "https://gta.fandom.com/es/api.php"],
+               "grand theft auto": ["https://gta.fandom.com/api.php", "https://gta.fandom.com/es/api.php"],
+               "red dead": ["https://reddead.fandom.com/api.php"], "zelda": ["https://zelda.fandom.com/api.php"],
+               "pokemon": ["https://bulbapedia.bulbagarden.net/w/api.php"], "pokémon": ["https://bulbapedia.bulbagarden.net/w/api.php"],
+               "minecraft": ["https://minecraft.wiki/api.php"], "fortnite": ["https://fortnite.fandom.com/api.php"],
+               "call of duty": ["https://callofduty.fandom.com/api.php"], "elden ring": ["https://eldenring.wiki.fextralife.com"],
+               "mario": ["https://www.mariowiki.com/api.php"], "resident evil": ["https://residentevil.fandom.com/api.php"]}
+
+
+def _wikis_del_juego(idea: str) -> list[str]:
+    t = idea.lower()
+    apis = [u for clave, lista in WIKIS_FIJAS.items() if clave in t for u in lista if u.endswith("api.php")]
+    return list(dict.fromkeys(apis))
+
+
+def _wiki_buscar_y_leer(api: str, consulta: str, n: int = 2) -> list[dict[str, str]]:
+    """Busca en una wiki MediaWiki (Fandom y similares) y devuelve el texto limpio de los mejores artículos."""
+    import html as _html
+    r = _wiki_get(api, {"action": "query", "list": "search", "srsearch": consulta, "srlimit": n, "format": "json"})
+    salida = []
+    for x in r.json().get("query", {}).get("search", [])[:n]:
+        p = _wiki_get(api, {"action": "parse", "page": x["title"], "prop": "text", "format": "json", "redirects": 1})
+        crudo = ((p.json().get("parse") or {}).get("text") or {}).get("*", "")
+        crudo = re.sub(r"(?is)<(table|style|script|sup|figure|nav)[^>]*>.*?</\1>", " ", crudo)
+        texto = re.sub(r"\s+", " ", _html.unescape(re.sub(r"(?s)<[^>]+>", " ", crudo))).strip()
+        if len(texto) > 400:
+            base = api.rsplit("/", 1)[0]
+            salida.append({"titulo": x["title"], "texto": texto[:MAX_CARACTERES_ARTICULO],
+                           "url": f"{base}/wiki/{x['title'].replace(' ', '_')}"})
+    return salida
+
+
+def _con_varias(idea: str, produccion: str, fuentes_canal: list[str] | None = None) -> dict[str, Any]:
+    """Investigación con VARIAS fuentes a la vez: las fuentes de confianza del canal, las wikis del juego y Wikipedia.
+    Cada hecho del dossier cita su fuente [Fn]. Lo que falle se salta."""
+    crudo = gemini.generar(
+        f"Tema de un vídeo: {idea}\n\nDame consultas cortas (1-4 palabras) para buscar datos: en la wiki del juego (en inglés) "
+        'y en Wikipedia. Responde solo JSON: {"wiki": ["...", "..."], "es": ["..."], "en": ["..."]}',
+        temperatura=0.2, detalle="consultas de investigación", produccion=produccion)
+    consultas = jsonia.leer(crudo)
+    articulos: list[dict[str, str]] = []
+    if fuentes_canal:   # gtabase y las demás fuentes de confianza del canal
+        try:
+            from . import fuentes as paginas
+            r = paginas.investigar(idea, fuentes_canal, produccion=produccion)
+            if r.get("texto"):
+                articulos.append({"titulo": "Fuentes de confianza del canal", "texto": r["texto"],
+                                  "url": ", ".join(f["url"] for f in r["fuentes"][:3])})
+        except Exception as e:  # noqa: BLE001
+            logger.info("Fuentes del canal: %s", e)
+    for api in _wikis_del_juego(idea):
+        for q in (consultas.get("wiki") or [idea])[:2]:
+            try:
+                for a in _wiki_buscar_y_leer(api, str(q)[:80]):
+                    if all(x["url"] != a["url"] for x in articulos):
+                        articulos.append(a)
+            except Exception as e:  # noqa: BLE001
+                logger.info("Wiki %s «%s»: %s", api, q, e)
+    for lang in ("es", "en"):
+        for q in (consultas.get(lang) or [])[:1]:
+            try:
+                for titulo in _buscar_wikipedia(lang, str(q)):
+                    art = _articulo(lang, titulo)
+                    if art and all(x["url"] != art["url"] for x in articulos):
+                        articulos.append(art)
+            except requests.RequestException as e:
+                logger.info("Wikipedia %s: %s", lang, e)
+    articulos = articulos[:8]
+    if not articulos:
+        raise RuntimeError("Ninguna fuente devolvió datos para este tema.")
+    fuentes_txt = "\n\n".join(f"### FUENTE {i}: {a['titulo']} ({a['url']})\n{a['texto']}" for i, a in enumerate(articulos, 1))
+    dossier = gemini.generar(
+        f"Tema: {idea}\n\nArma el dossier usando SOLO estas fuentes; al final de cada hecho indica [F1], [F2]... Si dos fuentes "
+        f"se contradicen, dilo.\n\n{fuentes_txt}", sistema=SISTEMA, temperatura=0.3, detalle="dossier de investigación", produccion=produccion)
+    registro.apuntar("Investigación (varias fuentes)", f"{len(articulos)} fuentes", unidad="fuentes", cantidad=len(articulos), produccion=produccion)
+    return {"dossier": dossier.strip(), "fuentes": [{"titulo": a["titulo"], "url": a["url"]} for a in articulos],
+            "metodo": "wikis del juego + fuentes del canal + Wikipedia"}
+
+
+def investigar(idea: str, produccion: str = "", fuentes_canal: list[str] | None = None) -> dict[str, Any]:
     if config.BUSQUEDA_WEB and config.DEEPSEEK_API_KEY:   # toda la web, fuentes con autoridad (de pago, activado a mano)
         try:
             return _con_deepseek_web(idea, produccion)
         except Exception as e:  # noqa: BLE001 - sin saldo, red, sin resultados: sigue lo gratis
             logger.info("Búsqueda web de DeepSeek no disponible (%s): sigo con Google/Wikipedia.", str(e)[:120])
-    if gemini.bloqueado() or not config.GEMINI_API_KEY:   # Gemini en pausa: directo a Wikipedia (con la reserva)
+    try:   # varias fuentes a la vez: las del canal, las wikis del juego y Wikipedia (gratis)
+        return _con_varias(idea, produccion, fuentes_canal)
+    except Exception as e:  # noqa: BLE001
+        logger.info("Investigación con varias fuentes: %s", str(e)[:160])
+    if gemini.bloqueado() or not config.GEMINI_API_KEY:
         return _con_wikipedia(idea, produccion)
     try:
         return _con_google(idea, produccion)

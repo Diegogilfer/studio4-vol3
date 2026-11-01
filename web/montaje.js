@@ -94,7 +94,7 @@ async function vistaInicio() {
     <section class="carrusel" id="carrusel" aria-label="Presentación"><div class="carrusel-pista" id="carrusel-pista"></div></section>
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
-    <section class="inicio-chat" id="inicio-chat"><div class="cargando-chat meta">Cargando el chat…</div></section>
+    <section class="url-magica crear-video" id="crear-video"><div class="meta">Cargando…</div></section>
     <section class="url-magica pegar-guion">
       <div><span class="etiqueta">¿Ya tienes guion?</span><h2>Pega tu <em>guion</em></h2>
         <p class="meta">Quita marcas de tiempo, acotaciones y muletillas, y lo parte en escenas listo para empezar.</p></div>
@@ -122,12 +122,12 @@ async function vistaInicio() {
     <section class="bloque-inicio">
       <div class="seccion-cab fila-entre"><h2>Sigue con <em>tus vídeos</em></h2><a class="boton" href="#videos">Ver todos</a></div>
       <div class="videos">
-        <article class="tarjeta nuevo" data-al-chat><span>+</span><b>Nuevo vídeo</b><small>Cuéntaselo al chat: sin guion</small></article>
+        <article class="tarjeta nuevo" data-al-crear><span>+</span><b>Nuevo vídeo</b><small>Escribe el tema y Studio 4 lo hace</small></article>
         ${m.videos.slice(0, 5).map(tarjetaVideo).join("")}
       </div>
     </section>`;
   $("archivo-input").onchange = (ev) => ev.target.files[0] && traerArchivo(ev.target.files[0]);
-  pintarInicioChat();
+  pintarCrear().then(() => { if (sessionStorage.getItem("s4-crear")) { sessionStorage.removeItem("s4-crear"); $("crear-video")?.scrollIntoView({ behavior: "smooth" }); $("c-tema")?.focus(); } });
   $("pegar-form").onsubmit = async (ev) => {
     ev.preventDefault();
     const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Limpiando y puliendo…";
@@ -178,94 +178,35 @@ function enlazarCanal() {
   };
 }
 
-// ============================================================ Chat de Inicio: se empieza hablando, nunca con un guion
-const SUGERENCIAS_INICIO = ["Prepárame la campaña de Black Friday de mi producto", "Busca un nicho poco saturado para mi canal", "Dame 5 ideas de Shorts para esta semana",
-  "¿Qué es tendencia hoy en mi nicho?", "Hazme un Short de 1 minuto sobre algo que esté sonando"];
-function nichoHTML(n) {
-  const color = n.veredicto.startsWith("Hueco") ? "ok" : n.veredicto.startsWith("Saturado") || n.veredicto.startsWith("Poca") ? "bajo" : "medio";
-  return `<div class="nicho-fila"><b>${esc(n.tema)}</b><span class="nota-titulo ${color}">${esc(n.veredicto)}</span>
-    ${n.videos ? `<small class="meta">${corto(n.mediana_vistas)} vistas medianas · ${n.grandes_1M} canales de +1M · el top 3 se lleva el ${Math.round(n.top3_cuota * 100)} % · ${n.pequenos_que_explotan} canales pequeños que explotan</small>` : ""}
-    ${n.ejemplo ? `<small class="meta">Ejemplo: ${esc(n.ejemplo)}</small>` : ""}
-    ${(n.historias || []).length ? `<div class="historias-nicho"><span class="etiqueta">Historias reales para empezar</span>
-      ${n.historias.map((h) => `<div class="historia"><b>${esc(h.titulo)}</b><small class="meta">${esc(h.resumen)}</small>
-        <div class="fila"><a class="chip" href="${esc(h.fuente)}" target="_blank" rel="noopener">Fuente</a>
-        <button class="chip" type="button" data-preguntar="Dame guiones sobre esta historia real: ${esc(h.titulo)}">Guiones de esta historia</button></div></div>`).join("")}</div>` : ""}
-    <button class="chip" type="button" data-preguntar="Dame ideas de guiones sobre ${esc(n.tema)}">Ideas de este nicho</button></div>`;
-}
-function resultadoHTML(r) {
-  if (!r) return "";
-  if (r.tipo === "nicho") return `<div class="nichos">${r.nichos.map(nichoHTML).join("")}</div>`;
-  if (r.tipo === "ideas") return `<div class="ideas-rejilla">${r.ideas.map((i) => ideaHTML(i, false)).join("")}</div>`;
-  if (r.tipo === "tendencias") return `<div class="chips">${r.senales.map((s) => `<button type="button" class="chip-radar" data-preguntar="Dame ideas de guiones sobre ${esc(s.tema)} (${esc((s.titulares || [])[0] || "")})">${esc(s.tema)} <b>${s.n_fuentes}</b></button>`).join("") || `<span class="meta">El radar aún no tiene señales de hoy.</span>`}</div>`;
-  if (r.tipo === "estilo") return `<div class="estilos-ia chips-ia">${r.estilos.map((e) => `<button type="button" class="chip-ia${e.hecho_por === "claude" ? " por-claude" : ""}" title="${esc(e.para)} · ${esc(e.imagen)}" data-preguntar="Hazlo en estilo ${esc(e.nombre)} (${esc(e.id)})">${esc(e.nombre)}</button>`).join("")}</div>
-    <p class="meta">✦ = lo hace Claude con código, gratis. El resto necesita un modelo de imagen o vídeo.</p>`;
-  if (r.tipo === "campana") return campanaHTML(r.kit);
-  if (r.tipo === "propuesta") return `<div class="propuesta${r.lanzada ? " lanzada" : ""}"><span class="etiqueta">${r.lanzada ? "Lanzado ✓" : "Listo para lanzar"}</span>
-    <p>${esc(r.plan)}</p>${r.lanzada ? "" : `<div class="fila"><button class="primario" type="button" data-lanzar-inicio>Lanzar</button>
-    <span class="meta">o escribe «lánzalo». Si quieres cambiar algo, dímelo antes.</span></div>`}</div>`;
-  if (r.tipo === "video") return `<div class="fila"><a class="primario" href="#v=${esc(r.id)}/1">Abrir el vídeo (${esc(r.estilo)})</a><span class="meta">Se está investigando y escribiendo solo.</span></div>`;
-  return "";
-}
-async function pintarInicioChat() {
-  const caja = $("inicio-chat");
+// ============================================================ Crear un vídeo: tema, estilo, duración y formato
+async function pintarCrear() {
+  const caja = $("crear-video");
   if (!caja) return;
-  const d = await seguro("/api/m/inicio-chat");
-  const chat = d?.chat || [];
-  const plegado = estadoChat("s4-chat-inicio") === "minimizado";
-  caja.classList.toggle("plegado", plegado);
-  caja.innerHTML = `<div class="seccion-cab fila-entre"><h2>¿Qué vídeo <em>hacemos</em> hoy?</h2>
-      <div class="fila">${chat.length && !plegado ? `<button class="boton" type="button" id="inicio-limpiar">Empezar de nuevo</button>` : ""}
-        <button class="boton icono" type="button" id="inicio-plegar" title="${plegado ? "Abrir el chat" : "Minimizar el chat"}" aria-label="${plegado ? "Abrir el chat" : "Minimizar el chat"}">${plegado ? "▾" : "—"}</button></div></div>
-    ${plegado ? "" : `
-    <form class="chat-form" id="inicio-form"><textarea class="campo" id="inicio-texto" rows="2" placeholder="Pregúntame lo que quieras o pídeme un vídeo: te digo qué haría y lo lanzas cuando quieras"></textarea>
-      <button class="primario" type="submit">Enviar</button></form>
-    <div class="chips-ia sugerencias">${SUGERENCIAS_INICIO.map((t) => `<button type="button" class="chip-ia" data-preguntar="${esc(t)}">${esc(t)}</button>`).join("")}</div>
-    <div class="chat-msgs inicio-msgs" id="inicio-msgs">${pares(chat).map((x) => x.quien === "tú"
-      ? `<div class="msg mio"><p>${esc(x.texto)}</p></div>`
-      : `<div class="msg ia"><p>${esc(x.texto)}</p>${x.error ? `<small class="fallo">✕ ${esc(x.error)}</small>` : ""}${resultadoHTML(x.resultado)}</div>`).join("")
-      || `<p class="meta">Pregúntame lo que quieras: un nicho, ideas, lo que es tendencia o un vídeo. Primero te digo qué haría; nada largo arranca hasta que digas «lánzalo».</p>`}</div>`}`;
-  $("inicio-plegar").onclick = () => { estadoChat("s4-chat-inicio", plegado ? "abierto" : "minimizado"); pintarInicioChat(); };
-  if (plegado) return;
-  if ($("inicio-texto") && sessionStorage.getItem("s4-al-chat")) { sessionStorage.removeItem("s4-al-chat"); $("inicio-texto").focus(); }
-  caja.querySelectorAll("[data-lanzar-inicio]").forEach((b) => {
-    b.onclick = async () => {
-      b.disabled = true; b.textContent = "Lanzando…";
-      try {
-        const r = await api("/api/m/inicio-chat/lanzar", {});
-        if (r.resultado?.tipo === "video") { location.hash = `v=${r.resultado.id}/1`; return; }
-        await pintarInicioChat();
-      } catch (e) { aviso(e); b.disabled = false; b.textContent = "Lanzar"; }
-    };
-  });
-  const enviarInicio = async (texto) => {
-    if (!texto.trim()) return;
-    const b = $("inicio-form").querySelector("button");
-    b.disabled = true; b.textContent = "Pensando…";
+  const e = await seguro("/api/m/estilos");
+  const estilos = e?.estilos || [];
+  caja.innerHTML = `<div><span class="etiqueta">Vídeo nuevo</span><h2>¿Qué vídeo <em>hacemos</em> hoy?</h2>
+      <p class="meta">Escribe el tema: Studio 4 investiga con varias fuentes, escribe el guion, busca material en alta calidad y pone un plano en cada frase.</p></div>
+    <form class="crear-form" id="crear-form">
+      <input class="campo" id="c-tema" placeholder="Ej.: el fantasma del Monte Chiliad en GTA V" required>
+      <div class="fila">
+        <select class="campo" id="c-estilo">${estilos.map((x) => `<option value="${esc(x.id)}" ${x.id === e.canal ? "selected" : ""}>${esc(x.nombre)}${x.hecho_por === "claude" ? "" : " · necesita modelo"}</option>`).join("")}</select>
+        <select class="campo" id="c-duracion"><option value="60">1 min (Short)</option><option value="180" selected>3 min</option><option value="300">5 min</option><option value="600">10 min</option></select>
+        <select class="campo" id="c-formato"><option value="16:9">16:9 (YouTube)</option><option value="9:16">9:16 (Shorts)</option></select>
+        <button class="primario" type="submit">Crear vídeo</button></div></form>`;
+  $("crear-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const b = ev.target.querySelector("button"); b.disabled = true; b.textContent = "Creando…";
     try {
-      const r = await api("/api/m/inicio-chat", { mensaje: texto });
-      if (r.resultado?.tipo === "video") { location.hash = `v=${r.resultado.id}/1`; return; }
-      await pintarInicioChat();
-    } catch (e) { aviso(e); b.disabled = false; b.textContent = "Enviar"; }
+      const r = await api("/api/m/crear-ia", { tema: $("c-tema").value, opciones: { estilo: $("c-estilo").value,
+        duracion: Number($("c-duracion").value), formato: $("c-formato").value } });
+      location.hash = `v=${r.id}/1`;
+    } catch (e2) { aviso(e2); b.disabled = false; b.textContent = "Crear vídeo"; }
   };
-  $("inicio-form").onsubmit = (ev) => { ev.preventDefault(); enviarInicio($("inicio-texto").value); };
-  $("inicio-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); enviarInicio(ev.target.value); } };
-  caja.querySelectorAll("[data-preguntar]").forEach((x) => { x.onclick = () => enviarInicio(x.dataset.preguntar); });
-  if ($("inicio-limpiar")) $("inicio-limpiar").onclick = async () => { await api("/api/m/inicio-chat/limpiar", {}); pintarInicioChat(); };
-  // las propuestas de guion: crear el vídeo o guardarlas, igual que en la Biblioteca
-  caja.querySelectorAll("[data-idea-crear]").forEach((x) => { x.onclick = async () => {
-    x.disabled = true; x.textContent = "Creando…";
-    try { location.hash = `v=${(await api("/api/m/biblioteca/crear", { idea: x.dataset.ideaCrear })).id}/1`; } catch (e) { aviso(e); x.disabled = false; x.textContent = "Crear vídeo"; }
-  }; });
-  caja.querySelectorAll("[data-idea-guardar]").forEach((x) => { x.onclick = async () => {
-    try { await api("/api/m/biblioteca/guardar", { idea: x.dataset.ideaGuardar }); x.textContent = "Guardada"; x.disabled = true; } catch (e) { aviso(e); }
-  }; });
-  if (sessionStorage.getItem("s4-al-chat")) { sessionStorage.removeItem("s4-al-chat"); $("inicio-texto").focus(); caja.scrollIntoView({ behavior: "smooth" }); }
 }
-document.addEventListener("click", (ev) => {   // «Nuevo vídeo» = ir al chat de inicio
-  if (!ev.target.closest("[data-al-chat]")) return;
-  sessionStorage.setItem("s4-al-chat", "1");
-  estadoChat("s4-chat-inicio", "abierto");   // si estaba plegado, se abre
-  if (location.hash === "#inicio" || location.hash === "") { pintarInicioChat(); } else { location.hash = "inicio"; }
+document.addEventListener("click", (ev) => {   // «Nuevo vídeo» = ir al formulario de Inicio
+  if (!ev.target.closest("[data-al-crear]")) return;
+  if (location.hash === "#inicio" || location.hash === "") { $("crear-video")?.scrollIntoView({ behavior: "smooth" }); $("c-tema")?.focus(); }
+  else { sessionStorage.setItem("s4-crear", "1"); location.hash = "inicio"; }
 });
 
 // ============================================================ Presentación en carrusel (cristal sobre imagen)
@@ -277,7 +218,7 @@ function pintarCarrusel(diapos) {
     <article class="diapo" style="${d.imagen ? `--img:url('${esc(d.imagen)}')` : ""}" aria-label="${k + 1} de ${diapos.length}">
       <div class="diapo-fondo"></div>${d.orbe ? `<div class="diapo-orbe"></div>` : ""}
       <div class="diapo-cristal"><span class="etiqueta">${esc(d.etiqueta)}</span><h2>${esc(d.titulo)}</h2><p>${esc(d.texto)}</p>
-        ${d.chat ? `<button class="primario" type="button" data-al-chat>${esc(d.accion)} →</button>`
+        ${d.chat ? `<button class="primario" type="button" data-al-crear>${esc(d.accion)} →</button>`
         : `<a class="primario" href="${esc(d.href)}">${esc(d.accion)} →</a>`}</div>
       ${(d.abanico || []).length > 1 ? `<div class="diapo-abanico">${d.abanico.map((im) => `<img src="${esc(im)}" alt="" loading="lazy">`).join("")}</div>`
         : d.imagen && !d.orbe ? `<img class="diapo-mini" src="${esc(d.imagen)}" alt="" loading="lazy">` : ""}
@@ -373,42 +314,6 @@ function mostrarPausa() {
 }
 montarTemas();
 
-// los chats con la barra arriba: cada pregunta con su respuesta, lo más nuevo primero
-function pares(mensajes) {
-  const grupos = [];
-  mensajes.forEach((m) => { if (m.quien === "tú" || !grupos.length) grupos.push([m]); else grupos[grupos.length - 1].push(m); });
-  return grupos.reverse().flat();
-}
-
-// el kit de campaña: anuncios (cada uno se convierte en vídeo), publicaciones, correos y calendario
-function campanaHTML(k) {
-  const copiar = (t) => `<button type="button" class="chip" data-copiar="${esc(t)}">Copiar</button>`;
-  return `<div class="campana"><span class="etiqueta">${esc(k.temporada)} · ${esc(k.titulo)}</span>
-    ${k.mensaje ? `<p class="gancho">«${esc(k.mensaje)}»</p>` : ""}
-    <div class="campana-anuncios">${k.anuncios.map((a, n) => `<div class="historia"><b>Anuncio ${a.duracion} s · ${esc(a.titulo)}</b>
-      <small class="meta">${esc(a.guion)}</small><div class="fila"><button class="primario" type="button" data-anuncio="${n}" data-kit="${esc(k.id)}">Hacer este anuncio</button>${copiar(a.guion)}</div></div>`).join("")}</div>
-    <details><summary>Publicaciones para redes (${k.publicaciones.length})</summary>${k.publicaciones.map((p) => `<div class="historia"><b>${esc(p.cuando)} · ${esc(p.red)}</b>
-      <small>${esc(p.texto)} ${esc((p.hashtags || []).join(" "))}</small>${copiar(`${p.texto}\n\n${(p.hashtags || []).join(" ")}`)}</div>`).join("")}</details>
-    <details><summary>Correos (${k.correos.length})</summary>${k.correos.map((c) => `<div class="historia"><b>${esc(c.cuando)} · ${esc(c.asunto)}</b>
-      <small>${esc(c.cuerpo)}</small>${copiar(`${c.asunto}\n\n${c.cuerpo}`)}</div>`).join("")}</details>
-    <details><summary>Calendario</summary><ul>${k.calendario.map((c) => `<li><b>${esc(c.cuando)}</b> · ${esc(c.que)}</li>`).join("")}</ul></details></div>`;
-}
-document.addEventListener("click", async (ev) => {
-  const c = ev.target.closest("[data-copiar]");
-  if (c) { try { await navigator.clipboard.writeText(c.dataset.copiar); c.textContent = "Copiado ✓"; } catch (e) { aviso("No pude copiar: selecciónalo a mano."); } return; }
-  const a = ev.target.closest("[data-anuncio]");
-  if (a) {
-    a.disabled = true; a.textContent = "Creando…";
-    try { location.hash = `v=${(await api("/api/m/campana/video", { kit: a.dataset.kit, n: Number(a.dataset.anuncio) })).id}/1`; }
-    catch (e) { aviso(e); a.disabled = false; a.textContent = "Hacer este anuncio"; }
-  }
-});
-
-// el panel de chat se puede minimizar (burbuja flotante) o cerrar (botón «Chat» arriba); se recuerda
-const estadoChat = (clave, valor) => {
-  try { if (valor) localStorage.setItem(clave, valor); return localStorage.getItem(clave) || "abierto"; } catch (e) { return valor || "abierto"; }
-};
-
 function pintarRadar(r) {
   const s = r?.senales || [];
   if (!s.length) return r?.actualizando ? `<section class="bloque-inicio"><div class="seccion-cab"><h2>En <em>tendencia</em> ahora</h2>
@@ -468,7 +373,7 @@ async function vistaVideos() {
       <div class="fila"><button class="primario" type="submit">Crear vídeo</button><button class="boton" type="button" id="n-cancelar">Cancelar</button></div>
     </form>
     <div class="videos">
-      <article class="tarjeta nuevo" data-al-chat><span>+</span><b>Nuevo vídeo</b><small>Cuéntaselo al chat: sin guion</small></article>
+      <article class="tarjeta nuevo" data-al-crear><span>+</span><b>Nuevo vídeo</b><small>Escribe el tema y Studio 4 lo hace</small></article>
       ${m.videos.map(tarjetaVideo).join("")}
     </div>
     <p class="meta">¿Ya tienes el guion escrito? <a href="#" data-nuevo>Pégalo aquí</a>.</p>
@@ -683,9 +588,14 @@ async function vistaHerramientas() {
       $("flow-abrir").href = r.enlace; $("flow-abrir").hidden = !r.enlace; $("flow-guardar").textContent = "Guardado";
     } catch (e) { aviso(e); }
   };
+  const g = await seguro("/api/m/google");
   seguro("/api/m/conexiones").then((c) => {
     if (!c || !$("conexiones")) return;
-    $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Conexiones (las mismas claves del proyecto anterior)</span>
+    $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Google · YouTube y Drive</span>
+      <div class="fila"><span class="meta">${g?.conectado ? "Conectado: analítica de YouTube y cada vídeo terminado sube su carpeta a Drive (Studio 4/<canal>)."
+        : g?.configurado ? "Un clic da acceso a la analítica de YouTube y a Drive (solo a las carpetas que sube Studio 4)." : "Falta la credencial de Google Cloud (secrets/youtube_client.json)."}</span>
+      ${g?.configurado ? `<a class="${g.conectado ? "boton" : "primario"}" href="/youtube/conectar">${g.conectado ? "Volver a conectar" : "Conectar con Google"}</a>` : ""}</div></section>
+      <section class="mantenimiento"><span class="etiqueta">Conexiones (las mismas claves del proyecto anterior)</span>
       <div class="conexiones">${c.conexiones.map((x) => `<div class="conexion ${x.conectada ? "si" : ""}">
         <i></i><div><b>${esc(x.api)}</b><small>${esc(x.uso)}</small></div><span>${x.conectada ? (x.pago ? "Conectada · de pago" : "Conectada · gratis") : "Sin conectar"}</span></div>`).join("")}</div></section>`;
   });
@@ -780,77 +690,6 @@ function miniaturaDe(f) {
 }
 
 const NOMBRES = ["Guion", "Material", "Montaje", "Previa", "Final"];
-// ============================================================ Chat del vídeo (DeepSeek ejecuta acciones del estudio)
-const SUGERENCIAS = ["Escribe el guion con IA", "Pon un plano en cada frase", "Subtítulos estilo cine arriba",
-  "Cambia la voz a Charon", "Haz la previa", "Hazlo todo: los 3 formatos"];
-function chatHTML(v) {
-  const msgs = v.chat || [];
-  const form = `<form class="chat-form" id="chat-form"><textarea class="campo" id="chat-texto" rows="2" placeholder="Pregunta o pide un cambio; lo largo te lo propongo y lo lanzas tú…"></textarea>
-      <label class="boton clip" title="Adjuntar imagen, vídeo o guion">📎<input type="file" id="chat-adjunto" accept="image/*,video/*,.txt,.md" hidden></label>
-      <button class="primario" type="submit">Enviar</button></form>`;
-  return `<aside class="chat-lado"><div class="chat-cab"><b>Chat</b><small class="meta">Conversa; lo largo lo lanzas tú</small>
-      <span class="chat-ventana"><button type="button" class="boton icono" data-chat="minimizado" title="Minimizar" aria-label="Minimizar el chat">—</button>
-      <button type="button" class="boton icono" data-chat="cerrado" title="Cerrar" aria-label="Cerrar el chat">×</button></span></div>
-    ${form}<span class="meta" id="chat-estado"></span>
-    <div class="chips-ia sugerencias">${SUGERENCIAS.map((t) => `<button type="button" class="chip-ia" data-sugerencia="${esc(t)}">${esc(t)}</button>`).join("")}</div>
-    <div class="chat-msgs" id="chat-msgs">${msgs.length ? pares(msgs).map((m) => `
-      <div class="msg ${m.quien === "tú" ? "mio" : "ia"}"><p>${esc(m.texto)}</p>
-        ${(m.hechas || []).map((h) => `<small class="hecho">✓ ${esc(h)}</small>`).join("")}
-        ${(m.errores || []).map((h) => `<small class="fallo">✕ ${esc(h)}</small>`).join("")}
-        ${m.pendiente ? `<div class="propuesta${m.pendiente.lanzada ? " lanzada" : ""}"><span class="etiqueta">${m.pendiente.lanzada ? "Lanzado ✓" : "Listo para lanzar"}</span>
-          <p>${esc(m.pendiente.plan)}</p>${m.pendiente.lanzada ? "" : `<button class="primario" type="button" data-lanzar-video>Lanzar</button>`}</div>` : ""}</div>`).join("")
-      : `<p class="meta">Pregúntame por el vídeo o pide cambios: «¿qué le falta?», «pon subtítulos estilo cine», «escribe un guion de 1 minuto»…</p>`}</div>
-    ${(v.adjuntos || []).length ? `<div class="adjuntos">${v.adjuntos.map((a) => `<img src="/m/${esc(v.id)}/adjuntos/${esc(a.archivo)}" alt="${esc(a.nombre)}" title="${esc(a.nombre)} · pídele: «ponla en la miniatura» o «ponla en la frase 3»">`).join("")}</div>` : ""}
-    </aside>`;
-}
-function enlazarChat(v) {
-  const caja = $("chat-msgs");
-  if (caja) caja.scrollTop = 0;   // lo nuevo va arriba, junto a la barra
-  document.querySelectorAll("[data-lanzar-video]").forEach((b) => {
-    b.onclick = async () => {
-      b.disabled = true; b.textContent = "Lanzando…";
-      try { await api("/api/m/chat/lanzar", { id: v.id }); } catch (e) { aviso(e); }
-      firma = ""; await cargarVideo(v.id);
-    };
-  });
-  const enviarChat = async (texto) => {
-    if (!texto.trim()) return;
-    const b = $("chat-form").querySelector("button");
-    b.disabled = true; b.textContent = "Pensando…";
-    try { await api("/api/m/chat", { id: v.id, mensaje: texto }); $("chat-texto").value = ""; }
-    catch (e) { aviso(e); }
-    finally { b.disabled = false; b.textContent = "Enviar"; firma = ""; await cargarVideo(v.id); }
-  };
-  $("chat-form").onsubmit = (ev) => { ev.preventDefault(); enviarChat($("chat-texto").value); };
-  $("chat-texto").onkeydown = (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); enviarChat(ev.target.value); } };
-  document.querySelectorAll("[data-sugerencia]").forEach((b) => { b.onclick = () => enviarChat(b.dataset.sugerencia); });
-  // adjuntos: imagen → queda en el vídeo para la miniatura o una frase; vídeo → material; .txt → guion
-  const adjuntar = async (f) => {
-    const estado = (t) => { $("chat-estado").textContent = t; };
-    try {
-      if (/\.(txt|md)$/i.test(f.name) || f.type.startsWith("text/")) {
-        const texto = await f.text();
-        if (!confirm(`¿Usar «${f.name}» como guion de este vídeo? (${texto.split(/\s+/).length} palabras)`)) return;
-        await api("/api/m/guion", { id: v.id, guion: texto });
-      } else if (f.type.startsWith("image/") || /\.(jpe?g|png|webp)$/i.test(f.name)) {
-        await subirVideo(f, v.id, (pc) => estado(`Adjuntando «${f.name}»… ${pc} %`), "/api/m/adjuntar");
-      } else if (f.type.startsWith("video/") || /\.(mp4|mov|mkv|webm|avi|m4v)$/i.test(f.name)) {
-        await subirVideo(f, v.id, (pc) => estado(`Subiendo «${f.name}»… ${pc} %`));
-      } else { aviso("Adjunta una imagen, un vídeo o un guion en .txt."); return; }
-      estado(""); firma = ""; await cargarVideo(v.id);
-    } catch (e) { estado(""); aviso(e); }
-  };
-  $("chat-adjunto").onchange = (ev) => { if (ev.target.files[0]) adjuntar(ev.target.files[0]); };
-  const lado = document.querySelector(".chat-lado");
-  lado.addEventListener("dragover", (ev) => { ev.preventDefault(); ev.stopPropagation(); lado.classList.add("soltando-chat"); });
-  lado.addEventListener("dragleave", () => lado.classList.remove("soltando-chat"));
-  lado.addEventListener("drop", (ev) => {
-    ev.preventDefault(); ev.stopPropagation(); lado.classList.remove("soltando-chat");
-    const f = ev.dataTransfer?.files?.[0];
-    if (f) adjuntar(f);
-  });
-}
-
 // Tarjeta «Resumen» y guion gráfico (escenas con su tiempo y su plano), como el lienzo de CapCut
 function resumenIAHTML(v) {
   const r = v.resumen_ia;
@@ -884,8 +723,10 @@ function cierreHTML(v) {
     <video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final?.hecho || "")}"></video>
     <div class="fila">${v.paquete ? `<a class="boton" href="/m/${esc(v.id)}/paquete.zip?v=${encodeURIComponent(v.paquete.hecho)}" download="${esc(v.titulo)} (proyecto).zip">Descargar proyecto (.zip)</a>
       <button class="boton" type="button" id="abrir-paquete">Abrir carpeta</button>` : ""}
+      ${v.paquete?.drive ? `<a class="boton" href="${esc(v.paquete.drive)}" target="_blank" rel="noopener">Abrir en Drive</a>`
+        : `<button class="boton" type="button" id="subir-drive" title="${esc(v.paquete?.drive_error || "")}">${v.paquete?.drive_error ? "Reintentar subir a Drive" : "Subir a Drive"}</button>`}
       <button class="boton" type="button" id="reabrir">Seguir editando</button></div>
-    <div class="cierre-nuevo"><div><b>¿Hacemos el siguiente?</b><p class="meta">Cuéntale al chat de inicio una idea o pídele temas en tendencia.</p></div>
+    <div class="cierre-nuevo"><div><b>¿Hacemos el siguiente?</b><p class="meta">Escribe el tema en Inicio y Studio 4 lo hace.</p></div>
       <a class="primario grande" href="#inicio" id="nuevo-tras-cierre">Hacer un nuevo vídeo →</a></div></section>`;
 }
 
@@ -896,19 +737,17 @@ function pintarVideo() {
       <div class="cabeza"><h1>${esc(v.titulo)}</h1></div>${cierreHTML(v)}</div></div>`;
     if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
     $("reabrir").onclick = () => { pasoVisto = 5; enviar("/api/m/reabrir"); };
+    if ($("subir-drive")) $("subir-drive").onclick = () => enviar("/api/m/paquete/drive");
     return;
   }
   const p = pasoVisto || paso;
   const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
   const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen).length;
-  const chatVista = estadoChat("s4-chat-video");
-  const pendiente = (v.chat || []).some((m) => m.pendiente && !m.pendiente.lanzada);
   $("vista").innerHTML = `
-    <div class="lienzo ${chatVista !== "abierto" ? "sin-chat" : ""}"><div class="lienzo-main">
+    <div class="lienzo sin-chat"><div class="lienzo-main">
     <a class="volver" href="#videos">← Tus vídeos</a>
     <div class="cabeza"><h1>${esc(v.titulo)}</h1>
-      <div class="fila"><button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button>
-      ${chatVista === "cerrado" ? `<button class="boton" type="button" data-chat="abierto">Chat</button>` : ""}</div></div>
+      <div class="fila"><button class="boton" type="button" id="abrir-carpeta">Abrir carpeta</button></div></div>
     <nav class="pasos">${NOMBRES.map((n, k) => `<a href="#v=${esc(v.id)}/${k + 1}" class="${estado(k + 1)} ${p === k + 1 ? "visto" : ""}">
       <b>${estado(k + 1) === "hecho" ? "✓" : k + 1}</b><span>${n}</span></a>`).join("")}</nav>
     ${[pasoGuion, pasoMaterial, pasoMontaje, pasoPrevia, pasoFinal][p - 1](v, conClip)}
@@ -916,12 +755,8 @@ function pintarVideo() {
       ${p > 1 ? `<a class="boton" href="#v=${esc(v.id)}/${p - 1}">← ${NOMBRES[p - 2]}</a>` : "<span></span>"}
       ${p < 5 ? `<a class="primario" href="#v=${esc(v.id)}/${p + 1}">${NOMBRES[p]} →</a>` : ""}
     </div>
-    </div>${chatVista === "abierto" ? chatHTML(v) : ""}</div>
-    ${chatVista === "minimizado" ? `<button class="chat-burbuja${pendiente ? " aviso" : ""}" type="button" data-chat="abierto" aria-label="Abrir el chat">
-      <span>Chat</span>${pendiente ? "<i></i>" : ""}</button>` : ""}`;
-  document.querySelectorAll("[data-chat]").forEach((b) => { b.onclick = () => { estadoChat("s4-chat-video", b.dataset.chat); firma = ""; pintarVideo(); }; });
+    </div></div>`;
   enlazarVideo(p);
-  if (chatVista === "abierto") enlazarChat(v);
 }
 
 const pasoCab = (n, titulo, texto) => `<div class="paso-cab"><span class="num">${n}</span><div><h2>${titulo}</h2><p>${texto}</p></div></div>`;
@@ -1217,6 +1052,8 @@ function pasoFinal(v) {
     ${v.final ? `<video class="pantalla" controls preload="metadata" src="/m/${esc(v.id)}/final_16x9.mp4?v=${encodeURIComponent(v.final.hecho)}"></video>
     ${calidadHTML(v.calidad?.final)}
     ${v.ia ? `<div class="avisos"><p>Este vídeo lleva escenas generadas con IA: al subirlo a YouTube marca «Contenido alterado o sintético» (lo pide YouTube).</p></div>` : ""}
+    <label class="fila interruptor"><input type="checkbox" id="modo-cine" ${v.cine ? "checked" : ""}> <b>Modo cine</b>
+      <span class="meta">color de película, viñeta, grano y bandas (se aplica al aplicar subtítulos o al volver a montar)</span></label>
     ${subsRapidosHTML(v)}
     <div class="fila"><a class="boton" href="/m/${esc(v.id)}/subtitulos.srt" download="${esc(v.titulo)}.srt">Subtítulos .srt para YouTube</a>
       <a class="boton" href="/m/${esc(v.id)}/final_16x9.mp4" download="${esc(v.titulo)}.mp4">Descargar vídeo</a></div>
@@ -1412,6 +1249,7 @@ function enlazarVideo(p) {
       $("aplicar-subs").onclick = () => enviar("/api/m/subtitulos-rapido", { cambios: elegido });
       $("corregir-sub").onclick = () => enviar("/api/m/corregir-subtitulo", { de: $("sub-de").value, a: $("sub-a").value });
     }
+    if ($("modo-cine")) $("modo-cine").onchange = (ev) => enviar("/api/m/cine", { activo: ev.target.checked });
     if ($("hacer-paquete")) $("hacer-paquete").onclick = () => enviar("/api/m/paquete");
     if ($("terminar-edicion")) $("terminar-edicion").onclick = () => enviar("/api/m/terminar");
     if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
@@ -1565,22 +1403,8 @@ async function vistaPlanes() {
 }
 
 const VISTAS = { inicio: vistaInicio, videos: vistaVideos, biblioteca: vistaBiblioteca, tendencias: vistaTendencias,
-  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas, planes: vistaPlanes, proximamente: vistaProximamente };
+  musica: vistaMusica, canal: vistaCanal, herramientas: vistaHerramientas, planes: vistaPlanes };
 
-// Próximamente: lo que se está configurando y aún no se ofrece (Sofi, la asistente de voz, en beta privada)
-const PROXIMAMENTE = [
-  { nombre: "Sofi", estado: "Beta privada", texto: "Tu asistente de voz: le hablas y maneja Studio 4 y tu PC, investiga en internet y te pregunta antes de hacer nada delicado.",
-    puntos: ["Hablar en vez de escribir, también desde el móvil", "Memoria: recuerda tus gustos y aprende de tus correcciones", "Solo se activa con tu voz"] },
-  { nombre: "IA incluida en tu plan", estado: "En camino", texto: "Imágenes, voz premium y vídeo con IA incluidos en el plan, sin tener que conectar tus propias claves.",
-    puntos: ["Cupos mensuales por plan", "Pasado el cupo, tus claves o un paquete"] },
-  { nombre: "Studio 4 en inglés", estado: "En camino", texto: "El panel, los guiones y las voces en inglés para canales en otros idiomas.", puntos: [] },
-];
-async function vistaProximamente() {
-  $("vista").innerHTML = `${cabecera("Próximamente", "Lo que estamos configurando para que funcione bien antes de abrirlo a todos.")}
-    <div class="proximos">${PROXIMAMENTE.map((p) => `<article class="proximo">
-      <div class="proximo-cab">${p.nombre === "Sofi" ? `<span class="proximo-orbe"></span>` : ""}<div><span class="etiqueta">${esc(p.estado)}</span><h2>${esc(p.nombre)}</h2></div></div>
-      <p>${esc(p.texto)}</p>${p.puntos.length ? `<ul>${p.puntos.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}</article>`).join("")}</div>`;
-}
 async function ir() {
   $("trabajo").hidden = true;
   $("selector").hidden = true;

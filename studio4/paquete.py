@@ -68,6 +68,31 @@ def textos_para_publicar(p: dict[str, Any], base: Path) -> str:
     return "\n".join(partes).strip() + "\n"
 
 
+SISTEMA_FLOW = """Escribe UN prompt en inglés para generar la miniatura de un vídeo de YouTube con Google Flow (imagen).
+Reglas: 16:9, un sujeto claro y grande, fondo con profundidad, iluminación de alto contraste, colores vivos, deja
+espacio libre a un lado para el texto (no escribas el texto en la imagen). Nada de logos, marcas ni personajes con
+derechos de autor (ni de videojuegos ni de películas): estética propia que lo evoque. Máximo 80 palabras.
+Devuelve solo JSON: {"prompt": "..."}"""
+
+
+def prompt_miniatura_flow(p: dict[str, Any]) -> str:
+    """El prompt para hacer la miniatura en Google Flow (a mano, con tu suscripción) y el texto que va encima."""
+    t = p.get("textos") or {}
+    texto = (t.get("texto_miniatura") or p["titulo"])[:40]
+    base = (f"Cinematic YouTube thumbnail, 16:9, about: {p['titulo']}. One big clear subject, dramatic high-contrast lighting, "
+            "vivid colors, depth of field, empty space on the right for a headline. No text, no logos, no copyrighted characters.")
+    try:
+        from . import deepseek
+        if deepseek.disponible():
+            base = str(deepseek.generar_json(SISTEMA_FLOW, f"TÍTULO: {p['titulo']}\nGUION (inicio): {(p.get('guion') or '')[:1500]}",
+                                             temperatura=0.6, detalle="prompt de miniatura (Flow)", produccion=p["id"]).get("prompt") or base)
+    except Exception:  # noqa: BLE001 - sin IA, el prompt base ya sirve
+        pass
+    return (f"PROMPT PARA GOOGLE FLOW (pégalo tal cual, formato 16:9):\n\n{base}\n\n"
+            f"TEXTO PARA PONER ENCIMA (en mayúsculas, 2-4 palabras): {texto.upper()}\n\n"
+            "Después: descarga la imagen, ponle el texto y súbela como miniatura en YouTube.\n")
+
+
 def preparar(mid: str) -> Path:
     """Crea (o rehace) la carpeta de entrega del vídeo y su .zip. Devuelve la carpeta."""
     p = montaje.cargar(mid)
@@ -97,6 +122,7 @@ def preparar(mid: str) -> Path:
         idioma = srt.stem.split(".", 1)[1] if "." in srt.stem else "es"
         shutil.copy2(srt, destino / "Subtítulos" / f"subtítulos.{idioma}.srt")
     (destino / "Textos para publicar.txt").write_text(textos_para_publicar(p, base), encoding="utf-8")
+    (destino / "Miniaturas" / "Prompt para Google Flow.txt").write_text(prompt_miniatura_flow(p), encoding="utf-8")
     proyecto = destino / "Proyecto (para reeditar)"
     (proyecto / "guion.txt").write_text(p.get("guion", ""), encoding="utf-8")
     for archivo in ("voz.wav", "linea_de_tiempo.json", "proyecto.json", "Fuentes y créditos.txt"):
@@ -116,7 +142,29 @@ def terminar(mid: str) -> Path:
     """Cierra la edición: carpeta y .zip al día y el vídeo marcado como terminado (el panel invita a otro)."""
     destino = preparar(mid)
     montaje.modificar(mid, lambda q: q.update(terminado={"hecho": time.strftime("%Y-%m-%d %H:%M")}))
+    subir_a_drive(mid)
     return destino
+
+
+def subir_a_drive(mid: str) -> str:
+    """Sube la carpeta de entrega a Drive si Google está conectado (si no, no hace nada). Devuelve el enlace."""
+    from . import drive
+    p = montaje.cargar(mid)
+    carpeta_local = Path((p.get("paquete") or {}).get("carpeta", ""))
+    if not drive.conectado() or not carpeta_local.is_dir():
+        return ""
+    try:
+        canal = canales.obtener(p.get("canal") or "fourlevel")["nombre"]
+    except ValueError:
+        canal = "Canal"
+    try:
+        enlace = drive.subir_carpeta(carpeta_local, canal)
+    except Exception as e:  # noqa: BLE001 - el vídeo ya está en tu PC: Drive se reintenta con su botón
+        motivo = str(e)[:300]
+        montaje.modificar(mid, lambda q: q.setdefault("paquete", {}).update(drive_error=motivo))
+        return ""
+    montaje.modificar(mid, lambda q: q.setdefault("paquete", {}).update(drive=enlace, drive_error="", drive_subido=time.strftime("%Y-%m-%d %H:%M")))
+    return enlace
 
 
 def reabrir(mid: str) -> None:

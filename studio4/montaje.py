@@ -135,9 +135,6 @@ def presentacion(canal: dict[str, Any]) -> list[dict[str, Any]]:
     diapos.append({"etiqueta": "Ideas", "titulo": "¿Qué cuento hoy?", "imagen": fondo(1),
                    "texto": "Tendencias del canal y guiones con fuentes reales: elige uno y Studio 4 lo hace.",
                    "accion": "Buscar guiones", "href": "#biblioteca"})
-    diapos.append({"etiqueta": "Sofi · Próximamente", "titulo": "Tu asistente de voz", "imagen": fondo(2), "orbe": True,
-                   "texto": "Le hablas y maneja Studio 4 y tu PC. Está en beta privada mientras la dejamos fina.",
-                   "accion": "Ver qué viene", "href": "#proximamente"})
     return diapos
 
 
@@ -680,6 +677,9 @@ def preparar_fuente(url: str, desde: float | None = None, hasta: float | None = 
     import yt_dlp
     with yt_dlp.YoutubeDL(extractor.opciones_ytdlp(skip_download=True)) as y:
         info = y.extract_info(url, download=False)
+    alto_max = max((int(f.get("height") or 0) for f in info.get("formats") or [] if f.get("vcodec") not in (None, "none")), default=0)
+    if alto_max and alto_max < extractor.MIN_ALTO:   # solo material en alta: lo pixelado no entra en un vídeo
+        raise ValueError(f"Ese vídeo solo llega a {alto_max}p: Studio 4 solo usa material de {extractor.MIN_ALTO}p o más.")
     ini = float(desde or 0)
     fin = float(hasta) if hasta is not None else float(info.get("duration") or 0)
     if fin - ini > 45 * 60:
@@ -753,7 +753,7 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     from . import guion as guionista
     from . import material as materiales
     _avisar(mid, "Investigando el tema", 8)
-    dossier = investigacion.investigar(tema, produccion=mid).get("dossier", "")
+    dossier = investigacion.investigar(tema, produccion=mid, fuentes_canal=canales.obtener(cargar(mid)["canal"]).get("fuentes")).get("dossier", "")
     if o.get("fuentes"):   # las fuentes elegidas en la Biblioteca: el guion sale de ellas
         from . import fuentes as paginas
         leidas = []

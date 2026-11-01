@@ -52,9 +52,6 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         from . import buscador
         cid = canales.activo()["id"]
         return "json", {**buscador.leer(cid), "bases": buscador.bases(cid), "canal": canales.activo()["nombre"]}
-    if ruta == "/api/m/inicio-chat":   # el chat de la portada del canal activo
-        from . import asistente
-        return "json", {"chat": asistente.leer(canales.activo()["id"]), "canal": canales.activo()["nombre"]}
     if ruta == "/api/m/estilos":   # los estilos de producción: quién los hace, modelos recomendados y coste
         from . import estilos
         from . import composicion
@@ -79,6 +76,9 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
         return "json", radar.para_panel(canales.activo()["id"])
+    if ruta == "/api/m/google":   # un solo acceso de Google: YouTube (analítica) y Drive (carpetas de cada vídeo)
+        from . import drive, youtube
+        return "json", {"youtube": youtube.conectado(), **drive.estado()}
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
@@ -129,25 +129,6 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         from . import entrega
         entrega.entregar(mid, d.get("opciones") or {})
         return "json", {"ok": True}
-    if ruta == "/api/m/campana/video":   # un anuncio del kit de campaña → vídeo nuevo listo para montar
-        from . import campanas
-        return "json", {"ok": True, "id": campanas.video_de_anuncio(canales.activo()["id"], str(d.get("kit", "")), int(d.get("n", 0)))}
-    if ruta == "/api/m/chat/lanzar":   # «Lanzar»: la acción larga que el chat propuso
-        from . import chat
-        return "json", chat.lanzar(mid)
-    if ruta == "/api/m/inicio-chat/lanzar":
-        from . import asistente
-        return "json", asistente.lanzar(canales.activo()["id"])
-    if ruta == "/api/m/chat":   # el chat del vídeo: conversa; los cambios rápidos se aplican, los largos se proponen
-        from . import chat
-        return "json", chat.responder(mid, str(d.get("mensaje", "")))
-    if ruta in ("/api/m/inicio-chat", "/api/m/inicio-chat/limpiar"):   # empezar hablando: nicho, ideas, tendencias o vídeo
-        from . import asistente
-        cid = canales.activo()["id"]
-        if ruta.endswith("/limpiar"):
-            asistente.limpiar(cid)
-            return "json", {"ok": True}
-        return "json", asistente.responder(cid, str(d.get("mensaje", "")))
     if ruta.startswith("/api/m/biblioteca/"):   # chat de la Biblioteca: buscar guiones en las bases y usarlos
         from . import buscador
         cid = canales.activo()["id"]
@@ -206,6 +187,16 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/reabrir":   # seguir editando un vídeo ya terminado
         from . import paquete
         paquete.reabrir(mid)
+        return "json", {"ok": True}
+    if ruta == "/api/m/cine":   # modo cine: color de película, viñeta, grano y bandas (se ve al rehacer subtítulos o montar)
+        activo = bool(d.get("activo"))
+        montaje.modificar(mid, lambda p: p.update(cine=activo))
+        return "json", {"ok": True, "cine": activo}
+    if ruta == "/api/m/paquete/drive":   # subir (o volver a subir) la carpeta del vídeo a Google Drive
+        from . import drive, paquete
+        if not drive.conectado():
+            raise ValueError("Conecta Google primero («Conectar con Google»): da acceso a YouTube y a Drive a la vez.")
+        montaje._en_fondo(mid, "Drive", lambda: paquete.subir_a_drive(mid))
         return "json", {"ok": True}
     if ruta == "/api/m/paquete/abrir":   # la carpeta de entrega en el Explorador
         destino = (montaje.cargar(mid).get("paquete") or {}).get("carpeta", "")

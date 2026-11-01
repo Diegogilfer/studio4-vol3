@@ -2978,48 +2978,6 @@ def test_investigacion_web_de_deepseek_filtra_autoridad_y_cita(monkeypatch):
     assert "spam.example" not in textos[-1] and r["dossier"] == "HECHOS [F1]"
 
 
-def test_chat_ejecuta_acciones_reales_y_rechaza_inventadas(aislado, tmp_path, monkeypatch):
-    from studio4 import chat, montaje
-    _banco_falso(tmp_path, monkeypatch, n=4)
-    mid = montaje.crear("P", "Primera frase con seis palabras justas aqui.\n\nSegunda frase con seis palabras justas aqui.")
-    montaje.usar_fuente(mid, "fuenteA")
-    n1 = montaje.cargar(mid)["frases"][0]["n"]
-    respuesta = {"respuesta": "Listo: planos, voz y subtítulos.", "acciones": [
-        {"accion": "proponer_planos", "args": {}},
-        {"accion": "cambiar_voz", "args": {"nombre": "Charon"}},
-        {"accion": "subtitulos", "args": {"estilo": "cine", "posicion": "arriba"}},
-        {"accion": "mover_escena", "args": {"n": n1, "direccion": 1}},
-        {"accion": "borrar_disco", "args": {}}]}
-    r = chat.responder(mid, "pon planos, voz Charon, subtítulos cine arriba y baja la primera escena", pensar=lambda *a: respuesta)
-    p = montaje.cargar(mid)
-    # lo rápido se aplica al momento; lo largo (proponer planos) se queda propuesto hasta «lánzalo»
-    assert len(r["hechas"]) == 3 and any("borrar_disco" in e for e in r["errores"]) and r["pendiente"]["accion"] == "proponer_planos"
-    assert not any(f.get("clip") for f in p["frases"]) and p["voz_nombre"] == "Charon"
-    assert p["subtitulos"]["estilo"] == "cine" and p["subtitulos"]["posicion"] == "arriba"
-    assert p["frases"][1]["n"] == n1   # la escena bajó
-    assert [m["quien"] for m in p["chat"][-2:]] == ["tú", "IA"]
-    lanzado = chat.responder(mid, "lánzalo", pensar=lambda *a: pytest.fail("«lánzalo» no se le pregunta a la IA"))
-    assert lanzado["hechas"] and _esperar_montaje(mid) and all(f.get("clip") for f in montaje.cargar(mid)["frases"])
-    assert montaje.cargar(mid)["chat"][-3]["pendiente"]["lanzada"]
-    with pytest.raises(ValueError, match="nada pendiente"):
-        chat.lanzar(mid)
-    # voz inexistente / de pago: error, no se cambia
-    r2 = chat.responder(mid, "pon la voz de pago", pensar=lambda *a: {"respuesta": "ok", "acciones": [{"accion": "cambiar_voz", "args": {"nombre": "Rachel"}}]})
-    assert r2["errores"] and montaje.cargar(mid)["voz_nombre"] == "Charon"
-
-
-def test_chat_solo_un_trabajo_en_segundo_plano_por_mensaje(aislado, monkeypatch):
-    from studio4 import chat, montaje
-    mid = montaje.crear("P", "Una frase con seis palabras justas aqui.")
-    lanzados = []
-    monkeypatch.setitem(chat.ACCIONES, "hacer_previa", {**chat.ACCIONES["hacer_previa"], "fn": lambda m, a: lanzados.append("previa") or "previa"})
-    monkeypatch.setitem(chat.ACCIONES, "buscar_material", {**chat.ACCIONES["buscar_material"], "fn": lambda m, a: lanzados.append("material") or "material"})
-    r = chat.responder(mid, "todo", pensar=lambda *a: {"respuesta": "", "acciones": [{"accion": "hacer_previa"}, {"accion": "buscar_material"}]})
-    assert lanzados == [] and r["pendiente"]["accion"] == "hacer_previa"   # nada largo arranca sin confirmar
-    chat.lanzar(mid)
-    assert lanzados == ["previa"]
-
-
 def test_formatos_diarios_recorta_negro_y_saca_los_3(tmp_path):
     """Conteo diario: 3 escenas (logo, cuenta atrás, redes) + negro al final → 9x16, 9x16 zoom y 1x1 sin el negro."""
     import sys as _sys
@@ -3407,41 +3365,6 @@ def test_cuenta_del_negocio_cubre_gastos_con_pocos_clientes():
     assert planes.coste_captacion() < 10
 
 
-def test_chat_de_inicio_empieza_sin_guion_y_pregunta_el_estilo(aislado, monkeypatch):
-    """La portada empieza hablando: analiza nichos, propone ideas, enseña tendencias y crea el vídeo; si no se dijo
-    el estilo, lo pregunta en vez de crear; la historia es de cada canal."""
-    from studio4 import asistente, canales, deepseek, montaje, nichos
-    cid = canales.activo()["id"]
-    monkeypatch.setattr(deepseek, "disponible", lambda: True)
-    monkeypatch.setattr(nichos, "analizar", lambda temas: [{"tema": t, "videos": 50, "mediana_vistas": 400000, "grandes_1M": 3,
-                                                           "top3_cuota": 0.4, "pequenos_que_explotan": 15, "ejemplo": "",
-                                                           "veredicto": "Hueco: canales nuevos rompen"} for t in temas])
-    creados = []
-    monkeypatch.setattr(montaje, "crear_con_ia", lambda tema, o: creados.append((tema, o)) or "vid-9")
-    respuestas = iter([
-        {"respuesta": "Miro esos nichos.", "accion": "nicho", "args": {"temas": ["misterios sin resolver"]}},
-        {"respuesta": "¿En qué estilo?", "accion": "crear", "args": {"tema": "El mecanismo de Anticitera", "duracion": 60}},
-        {"respuesta": "Creándolo.", "accion": "crear", "args": {"tema": "El mecanismo de Anticitera", "estilo": "collage", "duracion": 60}},
-    ])
-    monkeypatch.setattr(nichos, "historias_reales", lambda temas, canal=None: {})
-    pensar = lambda canal, historia, mensaje: next(respuestas)   # noqa: E731
-    r = asistente.responder(cid, "busca un nicho de misterios", pensar=pensar)
-    assert r["resultado"]["tipo"] == "propuesta"   # analizar tarda: se propone y se lanza al confirmar
-    r = asistente.responder(cid, "lánzalo", pensar=pensar)
-    assert r["resultado"]["tipo"] == "nicho" and r["resultado"]["nichos"][0]["veredicto"].startswith("Hueco")
-    r = asistente.responder(cid, "hazme un short del mecanismo de Anticitera", pensar=pensar)
-    assert r["resultado"]["tipo"] == "estilo" and not creados   # sin estilo no crea: pregunta
-    r = asistente.responder(cid, "en collage", pensar=pensar)
-    assert r["resultado"]["tipo"] == "propuesta" and not creados
-    r = asistente.responder(cid, "dale", pensar=pensar)
-    assert r["resultado"] == {"tipo": "video", "id": "vid-9", "estilo": "Collage documental"}
-    assert creados[0][1]["estilo"] == "collage"
-    assert [m["quien"] for m in asistente.leer(cid)] == ["tú", "IA"] * 5
-    assert nichos.veredicto({"mediana_vistas": 5000, "pequenos_que_explotan": 0, "top3_cuota": 0.9, "grandes_1M": 0}) == "Poca demanda"
-    asistente.limpiar(cid)
-    assert asistente.leer(cid) == []
-
-
 def test_isometrico_3d_hecho_con_codigo_y_modo_ligero(aislado, monkeypatch):
     """El estilo isométrico lo hace Claude con código: la escena que llega de la IA se sanea (tipos, números,
     colores, máximo de objetos) y se dibuja en SVG encuadrado; sin IA hay escena de reserva. El modo ligero se
@@ -3531,23 +3454,6 @@ def test_la_voz_de_ia_se_sincroniza_escuchandola(aislado, monkeypatch, tmp_path)
     t = montaje._sincronizar_voz(["Hola mundo cruel.", "Adiós amigo."], wav, tmp_path)
     assert t["escenas"][1]["ini"] == 4.0 and t["palabras"][0]["ini"] == 1.0   # los tiempos que oyó Whisper
     assert [w["palabra"] for w in t["palabras"]][:2] == ["Hola", "mundo"]    # el texto, el del guion
-
-
-def test_sofi_se_sirve_y_dice_como_van_los_montajes(servidor, monkeypatch):
-    """Sofi: su página y la librería 3D se sirven (como JavaScript, si no el navegador no la carga) y la acción
-    «estado» del chat dice qué se está montando y lo último terminado."""
-    from studio4 import asistente, canales, montaje
-    pedir, _ = servidor
-    estado, cuerpo = pedir("GET", "/sofi")
-    assert estado == 200 and b"Sofi" in cuerpo and b"/web/vendor/three/three.module.js" in cuerpo
-    estado, cuerpo = pedir("GET", "/web/sofi.js")
-    assert estado == 200 and b"Oye Sofi" in cuerpo
-    estado, cuerpo = pedir("GET", "/web/vendor/three/three.module.js")
-    assert estado == 200 and len(cuerpo) > 100_000
-    a = montaje.crear("Uno en marcha", "Una frase con seis palabras justas aqui.")
-    montaje.modificar(a, lambda p: p["trabajo"].update(ocupado=True, fase="Plano 3 de 9", progreso=30))
-    r = asistente._ejecutar(canales.activo()["id"], "estado", {})
-    assert r["tipo"] == "estado" and r["en_curso"][0] == {"titulo": "Uno en marcha", "fase": "Plano 3 de 9", "progreso": 30}
 
 
 def test_sincronizar_con_cifras_y_wikipedia_reintenta(monkeypatch):
@@ -3674,7 +3580,7 @@ def test_presentacion_de_inicio_con_imagenes_de_tus_videos(aislado):
     vistos = [x for x in d if x.get("href", "").startswith("#v=")]
     assert len(vistos) == 3 and all(x["imagen"].endswith("miniatura_c1.jpg") for x in vistos)
     assert otro not in " ".join(x.get("href", "") for x in d)
-    assert d[-1]["href"] == "#proximamente" and d[-1]["orbe"] and "Próximamente" in d[-1]["etiqueta"]   # Sofi, en beta
+    assert d[-1]["href"] == "#biblioteca" and not any(x.get("orbe") for x in d)   # sin Sofi
     assert "Terminado ✓" in [x["etiqueta"] for x in d] and "Montado · falta cerrar" in [x["etiqueta"] for x in d]
 
 
@@ -3739,27 +3645,6 @@ def test_biblioteca_lleva_chatgpt_en_su_logo():
     assert 'class="chatgpt-logo" href="https://chatgpt.com/auth/login?next=%2Fg%2Fg-IgKhQ7IgB"' in js and "<svg viewBox=\"0 0 24 24\"" in js
 
 
-def test_chat_de_inicio_propone_y_solo_lanza_al_confirmar(aislado, monkeypatch):
-    """Pedir un vídeo no lo crea: queda propuesto con su plan; «dale» (o el botón) lo lanza. Una pregunta solo responde."""
-    from studio4 import asistente, deepseek, montaje
-    monkeypatch.setattr(deepseek, "disponible", lambda: True)
-    creados = []
-    monkeypatch.setattr(montaje, "crear_con_ia", lambda tema, o: creados.append(tema) or "vid-1")
-    estilo = next(iter(asistente.estilos.ESTILOS))
-    pide = {"respuesta": "Te lo preparo así.", "accion": "crear", "plan": "Investigo, escribo 1 minuto y monto (unos 15 min).",
-            "args": {"tema": "El barco sin nadie a bordo (1872)", "estilo": estilo, "duracion": 60}}
-    r = asistente.responder("arigab", "hazme un Short del Mary Celeste", pensar=lambda *a: pide)
-    assert r["resultado"]["tipo"] == "propuesta" and "15 min" in r["resultado"]["plan"] and creados == []
-    r2 = asistente.responder("arigab", "¿cuánto tarda más o menos?", pensar=lambda *a: {"respuesta": "Unos 15 minutos.", "accion": "responder"})
-    assert r2["resultado"]["tipo"] == "texto" and creados == []
-    with pytest.raises(ValueError, match="nada pendiente"):   # la pregunta de en medio cerró la propuesta
-        asistente.lanzar("arigab")
-    asistente.responder("arigab", "hazme un Short del Mary Celeste", pensar=lambda *a: pide)
-    r3 = asistente.responder("arigab", "dale", pensar=lambda *a: pytest.fail("«dale» no se le pregunta a la IA"))
-    assert creados == ["El barco sin nadie a bordo (1872)"] and r3["resultado"] == {"tipo": "video", "id": "vid-1", "estilo": asistente.estilos.ESTILOS[estilo]["nombre"]}
-    assert asistente.leer("arigab")[-3]["resultado"]["lanzada"]
-
-
 def test_planos_por_lo_que_se_ve_y_material_solo_del_juego(aislado, tmp_path, monkeypatch):
     """Studio 4 mira cada plano (Gemini) y elige el de cada frase; si ninguno encaja, la frase queda para elegir a mano.
     El material de otro juego se descarta."""
@@ -3793,32 +3678,6 @@ def test_planos_por_lo_que_se_ve_y_material_solo_del_juego(aislado, tmp_path, mo
     assert material.del_juego("GTA 5 Mount Chiliad no commentary", alias) and not material.del_juego("Silent Hill 2 Remake walkthrough", alias)
 
 
-def test_campana_de_black_friday_propuesta_lanzada_y_anuncio_a_video(aislado, monkeypatch):
-    """El chat propone la campaña; al lanzarla sale el kit (anuncios, redes, correos, calendario) y cada anuncio
-    se convierte en un vídeo listo para montar."""
-    from studio4 import asistente, campanas, deepseek, montaje
-    monkeypatch.setattr(deepseek, "disponible", lambda: True)
-    kit = {"titulo": "Black Friday del curso", "mensaje": "Aprende a editar en una semana",
-           "anuncios": [{"duracion": 15, "titulo": "Corto", "guion": "¿Editas tus vídeos a mano? Mi curso te enseña en una semana.\n\nDel 27 al 30 de noviembre, 30 % menos."},
-                        {"duracion": 30, "titulo": "Largo", "guion": "Editar no tiene que costarte horas cada día de la semana.\n\nMi curso te lo enseña paso a paso con ejemplos reales.\n\nDel 27 al 30 de noviembre, 30 % menos."}],
-           "publicaciones": [{"cuando": "27 nov", "red": "Instagram", "texto": "Abre el Black Friday", "hashtags": ["#BlackFriday", "sin almohadilla"]}],
-           "correos": [{"cuando": "26 nov", "asunto": "Mañana abre", "cuerpo": "Hola…"}], "calendario": [{"cuando": "27 nov", "que": "Apertura"}]}
-    pide = {"respuesta": "Te preparo el kit.", "accion": "campana", "plan": "Kit de Black Friday (1-2 min).",
-            "args": {"producto": "Curso de edición", "oferta": "30 % menos", "fechas": "27-30 nov"}}
-    r = asistente.responder("arigab", "prepárame la campaña de black friday de mi curso", pensar=lambda *a: pide)
-    assert r["resultado"]["tipo"] == "propuesta" and not campanas.leer("arigab")
-    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: kit)
-    r = asistente.responder("arigab", "lánzalo", pensar=lambda *a: pytest.fail("no se pregunta"))
-    k = r["resultado"]["kit"]
-    assert r["resultado"]["tipo"] == "campana" and len(k["anuncios"]) == 2 and k["publicaciones"][0]["hashtags"] == ["#BlackFriday"]
-    assert campanas.leer("arigab")[0]["id"] == k["id"]
-    mid = campanas.video_de_anuncio("arigab", k["id"], 0)
-    p = montaje.cargar(mid)
-    assert p["campana"]["temporada"] == "Black Friday" and p["formato_principal"] == "9:16" and len({f["bloque"] for f in p["frases"]}) == 2
-    with pytest.raises(ValueError):
-        campanas.crear_kit("arigab", "")
-
-
 def test_jsonia_lee_lo_que_devuelve_la_ia_aunque_venga_roto():
     """El JSON de la IA llega en ```json, con texto alrededor, comas de más o cortado: se lee igual (antes tumbaba la escaleta)."""
     from studio4 import jsonia
@@ -3827,12 +3686,6 @@ def test_jsonia_lee_lo_que_devuelve_la_ia_aunque_venga_roto():
     assert jsonia.leer('{"x": 1} y luego texto') == {"x": 1} and jsonia.leer("[1, 2") == [1, 2]
     with pytest.raises(ValueError, match="no devolvió JSON"):
         jsonia.leer("lo siento, no puedo")
-
-
-def test_sofi_queda_en_proximamente():
-    html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
-    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
-    assert 'href="/sofi"' not in html and 'href="#proximamente"' in html and "proximamente: vistaProximamente" in js
 
 
 def test_google_revisa_y_retoca_las_imagenes(monkeypatch):
@@ -3853,7 +3706,7 @@ def test_google_revisa_y_retoca_las_imagenes(monkeypatch):
 
 def test_modo_cine_en_la_pasada_final(aislado, tmp_path, monkeypatch):
     """Con «cine», la última pasada lleva color de película, viñeta, grano y, en horizontal, bandas 2,39:1."""
-    from studio4 import chat, montaje
+    from studio4 import montaje, rutas_montaje
     filtros = []
     monkeypatch.setattr(montaje.medios, "ffmpeg", lambda *a, **k: filtros.append(a[a.index("-filter_complex") + 1]))
     monkeypatch.setattr(montaje, "logo_de", lambda c: None)
@@ -3863,7 +3716,7 @@ def test_modo_cine_en_la_pasada_final(aislado, tmp_path, monkeypatch):
     assert "vignette" in filtros[0] and "colorbalance" in filtros[0] and "drawbox" in filtros[0]
     assert "vignette" in filtros[1] and "drawbox" not in filtros[1]   # en vertical, sin bandas
     mid = montaje.crear("P", "Una frase con seis palabras justas aqui.")
-    chat.ACCIONES["modo_cine"]["fn"](mid, {"activo": True})
+    rutas_montaje.post("/api/m/cine", {"id": mid, "activo": True})
     assert montaje.cargar(mid)["cine"] is True
 
 
@@ -3877,3 +3730,15 @@ def test_vigilante_no_abre_el_navegador_ni_da_por_caido_un_servidor_lento(monkey
     assert vigilante._arrancar_servidor()   # puerto ocupado: no lanza nada
     codigo = inspect.getsource(vigilante._arrancar_servidor)
     assert "iniciar.bat" not in codigo.lower().replace("antes usaba iniciar.bat", "") and "pythonw" in codigo
+
+
+
+def test_studio4_sin_chats_ni_sofi_y_con_formulario_de_video():
+    """Studio 4 se maneja con formularios y botones: sin chats ni Sofi; crear un vídeo es tema + estilo + duración."""
+    from studio4 import rutas_montaje
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
+    assert "chatHTML" not in js and "pintarInicioChat" not in js and "proximamente" not in js and "Sofi" not in html
+    assert 'id="crear-form"' in js and "/api/m/crear-ia" in js
+    with pytest.raises(rutas_montaje.NoExiste):
+        rutas_montaje.post("/api/m/chat", {"id": "x", "mensaje": "hola"})
