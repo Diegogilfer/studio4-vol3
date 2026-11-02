@@ -28,8 +28,7 @@ logger = logging.getLogger("studio4.youtube")
 
 CLIENTE = config.RAIZ / "secrets" / "youtube_client.json"
 TOKEN = config.RAIZ / "secrets" / "youtube_token.json"
-PERMISOS = ["https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/yt-analytics.readonly",
-            "https://www.googleapis.com/auth/drive.file"]   # Drive: solo los archivos que sube Studio 4 (la carpeta de cada vídeo)
+PERMISOS = ["https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/yt-analytics.readonly"]
 API = "https://www.googleapis.com/youtube/v3"
 VOLVER = f"http://localhost:{config.PUERTO}/youtube/volver"
 

@@ -23,7 +23,7 @@ from typing import Any
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from studio4 import rutas_montaje  # panel nuevo: separado del clásico
+from studio4 import drive, rutas_montaje  # panel nuevo: separado del clásico
 from studio4 import (aprender, archivo, canales, carpetas, config, flow, galeria, guion, ideas, miniaturas, produccion, referencias, registro,
                      render, subtitulos, tendencias, voz, youtube)  # noqa: E402
 
@@ -252,6 +252,14 @@ class Panel(BaseHTTPRequestHandler):
                 return self._redirigir("/?youtube=cancelado")
             youtube.completar((q.get("code") or [""])[0], (q.get("state") or [""])[0])
             return self._redirigir("/?youtube=ok")
+        if ruta == "/drive/conectar":
+            return self._redirigir(drive.url_autorizacion())
+        if ruta == "/drive/volver":   # Google vuelve aquí tras «Permitir» el acceso a Drive
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            if "error" in q:
+                return self._redirigir("/#herramientas")
+            drive.completar((q.get("code") or [""])[0], (q.get("state") or [""])[0])
+            return self._redirigir("/#herramientas")
         if ruta == "/api/youtube":
             if not youtube.disponible():
                 return self._json({"conectado": False})

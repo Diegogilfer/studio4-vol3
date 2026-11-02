@@ -3742,3 +3742,11 @@ def test_studio4_sin_chats_ni_sofi_y_con_formulario_de_video():
     assert 'id="crear-form"' in js and "/api/m/crear-ia" in js
     with pytest.raises(rutas_montaje.NoExiste):
         rutas_montaje.post("/api/m/chat", {"id": "x", "mensaje": "hola"})
+
+
+def test_google_youtube_y_drive_se_conectan_por_separado():
+    """Google rechaza pedir permisos de YouTube y de Drive en la misma autorización: cada uno tiene la suya."""
+    from studio4 import drive, youtube
+    assert not any("drive" in p for p in youtube.PERMISOS)
+    assert drive.PERMISO.endswith("drive.file") and drive.TOKEN != youtube.TOKEN
+    assert drive.VOLVER.endswith("/drive/volver")

@@ -591,10 +591,12 @@ async function vistaHerramientas() {
   const g = await seguro("/api/m/google");
   seguro("/api/m/conexiones").then((c) => {
     if (!c || !$("conexiones")) return;
-    $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Google · YouTube y Drive</span>
-      <div class="fila"><span class="meta">${g?.conectado ? "Conectado: analítica de YouTube y cada vídeo terminado sube su carpeta a Drive (Studio 4/<canal>)."
-        : g?.configurado ? "Un clic da acceso a la analítica de YouTube y a Drive (solo a las carpetas que sube Studio 4)." : "Falta la credencial de Google Cloud (secrets/youtube_client.json)."}</span>
-      ${g?.configurado ? `<a class="${g.conectado ? "boton" : "primario"}" href="/youtube/conectar">${g.conectado ? "Volver a conectar" : "Conectar con Google"}</a>` : ""}</div></section>
+    $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Google</span>
+      ${g?.configurado ? `<div class="fila"><span class="meta"><b>YouTube</b> · ${g.youtube ? "conectado (analítica de tu canal)" : "sin conectar"}</span>
+        <a class="${g.youtube ? "boton" : "primario"}" href="/youtube/conectar">${g.youtube ? "Volver a conectar" : "Conectar YouTube"}</a></div>
+      <div class="fila"><span class="meta"><b>Google Drive</b> · ${g.drive ? "conectado: cada vídeo terminado sube su carpeta a Studio 4/&lt;canal&gt;" : "sin conectar (solo verá las carpetas que suba Studio 4)"}</span>
+        <a class="${g.drive ? "boton" : "primario"}" href="/drive/conectar">${g.drive ? "Volver a conectar" : "Conectar Google Drive"}</a></div>`
+      : `<p class="meta">Falta la credencial de Google Cloud (secrets/youtube_client.json).</p>`}</section>
       <section class="mantenimiento"><span class="etiqueta">Conexiones (las mismas claves del proyecto anterior)</span>
       <div class="conexiones">${c.conexiones.map((x) => `<div class="conexion ${x.conectada ? "si" : ""}">
         <i></i><div><b>${esc(x.api)}</b><small>${esc(x.uso)}</small></div><span>${x.conectada ? (x.pago ? "Conectada · de pago" : "Conectada · gratis") : "Sin conectar"}</span></div>`).join("")}</div></section>`;

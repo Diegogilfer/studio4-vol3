@@ -78,7 +78,7 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", radar.para_panel(canales.activo()["id"])
     if ruta == "/api/m/google":   # un solo acceso de Google: YouTube (analítica) y Drive (carpetas de cada vídeo)
         from . import drive, youtube
-        return "json", {"youtube": youtube.conectado(), **drive.estado()}
+        return "json", {"youtube": youtube.conectado(), "drive": drive.conectado(), "configurado": youtube.CLIENTE.exists()}
     if ruta == "/api/m/conexiones":   # qué APIs del estudio están conectadas (nunca las claves)
         return "json", {"conexiones": montaje.conexiones()}
     if ruta == "/api/m/mantenimiento":   # espacio en disco y versión del descargador
@@ -195,7 +195,7 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/paquete/drive":   # subir (o volver a subir) la carpeta del vídeo a Google Drive
         from . import drive, paquete
         if not drive.conectado():
-            raise ValueError("Conecta Google primero («Conectar con Google»): da acceso a YouTube y a Drive a la vez.")
+            raise ValueError("Conecta Google Drive primero (Herramientas → «Conectar Google Drive»).")
         montaje._en_fondo(mid, "Drive", lambda: paquete.subir_a_drive(mid))
         return "json", {"ok": True}
     if ruta == "/api/m/paquete/abrir":   # la carpeta de entrega en el Explorador
