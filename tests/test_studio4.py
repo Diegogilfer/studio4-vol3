@@ -3787,3 +3787,22 @@ def test_higgsfield_respeta_plan_y_tope_y_anima_la_imagen(tmp_path, monkeypatch)
     assert higgsfield._url_video({"videos": [{"url": "https://x/a.mp4"}]}) == "https://x/a.mp4"
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
     assert "data-hf-animar" in js and "confirm(" in js and "[data-subir],[data-bajar],[data-quitar-clip]" in js
+
+
+def test_gancho_de_continuidad_miniatura_y_primer_plano_con_la_misma_imagen(aislado, tmp_path, monkeypatch):
+    """La imagen de Google Flow es a la vez la miniatura (con texto) y el primer plano: el vídeo arranca en la miniatura."""
+    import base64
+    import io
+    from PIL import Image
+    from studio4 import montaje
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("Prueba", "Primera frase del vídeo con seis palabras. Segunda frase también con seis palabras.")
+    caja = io.BytesIO()
+    Image.new("RGB", (1600, 900), (20, 120, 200)).save(caja, "PNG")
+    r = montaje.gancho_continuidad(mid, "data:image/png;base64," + base64.b64encode(caja.getvalue()).decode(), "¿LO VISTE?")
+    p = montaje.cargar(mid)
+    assert r["frase"] == p["frases"][0]["n"] and p["frases"][0]["imagen"]["archivo"] == r["imagen"]
+    assert p["miniatura"] == "miniatura.jpg" and (montaje.carpeta(mid) / "miniatura.jpg").exists()
+    assert p["continuidad"]["texto"] == "¿LO VISTE?"
+    centro = Image.open(montaje.carpeta(mid) / "miniatura.jpg").convert("RGB").getpixel((640, 200))
+    assert centro[2] > centro[0]   # la miniatura está hecha con la imagen de Flow

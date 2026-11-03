@@ -732,7 +732,13 @@ function flowMiniHTML(v) {   // la miniatura hecha en Google Flow: prompt para c
     ${v.miniatura_flow ? `<div class="copiable"><p style="white-space:pre-wrap">${esc(v.miniatura_flow)}</p>
       <button class="boton" type="button" data-copiar="${esc(v.miniatura_flow)}">Copiar</button></div>` : `<p class="meta">Studio 4 te escribe el prompt: lo pegas en Flow y subes la imagen como miniatura.</p>`}
     <div class="fila"><button class="${v.miniatura_flow ? "boton" : "primario"}" type="button" id="prompt-flow">${v.miniatura_flow ? "Otro prompt" : "Prompt para Google Flow"}</button>
-      <a class="boton" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener">Abrir Google Flow</a></div></div>`;
+      <a class="boton" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener">Abrir Google Flow</a></div>
+    <span class="etiqueta">Gancho de continuidad</span>
+    ${v.continuidad ? `<p class="meta">Hecho: la imagen de Flow es la miniatura y el primer plano del vídeo (frase ${v.continuidad.frase}).
+      ${(v.frases || []).find((f) => f.n === v.continuidad.frase)?.video ? "Además, el gancho está animado." : datos.higgsfield?.disponible ? "Puedes animarlo con «Animar» en esa frase." : "Lleva movimiento lento; con Higgsfield podrás animarlo."}</p>`
+      : `<p class="meta">Sube aquí la imagen que hiciste en Flow: será la miniatura (con su texto) y el vídeo empezará justo en ella.</p>`}
+    <div class="fila"><input class="campo" type="file" accept="image/*" id="flow-imagen">
+      <button class="${v.continuidad ? "boton" : "primario"}" type="button" id="hacer-continuidad">${v.continuidad ? "Cambiar imagen" : "Hacer gancho de continuidad"}</button></div></div>`;
 }
 
 // el vídeo terminado: la edición se cierra y se invita a hacer el siguiente
@@ -754,6 +760,16 @@ function cierreHTML(v) {
 
 function enlazarFlowMini() {
   if (!$("prompt-flow")) return;
+  $("hacer-continuidad").onclick = async (ev) => {
+    const archivo = $("flow-imagen").files[0];
+    if (!archivo) { aviso(new Error("Elige primero la imagen que descargaste de Google Flow.")); return; }
+    const b = ev.target; b.disabled = true; b.textContent = "Haciendo miniatura y gancho…";
+    try {
+      const datosImg = await new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = mal; r.readAsDataURL(archivo); });
+      await api("/api/m/gancho-continuidad", { id: datos.video.id, datos: datosImg, texto: $("mini-texto")?.value || "" });
+      await cargarVideo(datos.video.id);
+    } catch (e) { aviso(e); b.disabled = false; b.textContent = "Hacer gancho de continuidad"; }
+  };
   $("prompt-flow").onclick = async (ev) => {
     const b = ev.target; b.disabled = true; b.textContent = "Escribiendo…";
     try { await api("/api/m/miniatura/flow", { id: datos.video.id }); await cargarVideo(datos.video.id); }

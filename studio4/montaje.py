@@ -2448,6 +2448,21 @@ def hacer_textos(mid: str) -> dict[str, Any]:
     return textos
 
 
+def gancho_continuidad(mid: str, datos_b64: str, texto: str = "") -> dict[str, Any]:
+    """Gancho de continuidad: la imagen de Google Flow es a la vez la miniatura (con su texto) y el primer plano del
+    vídeo, así quien hace clic ve al instante lo que prometía la miniatura y la escena sigue desde ahí."""
+    p = cargar(mid)
+    if not p.get("frases"):
+        raise ValueError("El vídeo aún no tiene frases: primero el guion y la voz.")
+    n = p["frases"][0]["n"]
+    imagen = poner_imagen(mid, n, datos_b64=datos_b64, credito="Google Flow")
+    texto = (texto or (p.get("textos") or {}).get("texto_miniatura") or p["titulo"])[:40].upper()
+    miniatura(mid, texto, [{"imagen": imagen["archivo"]}])
+    modificar(mid, lambda q: q.update(continuidad={"frase": n, "imagen": imagen["archivo"], "texto": texto,
+                                                   "hecho": time.strftime("%Y-%m-%d %H:%M")}))
+    return {"frase": n, "imagen": imagen["archivo"]}
+
+
 def miniatura(mid: str, texto: str, fotos: list[dict[str, Any]], destino_nombre: str = "miniatura.jpg") -> Path:
     """Miniatura 1280×720: una o dos imágenes de los planos (pantalla dividida) y el texto grande, con el logo."""
     from playwright.sync_api import sync_playwright

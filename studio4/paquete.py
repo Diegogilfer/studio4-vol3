@@ -90,7 +90,8 @@ def prompt_miniatura_flow(p: dict[str, Any]) -> str:
         pass
     return (f"PROMPT PARA GOOGLE FLOW (pégalo tal cual, formato 16:9):\n\n{base}\n\n"
             f"TEXTO PARA PONER ENCIMA (en mayúsculas, 2-4 palabras): {texto.upper()}\n\n"
-            "Después: descarga la imagen, ponle el texto y súbela como miniatura en YouTube.\n")
+            "Después: descarga la imagen y súbela en Studio 4 → «Gancho de continuidad»: será la miniatura (con el texto)\n"
+            "y el primer plano del vídeo, para que quien haga clic vea al instante lo que promete la miniatura.\n")
 
 
 def preparar(mid: str) -> Path:

@@ -219,6 +219,8 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/imagen":   # una imagen para una frase: enlace o archivo (base64)
         return "json", {"ok": True, "imagen": montaje.poner_imagen(mid, int(d.get("n", 0)), str(d.get("url", "")).strip(),
                                                                     str(d.get("datos", "")), str(d.get("credito", "")))}
+    if ruta == "/api/m/gancho-continuidad":   # la imagen de Flow → miniatura + primer plano del vídeo
+        return "json", montaje.gancho_continuidad(mid, str(d.get("datos", "")), str(d.get("texto", "")))
     if ruta == "/api/m/higgsfield/ajustes":
         from . import higgsfield
         higgsfield.guardar_ajustes(d.get("plan"), d.get("tope"))
