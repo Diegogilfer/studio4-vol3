@@ -3750,3 +3750,18 @@ def test_google_youtube_y_drive_se_conectan_por_separado():
     assert not any("drive" in p for p in youtube.PERMISOS)
     assert drive.PERMISO.endswith("drive.file") and drive.TOKEN != youtube.TOKEN
     assert drive.VOLVER.endswith("/drive/volver")
+
+
+def test_procesos_sin_ventana_y_prompt_de_flow_en_el_panel(monkeypatch):
+    """FFmpeg y compañía no abren consola en Windows; el prompt de miniatura para Flow se pide desde el panel."""
+    import subprocess
+    import sys
+    import studio4  # noqa: F401 - aplica el arreglo al importar
+    from studio4 import rutas_montaje
+    if sys.platform == "win32":
+        r = subprocess.run([sys.executable, "-c", "print(1)"], capture_output=True, text=True)
+        assert r.stdout.strip() == "1" and subprocess.Popen.__init__.__name__ == "_sin_ventana"
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert "/api/m/miniatura/flow" in js and "flowMiniHTML(v)" in js
+    with pytest.raises(Exception):   # sin vídeo no hay prompt
+        rutas_montaje.post("/api/m/miniatura/flow", {"id": "no-existe"})

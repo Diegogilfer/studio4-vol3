@@ -716,6 +716,14 @@ function guionGraficoHTML(v) {
   return `<section class="guion-grafico"><span class="etiqueta">Guion gráfico · ${v.frases.length} escenas</span>${filas}</section>`;
 }
 
+function flowMiniHTML(v) {   // la miniatura hecha en Google Flow: prompt para copiar + abrir Flow
+  return `<div class="flow-mini"><span class="etiqueta">Miniatura con Google Flow</span>
+    ${v.miniatura_flow ? `<div class="copiable"><p style="white-space:pre-wrap">${esc(v.miniatura_flow)}</p>
+      <button class="boton" type="button" data-copiar="${esc(v.miniatura_flow)}">Copiar</button></div>` : `<p class="meta">Studio 4 te escribe el prompt: lo pegas en Flow y subes la imagen como miniatura.</p>`}
+    <div class="fila"><button class="${v.miniatura_flow ? "boton" : "primario"}" type="button" id="prompt-flow">${v.miniatura_flow ? "Otro prompt" : "Prompt para Google Flow"}</button>
+      <a class="boton" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener">Abrir Google Flow</a></div></div>`;
+}
+
 // el vídeo terminado: la edición se cierra y se invita a hacer el siguiente
 function cierreHTML(v) {
   const t = v.textos || {};
@@ -728,8 +736,18 @@ function cierreHTML(v) {
       ${v.paquete?.drive ? `<a class="boton" href="${esc(v.paquete.drive)}" target="_blank" rel="noopener">Abrir en Drive</a>`
         : `<button class="boton" type="button" id="subir-drive" title="${esc(v.paquete?.drive_error || "")}">${v.paquete?.drive_error ? "Reintentar subir a Drive" : "Subir a Drive"}</button>`}
       <button class="boton" type="button" id="reabrir">Seguir editando</button></div>
+    ${flowMiniHTML(v)}
     <div class="cierre-nuevo"><div><b>¿Hacemos el siguiente?</b><p class="meta">Escribe el tema en Inicio y Studio 4 lo hace.</p></div>
       <a class="primario grande" href="#inicio" id="nuevo-tras-cierre">Hacer un nuevo vídeo →</a></div></section>`;
+}
+
+function enlazarFlowMini() {
+  if (!$("prompt-flow")) return;
+  $("prompt-flow").onclick = async (ev) => {
+    const b = ev.target; b.disabled = true; b.textContent = "Escribiendo…";
+    try { await api("/api/m/miniatura/flow", { id: datos.video.id }); await cargarVideo(datos.video.id); }
+    catch (e) { aviso(e); b.disabled = false; b.textContent = "Prompt para Google Flow"; }
+  };
 }
 
 function pintarVideo() {
@@ -740,6 +758,7 @@ function pintarVideo() {
     if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
     $("reabrir").onclick = () => { pasoVisto = 5; enviar("/api/m/reabrir"); };
     if ($("subir-drive")) $("subir-drive").onclick = () => enviar("/api/m/paquete/drive");
+    enlazarFlowMini();
     return;
   }
   const p = pasoVisto || paso;
@@ -1083,6 +1102,7 @@ function pasoFinal(v) {
           <select class="campo" id="mini-b" style="flex:1"><option value="">Una sola imagen</option>${fotosMini.map((f, k) => `<option value="${f.n}" ${k === fotosMini.length - 1 ? "selected" : ""}>Frase ${f.n}</option>`).join("")}</select></div>
         <button class="boton" type="button" id="hacer-mini">${v.miniatura ? "Rehacer miniatura" : "Hacer miniatura"}</button>
         </details>
+        ${flowMiniHTML(v)}
         ${v.miniatura ? `<span class="meta">La elegida</span><img class="miniatura-hecha" src="/m/${esc(v.id)}/miniatura.jpg?v=${encodeURIComponent(v.actualizado)}" alt="Miniatura">` : ""}
       </div>
     </div>
@@ -1255,6 +1275,7 @@ function enlazarVideo(p) {
     if ($("hacer-paquete")) $("hacer-paquete").onclick = () => enviar("/api/m/paquete");
     if ($("terminar-edicion")) $("terminar-edicion").onclick = () => enviar("/api/m/terminar");
     if ($("abrir-paquete")) $("abrir-paquete").onclick = () => enviar("/api/m/paquete/abrir");
+    enlazarFlowMini();
     if ($("ver-minis")) $("ver-minis").onclick = () => enviar("/api/m/miniaturas", { texto: $("mini-texto")?.value || "" });
     document.querySelectorAll("[data-mini]").forEach((b) => { b.onclick = () => enviar("/api/m/miniatura/elegir", { archivo: b.dataset.mini }); });
     if ($("hacer-short")) $("hacer-short").onclick = () => enviar("/api/m/short", { desde: segundos($("s-desde").value), hasta: segundos($("s-hasta").value) });

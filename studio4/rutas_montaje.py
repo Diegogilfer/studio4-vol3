@@ -192,6 +192,11 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
         activo = bool(d.get("activo"))
         montaje.modificar(mid, lambda p: p.update(cine=activo))
         return "json", {"ok": True, "cine": activo}
+    if ruta == "/api/m/miniatura/flow":   # el prompt para hacer la miniatura en Google Flow (se guarda en el vídeo)
+        from . import paquete
+        texto = paquete.prompt_miniatura_flow(montaje.cargar(mid))
+        montaje.modificar(mid, lambda p: p.update(miniatura_flow=texto))
+        return "json", {"ok": True, "prompt": texto}
     if ruta == "/api/m/paquete/drive":   # subir (o volver a subir) la carpeta del vídeo a Google Drive
         from . import drive, paquete
         if not drive.conectado():

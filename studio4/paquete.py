@@ -122,7 +122,7 @@ def preparar(mid: str) -> Path:
         idioma = srt.stem.split(".", 1)[1] if "." in srt.stem else "es"
         shutil.copy2(srt, destino / "Subtítulos" / f"subtítulos.{idioma}.srt")
     (destino / "Textos para publicar.txt").write_text(textos_para_publicar(p, base), encoding="utf-8")
-    (destino / "Miniaturas" / "Prompt para Google Flow.txt").write_text(prompt_miniatura_flow(p), encoding="utf-8")
+    (destino / "Miniaturas" / "Prompt para Google Flow.txt").write_text(p.get("miniatura_flow") or prompt_miniatura_flow(p), encoding="utf-8")
     proyecto = destino / "Proyecto (para reeditar)"
     (proyecto / "guion.txt").write_text(p.get("guion", ""), encoding="utf-8")
     for archivo in ("voz.wav", "linea_de_tiempo.json", "proyecto.json", "Fuentes y créditos.txt"):
