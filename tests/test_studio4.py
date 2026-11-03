@@ -3765,3 +3765,25 @@ def test_procesos_sin_ventana_y_prompt_de_flow_en_el_panel(monkeypatch):
     assert "/api/m/miniatura/flow" in js and "flowMiniHTML(v)" in js
     with pytest.raises(Exception):   # sin vídeo no hay prompt
         rutas_montaje.post("/api/m/miniatura/flow", {"id": "no-existe"})
+
+
+def test_higgsfield_respeta_plan_y_tope_y_anima_la_imagen(tmp_path, monkeypatch):
+    """Sin clave no se ofrece; con clave, el plan limita los clips por vídeo y el tope en $ nunca se pasa."""
+    from studio4 import higgsfield
+    monkeypatch.setattr(higgsfield, "AJUSTES", tmp_path / "hf.json")
+    monkeypatch.setattr(higgsfield, "_credencial", lambda: "")
+    assert not higgsfield.disponible()
+    higgsfield.guardar_ajustes("minima", 1.0)
+    p = {"higgsfield": {"clips": 0, "gastado": 0.0}}
+    higgsfield.comprobar(p)                                   # el gancho sí
+    with pytest.raises(ValueError, match="Plan Mínima"):
+        higgsfield.comprobar({"higgsfield": {"clips": 1, "gastado": 0.35}})
+    higgsfield.guardar_ajustes("media", 0.5)
+    with pytest.raises(ValueError, match="tope"):
+        higgsfield.comprobar({"higgsfield": {"clips": 1, "gastado": 0.35}})
+    with pytest.raises(ValueError):
+        higgsfield.guardar_ajustes(tope=50)
+    assert higgsfield._url_video({"status": "completed", "video": {"url": "https://x/v.mp4"}}) == "https://x/v.mp4"
+    assert higgsfield._url_video({"videos": [{"url": "https://x/a.mp4"}]}) == "https://x/a.mp4"
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert "data-hf-animar" in js and "confirm(" in js and "[data-subir],[data-bajar],[data-quitar-clip]" in js

@@ -76,6 +76,9 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
         return "json", radar.para_panel(canales.activo()["id"])
+    if ruta == "/api/m/higgsfield":   # clave, plan (mínima/media) y tope por vídeo
+        from . import higgsfield
+        return "json", higgsfield.estado()
     if ruta == "/api/m/google":   # un solo acceso de Google: YouTube (analítica) y Drive (carpetas de cada vídeo)
         from . import drive, youtube
         return "json", {"youtube": youtube.conectado(), "drive": drive.conectado(), "configurado": youtube.CLIENTE.exists()}
@@ -91,7 +94,8 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         p = montaje.cargar(q("id"))
         elegida = musica.elegir(p)
         idx = escenas.indice(red=False)
-        return "json", {"video": p, "paso": montaje.paso_actual(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
+        from . import higgsfield
+        return "json", {"video": p, "paso": montaje.paso_actual(p), "higgsfield": higgsfield.estado(p), "fuentes": {fid: montaje.fuente(fid) for fid in p["fuentes"]},
                         "escenas": {fid: len(escenas.de_fuente(montaje.fuente(fid), idx)) for fid in p["fuentes"]},
                         "voces": montaje.opciones_voz(), "voces_guardadas": montaje.voces_guardadas(), "coste_voz": montaje.coste_voz(p), "resumen": montaje.resumen(p),
                         "musica": {"modo": p.get("musica") or musica.AUTO, "elegida": elegida["titulo"] if elegida else "",
@@ -215,6 +219,18 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/imagen":   # una imagen para una frase: enlace o archivo (base64)
         return "json", {"ok": True, "imagen": montaje.poner_imagen(mid, int(d.get("n", 0)), str(d.get("url", "")).strip(),
                                                                     str(d.get("datos", "")), str(d.get("credito", "")))}
+    if ruta == "/api/m/higgsfield/ajustes":
+        from . import higgsfield
+        higgsfield.guardar_ajustes(d.get("plan"), d.get("tope"))
+        return "json", higgsfield.estado()
+    if ruta == "/api/m/higgsfield/animar":   # la imagen de la frase → clip de 5 s (de pago, con tope por vídeo)
+        from . import higgsfield
+        higgsfield.animar_frase(mid, int(d.get("n", 0)))
+        return "json", {"ok": True}
+    if ruta == "/api/m/higgsfield/quitar":
+        from . import higgsfield
+        higgsfield.quitar_animacion(mid, int(d.get("n", 0)))
+        return "json", {"ok": True}
     if ruta == "/api/m/imagen/quitar":
         montaje.quitar_imagen(mid, int(d.get("n", 0)))
         return "json", {"ok": True}
