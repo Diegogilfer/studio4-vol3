@@ -3806,3 +3806,27 @@ def test_gancho_de_continuidad_miniatura_y_primer_plano_con_la_misma_imagen(aisl
     assert p["continuidad"]["texto"] == "¿LO VISTE?"
     centro = Image.open(montaje.carpeta(mid) / "miniatura.jpg").convert("RGB").getpixel((640, 200))
     assert centro[2] > centro[0]   # la miniatura está hecha con la imagen de Flow
+
+
+def test_agenda_crea_cada_video_dias_antes_y_de_uno_en_uno(tmp_path, monkeypatch):
+    """La agenda crea el vídeo ANTELACION_DIAS antes de su fecha, en su canal, uno por ronda y nunca si hay otro trabajando."""
+    from datetime import date
+    from studio4 import agenda
+    monkeypatch.setattr(agenda, "ARCHIVO", tmp_path / "agenda.json")
+    a = agenda.anadir("2026-12-02", "Los 10 secretos de GTA VI", "fourlevel")
+    agenda.anadir("2026-12-05", "Vice City en GTA VI", "fourlevel")
+    with pytest.raises(ValueError):
+        agenda.anadir("2 de diciembre", "Algo", "fourlevel")
+    creados, avisos = [], []
+
+    def crear(tema, opciones, canal=""):
+        creados.append((tema, canal))
+        return f"vid{len(creados)}"
+    assert agenda.listar()[0]["crear_en"] == "2026-11-29"
+    assert agenda.revisar(date(2026, 11, 28), crear, lambda t, x: avisos.append(t), ocupado=lambda: False) == ""
+    assert agenda.revisar(date(2026, 11, 29), crear, lambda t, x: avisos.append(t), ocupado=lambda: True) == ""
+    assert agenda.revisar(date(2026, 12, 3), crear, lambda t, x: avisos.append(t), ocupado=lambda: False) == "vid1"
+    assert creados == [("Los 10 secretos de GTA VI", "fourlevel")] and avisos   # el más próximo primero, uno por ronda
+    assert agenda.listar()[0]["video"] == "vid1" and agenda.lanzar(a["id"], crear) == "vid1"   # no se crea dos veces
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert 'id="agenda"' in js and "/api/m/agenda/lanzar" in js

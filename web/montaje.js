@@ -95,6 +95,7 @@ async function vistaInicio() {
     <div id="i-canal"><section class="canal-hero cargando"><div class="canal-logo"></div><div class="canal-datos"><h1>${esc(m.canal?.nombre || "")}</h1>
       <p class="meta">Leyendo tu canal en YouTube…</p></div></section></div>
     <section class="url-magica crear-video" id="crear-video"><div class="meta">Cargando…</div></section>
+    <section class="mantenimiento agenda" id="agenda"></section>
     <section class="url-magica pegar-guion">
       <div><span class="etiqueta">¿Ya tienes guion?</span><h2>Pega tu <em>guion</em></h2>
         <p class="meta">Quita marcas de tiempo, acotaciones y muletillas, y lo parte en escenas listo para empezar.</p></div>
@@ -127,6 +128,7 @@ async function vistaInicio() {
       </div>
     </section>`;
   $("archivo-input").onchange = (ev) => ev.target.files[0] && traerArchivo(ev.target.files[0]);
+  pintarAgenda();
   pintarCrear().then(() => { if (sessionStorage.getItem("s4-crear")) { sessionStorage.removeItem("s4-crear"); $("crear-video")?.scrollIntoView({ behavior: "smooth" }); $("c-tema")?.focus(); } });
   $("pegar-form").onsubmit = async (ev) => {
     ev.preventDefault();
@@ -176,6 +178,38 @@ function enlazarCanal() {
     if (!ev.target.value) return;
     try { await api("/api/canales/activar", { id: ev.target.value }); ir(); } catch (e) { aviso(e); }
   };
+}
+
+// ============================================================ Agenda: cada vídeo se crea solo unos días antes de su fecha
+async function pintarAgenda() {
+  const caja = $("agenda");
+  if (!caja) return;
+  const a = await seguro("/api/m/agenda");
+  if (!a) return;
+  const fecha = (f) => new Date(f + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" });
+  const filas = a.videos.map((v) => `<div class="fila agenda-fila">
+      <b class="agenda-dia">${esc(fecha(v.fecha))}</b><span style="flex:1">${esc(v.tema)}</span>
+      ${v.video ? `<a class="boton" href="#v=${esc(v.video)}">Ver vídeo</a>`
+        : `<span class="meta">se crea el ${esc(fecha(v.crear_en))}</span>
+           <button class="boton" type="button" data-agenda-lanzar="${esc(v.id)}">Crear ya</button>
+           <button class="boton icono" type="button" data-agenda-quitar="${esc(v.id)}" title="Quitar de la agenda">✕</button>`}</div>`).join("");
+  caja.innerHTML = `<span class="etiqueta">Agenda · ${esc(a.canal)}</span>
+    <p class="meta">Cada vídeo se crea solo ${a.antelacion} días antes de su fecha (guion, material y planos) y te avisa para revisarlo. Nunca publica ni gasta en voz o imagen de pago.</p>
+    ${filas || `<p class="meta">Aún no hay vídeos agendados.</p>`}
+    <form class="fila" id="agenda-form"><input class="campo" type="date" id="ag-fecha" required>
+      <input class="campo" id="ag-tema" placeholder="Tema del vídeo" style="flex:1" required>
+      <button class="boton" type="submit">Agendar</button></form>`;
+  $("agenda-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    try { await api("/api/m/agenda/anadir", { fecha: $("ag-fecha").value, tema: $("ag-tema").value }); pintarAgenda(); } catch (e) { aviso(e); }
+  };
+  caja.querySelectorAll("[data-agenda-quitar]").forEach((b) => { b.onclick = async () => {
+    if (!confirm("¿Quitar este vídeo de la agenda?")) return;
+    try { await api("/api/m/agenda/quitar", { fila: b.dataset.agendaQuitar }); pintarAgenda(); } catch (e) { aviso(e); } }; });
+  caja.querySelectorAll("[data-agenda-lanzar]").forEach((b) => { b.onclick = async () => {
+    b.disabled = true; b.textContent = "Creando…";
+    try { const r = await api("/api/m/agenda/lanzar", { fila: b.dataset.agendaLanzar }); location.hash = `v=${r.id}/1`; }
+    catch (e) { aviso(e); b.disabled = false; b.textContent = "Crear ya"; } }; });
 }
 
 // ============================================================ Crear un vídeo: tema, estilo, duración y formato

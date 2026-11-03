@@ -712,14 +712,15 @@ OPCIONES_IA = {"duracion": 60, "formato": "16:9", "tono": "", "modo": "buscar", 
 DURACIONES_IA = (15, 30, 60, 180, 300, 600)
 
 
-def crear_con_ia(tema: str, opciones: dict[str, Any] | None = None) -> str:
+def crear_con_ia(tema: str, opciones: dict[str, Any] | None = None, canal: str = "") -> str:
     """Escribes la idea y eliges duración, formato y tono: Studio investiga, busca material real (tráilers y gameplay
     sin comentario), escribe el guion con DeepSeek y pone un plano en cada frase. El vídeo se abre ya; todo llega solo."""
     tema = (tema or "").strip()
     if len(tema) < 4:
         raise ValueError("Escribe la idea del vídeo.")
-    o = _opciones_ia(opciones)
-    mid = crear(tema[:90], "", canales.activo()["id"], sin_guion=True)
+    c = canales.obtener(canal) if canal else canales.activo()   # la agenda crea en su canal sin cambiar el que tienes abierto
+    o = _opciones_ia(opciones, c)
+    mid = crear(tema[:90], "", c["id"], sin_guion=True)
     modificar(mid, lambda p: p.update(ia_opciones=o, formato_principal=o["formato"]))
     _en_fondo(mid, "Guion", lambda: _fase_ia(mid, tema, o, buscar_material=True))
     return mid
@@ -734,16 +735,17 @@ def guion_con_ia(mid: str, opciones: dict[str, Any] | None = None) -> None:
     _en_fondo(mid, "Guion", lambda: _fase_ia(mid, tema, o, buscar_material=not p["fuentes"]))
 
 
-def _opciones_ia(opciones: dict[str, Any] | None) -> dict[str, Any]:
+def _opciones_ia(opciones: dict[str, Any] | None, canal: dict[str, Any] | None = None) -> dict[str, Any]:
+    canal = canal or canales.activo()
     o = {**OPCIONES_IA, **{k: v for k, v in (opciones or {}).items() if v not in (None, "")}}
     o["duracion"] = min(DURACIONES_IA, key=lambda d: abs(d - int(float(o["duracion"]))))
     o["formato"] = "9:16" if str(o["formato"]) == "9:16" else "16:9"
     o["modo"] = "inventar" if o["modo"] == "inventar" else "buscar"
     o["tono"] = str(o["tono"])[:80]
     from . import estilos   # el estilo pedido o, si no, el del canal activo
-    o["estilo"] = estilos.valido(o.get("estilo"), canales.activo())
+    o["estilo"] = estilos.valido(o.get("estilo"), canal)
     from . import composicion   # gancho, ritmo y leyenda: los pedidos o los del canal
-    o.update(composicion.valida(o, canales.activo()))
+    o.update(composicion.valida(o, canal))
     o["fuentes"] = [str(u) for u in (o.get("fuentes") or []) if re.match(r"https?://\S+$", str(u))][:4]
     return o
 

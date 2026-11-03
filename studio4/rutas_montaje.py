@@ -76,6 +76,10 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
         return "json", radar.para_panel(canales.activo()["id"])
+    if ruta == "/api/m/agenda":   # la agenda del canal activo: fecha de publicar, tema y si ya se creó
+        from . import agenda
+        c = canales.activo()
+        return "json", {"canal": c["nombre"], "antelacion": agenda.ANTELACION_DIAS, "videos": agenda.listar(c["id"])}
     if ruta == "/api/m/higgsfield":   # clave, plan (mínima/media) y tope por vídeo
         from . import higgsfield
         return "json", higgsfield.estado()
@@ -221,6 +225,16 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
                                                                     str(d.get("datos", "")), str(d.get("credito", "")))}
     if ruta == "/api/m/gancho-continuidad":   # la imagen de Flow → miniatura + primer plano del vídeo
         return "json", montaje.gancho_continuidad(mid, str(d.get("datos", "")), str(d.get("texto", "")))
+    if ruta == "/api/m/agenda/anadir":
+        from . import agenda
+        return "json", agenda.anadir(str(d.get("fecha", "")), str(d.get("tema", "")), canales.activo()["id"], d.get("opciones") or {})
+    if ruta == "/api/m/agenda/quitar":
+        from . import agenda
+        agenda.quitar(str(d.get("fila", "")))
+        return "json", {"ok": True}
+    if ruta == "/api/m/agenda/lanzar":   # «Crear ya», sin esperar a su día
+        from . import agenda
+        return "json", {"ok": True, "id": agenda.lanzar(str(d.get("fila", "")))}
     if ruta == "/api/m/higgsfield/ajustes":
         from . import higgsfield
         higgsfield.guardar_ajustes(d.get("plan"), d.get("tope"))

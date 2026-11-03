@@ -750,6 +750,8 @@ def main() -> None:
             except Exception as e:  # noqa: BLE001 - el vigilante nunca se cae
                 logger.warning("Vigilante de la carpeta: %s", e)
     threading.Thread(target=vigilar, name="studio4-carpeta", daemon=True).start()
+    from studio4 import agenda   # la agenda crea cada vídeo unos días antes de su fecha (studio4/agenda.py)
+    threading.Thread(target=agenda.vigilar, name="studio4-agenda", daemon=True).start()
     from studio4 import nube   # copia de los datos en Supabase cada 30 min (solo si hay cuenta en .env)
     threading.Thread(target=nube.vigilar, name="studio4-nube", daemon=True).start()
     ThreadingHTTPServer.daemon_threads = True
