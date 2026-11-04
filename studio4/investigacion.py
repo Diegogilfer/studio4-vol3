@@ -216,7 +216,13 @@ def _con_varias(idea: str, produccion: str, fuentes_canal: list[str] | None = No
                                   "url": ", ".join(f["url"] for f in r["fuentes"][:3])})
         except Exception as e:  # noqa: BLE001
             logger.info("Fuentes del canal: %s", e)
-    for api in _wikis_del_juego(idea):
+    wikis = _wikis_del_juego(idea)
+    try:   # prensa reciente: lo que las wikis aún no cuentan (lanzamientos, noticias de la semana)
+        from . import prensa
+        articulos += prensa.buscar(idea, n=4, juegos=bool(wikis) or bool(re.search(r"juego|gta|consola|gaming", idea, re.I)))
+    except Exception as e:  # noqa: BLE001
+        logger.info("Prensa: %s", e)
+    for api in wikis:
         for q in (consultas.get("wiki") or [idea])[:2]:
             try:
                 for a in _wiki_buscar_y_leer(api, str(q)[:80]):
@@ -239,10 +245,12 @@ def _con_varias(idea: str, produccion: str, fuentes_canal: list[str] | None = No
     fuentes_txt = "\n\n".join(f"### FUENTE {i}: {a['titulo']} ({a['url']})\n{a['texto']}" for i, a in enumerate(articulos, 1))
     dossier = gemini.generar(
         f"Tema: {idea}\n\nArma el dossier usando SOLO estas fuentes; al final de cada hecho indica [F1], [F2]... Si dos fuentes "
-        f"se contradicen, dilo.\n\n{fuentes_txt}", sistema=SISTEMA, temperatura=0.3, detalle="dossier de investigación", produccion=produccion)
+        f"se contradicen, dilo. Las noticias de prensa llevan su fecha: di desde cuándo es así lo que cuentan y separa lo "
+        f"confirmado de lo que son rumores o expectativas.\n\n{fuentes_txt}", sistema=SISTEMA, temperatura=0.3,
+        detalle="dossier de investigación", produccion=produccion)
     registro.apuntar("Investigación (varias fuentes)", f"{len(articulos)} fuentes", unidad="fuentes", cantidad=len(articulos), produccion=produccion)
     return {"dossier": dossier.strip(), "fuentes": [{"titulo": a["titulo"], "url": a["url"]} for a in articulos],
-            "metodo": "wikis del juego + fuentes del canal + Wikipedia"}
+            "metodo": "prensa reciente + wikis del juego + fuentes del canal + Wikipedia"}
 
 
 def investigar(idea: str, produccion: str = "", fuentes_canal: list[str] | None = None) -> dict[str, Any]:

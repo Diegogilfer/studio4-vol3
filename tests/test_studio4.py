@@ -3870,3 +3870,17 @@ def test_cifras_animadas_salen_en_los_subtitulos(tmp_path):
         assert "Style: Cifra," in texto and "}72" in texto and "}1872" in texto and "MILLONES DE VISTAS" in texto
     sin = subtitulos.construir(ps, tmp_path / "sin.ass", 1920, 1080, {"cifras": False}).read_text(encoding="utf-8")
     assert ",Cifra,," not in sin
+
+
+def test_prensa_reciente_elige_noticias_del_juego(monkeypatch):
+    """La investigación lee prensa reciente: solo noticias del juego del tema, las que más encajan primero, con su texto."""
+    from studio4 import prensa
+    assert prensa.claves("Esto es lo que harán los jugadores el primer día de GTA 6") == ["jugadores", "6", "gta", "grand theft auto"]
+    noticias = [{"titulo": "Zelda bate récords", "url": "u1", "resumen": "", "medio": "A", "fecha": "2026-11-03"},
+                {"titulo": "GTA 6: los jugadores harán cola el primer día", "url": "u2", "resumen": "", "medio": "B", "fecha": "2026-11-02"},
+                {"titulo": "Grand Theft Auto VI pesa 212 GB", "url": "u3", "resumen": "", "medio": "C", "fecha": "2026-11-03"}]
+    monkeypatch.setattr(prensa, "_rss", lambda n, u: noticias if n == "Vandal" else [])
+    monkeypatch.setattr(prensa, "_gdelt", lambda cl: [])
+    monkeypatch.setattr(prensa, "texto_articulo", lambda url: f"Texto completo de {url}. " * 40)
+    r = prensa.buscar("lo que harán los jugadores el primer día de GTA 6")
+    assert [x["url"] for x in r] == ["u2", "u3"] and "(B, 2026-11-02)" in r[0]["titulo"]
