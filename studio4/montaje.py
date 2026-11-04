@@ -2210,16 +2210,19 @@ def tramo_corto(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
 # el anterior. La rejilla y los paneles conservan la suya. No cambia la duración: la voz sigue sincronizada.
 EFECTOS_JUEGOS = ("zoom", "destello", "corte", "glitch", "desenfoque", "zoom", "corte", "barrido")
 EFECTOS_HISTORIAS = ("fundido", "zoom", "corte", "desenfoque", "destello", "fundido", "corte", "barrido")
-FX_VERSION = 1
+FX_VERSION = 2
 
 
 def _filtro_efecto(efecto: str, ancho: int, alto: int) -> str:
-    n = max(6, int(config.FPS * 0.35))
+    n = max(6, round(config.FPS * 0.36))
     return {
         "destello": "fade=t=in:st=0:d=0.22:color=white",
         "fundido": "fade=t=in:st=0:d=0.3",
-        "zoom": (f"zoompan=z='if(lt(on,{n}),1.12-0.12*on/{n},1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-                 f":d=1:s={ancho}x{alto}:fps={config.FPS}"),
+        # zoompan sobre el plano entero se atasca a 1080p: solo se aplica a los primeros n fotogramas y se une al resto
+        "zoom": (f"split=2[za][zb];[za]trim=end_frame={n},setpts=PTS-STARTPTS,"
+                 f"zoompan=z='1.12-0.12*on/{n}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS},"
+                 f"trim=end_frame={n},setpts=N/{config.FPS}/TB[zc];[zb]trim=start_frame={n},setpts=PTS-STARTPTS[zd];"
+                 f"[zc][zd]concat=n=2:v=1:a=0"),
         "desenfoque": "boxblur=22:enable='lt(t,0.1)',boxblur=9:enable='between(t,0.1,0.24)'",
         "glitch": "rgbashift=rh=14:bh=-14:enable='lt(t,0.16)',noise=alls=22:allf=t:enable='lt(t,0.16)'",
         "barrido": (f"gblur=sigma=18:steps=1:enable='lt(t,0.12)',"
