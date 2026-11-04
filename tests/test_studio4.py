@@ -3913,5 +3913,5 @@ def test_lista_con_portada_desde_el_principio_y_estado(aislado, tmp_path, monkey
     v = next(v for v in montaje.listar() if v["id"] == mid)
     assert v["portada"] == "/fv/fuenteA/002.jpg" and not v["repetido"] and not v["ocupado"]
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
-    assert 'id="otro-guion"' in js and "/api/m/otro-guion" in js and "Terminados (" in js
+    assert 'id="otro-guion"' in js and "/api/m/otro-guion" in js and "Ya hechos (" in js
     assert hasattr(montaje, "otro_guion") and rutas_montaje.post  # la ruta existe (se prueba sin lanzar la IA)

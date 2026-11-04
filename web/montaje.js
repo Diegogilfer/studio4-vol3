@@ -411,10 +411,10 @@ async function vistaVideos() {
     </form>
     <div class="videos">
       <article class="tarjeta nuevo" data-al-crear><span>+</span><b>Nuevo vídeo</b><small>Escribe el tema y Studio 4 lo hace</small></article>
-      ${m.videos.filter((v) => !v.terminado).map(tarjetaVideo).join("")}
+      ${m.videos.filter((v) => !v.final).map(tarjetaVideo).join("")}
     </div>
-    ${m.videos.some((v) => v.terminado) ? `<details class="terminados"><summary>Terminados (${m.videos.filter((v) => v.terminado).length})</summary>
-      <div class="videos">${m.videos.filter((v) => v.terminado).map(tarjetaVideo).join("")}</div></details>` : ""}
+    ${m.videos.some((v) => v.final) ? `<details class="terminados"><summary>Ya hechos (${m.videos.filter((v) => v.final).length})</summary>
+      <div class="videos">${m.videos.filter((v) => v.final).map(tarjetaVideo).join("")}</div></details>` : ""}
     <p class="meta">¿Ya tienes el guion escrito? <a href="#" data-nuevo>Pégalo aquí</a>.</p>
     <div hidden>
     </div>`;
