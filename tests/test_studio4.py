@@ -3969,3 +3969,14 @@ def test_explicado_animado_graficos_por_frase_y_render(aislado, tmp_path, monkey
     w = lambda x, i: {"palabra": x, "ini": i, "fin": i + 0.3}  # noqa: E731
     t = subtitulos.construir([w("Hola", 0), w("72", 0.4), w("millones", 0.8)], tmp_path / "p.ass", 1080, 1920, {"estilo": "palabra"}).read_text(encoding="utf-8")
     assert t.count(",Palabra,,") == 3 and ",Cifra,," not in t and r"\fscx80" in t
+
+
+
+def test_cambiar_guion_conserva_infografias_e_imagenes_de_las_frases_iguales(aislado):
+    """Editar el guion no borra lo que ya tenían las frases que no cambian (infografía, imagen…)."""
+    from studio4 import montaje
+    mid = montaje.crear("Prueba", "GTA 6 va a ocupar hasta 212 gigabytes en tu consola. El dato salió con las reservas de junio pasado.")
+    montaje.modificar(mid, lambda p: p["frases"][0].update(grafico={"tipo": "contador", "valor": 212}))
+    montaje.cambiar_guion(mid, "GTA 6 va a ocupar hasta 212 gigabytes en tu consola. Lo confirmó Rockstar al anunciar la predescarga.")
+    fr = montaje.cargar(mid)["frases"]
+    assert fr[0]["grafico"]["valor"] == 212 and "grafico" not in fr[1]

@@ -668,7 +668,7 @@ def cambiar_guion(mid: str, guion: str) -> None:
         for f in nuevas:
             v = viejas.get(f["texto"])
             if v:
-                f.update({k: v[k] for k in ("clip", "rotulo", "panel") if v.get(k)})
+                f.update({k: v[k] for k in ("clip", "rotulo", "panel", "grafico", "imagen", "video", "isometrico") if v.get(k)})
         p.update(guion=guion.strip(), frases=nuevas, avisos=revisar(guion), previa="", final=None, short=None)
     modificar(mid, cambio)
 
