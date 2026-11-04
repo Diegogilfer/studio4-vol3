@@ -109,6 +109,19 @@ def _portada(mid: str) -> str:
     return next(iter(_fotos_reales(mid, 1)), "")
 
 
+def _portada_lista(p: dict[str, Any]) -> str:
+    """La imagen de la tarjeta desde el primer momento: la miniatura si ya hay; si no, una foto real de sus frases; si
+    no, el fotograma del primer plano elegido."""
+    im = _portada(p["id"])
+    if im:
+        return im
+    for f in p.get("frases") or []:
+        c = f.get("clip") or {}
+        if c.get("fuente") and c.get("plano"):
+            return f"/fv/{c['fuente']}/{int(c['plano']):03d}.jpg"
+    return ""
+
+
 def _fotos_reales(mid: str, n: int = 3) -> list[str]:
     """Fotos reales puestas en las frases (archivo, stock libre): fondos para la presentación."""
     d = carpeta(mid) / "imagenes"
@@ -146,6 +159,8 @@ def listar() -> list[dict[str, Any]]:
         except ValueError:
             continue
         salida.append({"id": p["id"], "titulo": p["titulo"], "creado": p["creado"], "paso": paso_actual(p),
+                       "portada": _portada_lista(p), "repetido": bool(p.get("repetido")),
+                       "ocupado": bool((p.get("trabajo") or {}).get("ocupado")), "fase": (p.get("trabajo") or {}).get("fase", ""),
                        "frases": len(p["frases"]), "con_clip": sum(1 for x in p["frases"] if con_imagen(x)),
                        "final": bool(p.get("final")), "terminado": bool(p.get("terminado")), "canal": p.get("canal", "")})
     return salida
@@ -726,6 +741,45 @@ def crear_con_ia(tema: str, opciones: dict[str, Any] | None = None, canal: str =
     return mid
 
 
+def otro_guion(mid: str) -> None:
+    """«Cambiar guion»: el mismo tema contado de otra forma (otro gancho, otro ángulo, otros datos), sin el anterior."""
+    p = cargar(mid)
+    tema = (p.get("resumen_ia") or {}).get("tema") or p["titulo"]
+
+    def fase() -> None:
+        from . import guion as guionista
+        from . import investigacion, repetidos
+        q = cargar(mid)
+        o = _opciones_ia(q.get("ia_opciones"), canales.obtener(q["canal"]))
+        dossier = q.get("dossier") or ""
+        if not dossier:
+            _avisar(mid, "Investigando el tema", 15)
+            dossier = investigacion.investigar(tema, produccion=mid, fuentes_canal=canales.obtener(q["canal"]).get("fuentes")).get("dossier", "")
+            modificar(mid, lambda r: r.update(dossier=dossier[:20000]))
+        seg = int(o["duracion"])
+        version = "corto" if seg <= 60 else "largo"
+        _avisar(mid, "Escribiendo otro guion", 45)
+        anterior = re.sub(r"\s+", " ", q.get("guion") or "")[:900]
+        tono = (f"{o.get('tono', '')} Escribe una versión NUEVA y distinta: otro gancho, otro ángulo y otro orden; no reutilices "
+                f"frases de este guion anterior, que no gustó: {anterior}").strip()
+        rep = None
+        for _ in range(3):
+            escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=tono,
+                                         identidad=guionista.identidad_del_canal(canales.obtener(q["canal"])))
+            rep = repetidos.buscar(escrito[version]["guion"], escrito.get("titulo_provisional") or tema, q["canal"], excluir=mid)
+            if not rep:
+                break
+            tono += " " + repetidos.evitar(rep)
+        cambiar_guion(mid, escrito[version]["guion"])
+        modificar(mid, lambda r: (r.update(titulo=escrito.get("titulo_provisional") or r["titulo"]),
+                                  r.update(repetido={"id": rep["id"], "titulo": rep["titulo"], "dias": rep["dias"],
+                                                     "parecido": rep["parecido"], "hecho": repetidos.marca()}) if rep else r.pop("repetido", None)))
+        if cargar(mid)["fuentes"]:
+            _avisar(mid, "Poniendo un plano en cada frase nueva", 80)
+            proponer(mid)
+    _en_fondo(mid, "Guion", fase)
+
+
 def guion_con_ia(mid: str, opciones: dict[str, Any] | None = None) -> None:
     """Un vídeo que ya tiene material (subido o por enlace) pero no guion: la IA lo escribe a partir de ese material."""
     p = cargar(mid)
@@ -798,9 +852,25 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     from . import composicion
     tono = " ".join(x for x in (o.get("tono", ""), estilos.para_guion(o["estilo"]), composicion.para_guion(o)) if x)
     modificar(mid, lambda q: q.update(subtitulos={**SUBS_POR_DEFECTO, **composicion.subtitulos(o)}))   # la leyenda elegida
-    escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=tono,
-                                 identidad=guionista.identidad_del_canal(canales.obtener(cid)))
+    identidad = guionista.identidad_del_canal(canales.obtener(cid))
+    escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=tono, identidad=identidad)
+    from . import repetidos   # ¿ya se hizo este vídeo hace poco? → otro ángulo, y si no sale, se pausa
+    rep = None
+    for _ in range(3):
+        rep = repetidos.buscar(escrito[version]["guion"], escrito.get("titulo_provisional") or tema, cid, excluir=mid)
+        if not rep:
+            break
+        _avisar(mid, f"Se parece a «{rep['titulo'][:40]}» (hace {rep['dias']} días): busco otro ángulo", 58)
+        escrito = guionista.escribir(tema, dossier, {version: seg}, produccion=mid, tono=f"{tono} {repetidos.evitar(rep)}".strip(),
+                                     identidad=identidad)
+    modificar(mid, lambda q: q.update(dossier=dossier[:20000]))   # para «Cambiar guion» sin volver a investigar
     cambiar_guion(mid, escrito[version]["guion"])
+    if rep and (rep := repetidos.buscar(escrito[version]["guion"], escrito.get("titulo_provisional") or tema, cid, excluir=mid)):
+        aviso = {"id": rep["id"], "titulo": rep["titulo"], "dias": rep["dias"], "parecido": rep["parecido"], "hecho": repetidos.marca()}
+        modificar(mid, lambda q: q.update(repetido=aviso, titulo=escrito.get("titulo_provisional") or q["titulo"]))
+        _avisar(mid, f"En pausa: se parece demasiado a «{rep['titulo'][:40]}». Pulsa «Cambiar guion» o cambia el tema", 60)
+        return
+    modificar(mid, lambda q: q.pop("repetido", None))
     ganchos = escrito[version].get("ganchos") or []
     generador = estilos.ESTILOS[o["estilo"]].get("generador")
     if generador == "isometrico":   # cada frase con su maqueta hecha con código: no hace falta material de vídeo

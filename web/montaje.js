@@ -73,12 +73,15 @@ const num = (n) => Number(n || 0).toLocaleString("es");
 const corto = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(".", ",")} M` : n >= 1e3 ? `${(n / 1e3).toFixed(1).replace(".", ",")} K` : String(n || 0);
 const mb = (b) => b > 1e9 ? `${(b / 1e9).toFixed(1).replace(".", ",")} GB` : `${Math.round(b / 1e6)} MB`;
 const cabecera = (titulo, sub) => `<div class="seccion-cab"><h1>${titulo}</h1>${sub ? `<p class="meta">${sub}</p>` : ""}</div>`;
+const PASOS_LISTA = ["Guion", "Material", "Montaje", "Previa", "Final"];
 const tarjetaVideo = (v) => `
-  <article class="tarjeta" data-abrir="${esc(v.id)}">
+  <article class="tarjeta con-portada" data-abrir="${esc(v.id)}">
+    <div class="portada">${v.portada ? `<img src="${esc(v.portada)}" alt="" loading="lazy">` : `<span>Sin imagen aún</span>`}
+      ${v.repetido ? `<em class="sello aviso">Repetido</em>` : v.ocupado ? `<em class="sello">${esc(v.fase || "Trabajando")}…</em>` : ""}</div>
     <b>${esc(v.titulo)}</b>
     <div class="puntos">${[1, 2, 3, 4, 5].map((n) => `<i class="${n < v.paso || v.final ? "si" : ""}"></i>`).join("")}</div>
-    <small>${v.terminado ? "Terminado ✓" : v.final ? "Montado · falta cerrar" : `Paso ${v.paso} de 5`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
-    ${v.final ? "" : `<button class="archivar" type="button" data-archivar="${esc(v.id)}" title="No lo voy a terminar: sacarlo de la lista">Archivar</button>`}
+    <small>${v.terminado ? "Terminado ✓" : v.final ? "Montado · falta cerrar" : `Paso ${v.paso} de 5 · ${PASOS_LISTA[v.paso - 1]}`} · ${v.con_clip}/${v.frases} frases con imagen · ${esc(v.creado)}</small>
+    <button class="archivar" type="button" data-archivar="${esc(v.id)}" title="Sacarlo de la lista (va a la papelera, no se borra)">Quitar</button>
   </article>`;
 
 let datos = null;          // el vídeo abierto: {video, paso, fuentes}
@@ -408,8 +411,10 @@ async function vistaVideos() {
     </form>
     <div class="videos">
       <article class="tarjeta nuevo" data-al-crear><span>+</span><b>Nuevo vídeo</b><small>Escribe el tema y Studio 4 lo hace</small></article>
-      ${m.videos.map(tarjetaVideo).join("")}
+      ${m.videos.filter((v) => !v.terminado).map(tarjetaVideo).join("")}
     </div>
+    ${m.videos.some((v) => v.terminado) ? `<details class="terminados"><summary>Terminados (${m.videos.filter((v) => v.terminado).length})</summary>
+      <div class="videos">${m.videos.filter((v) => v.terminado).map(tarjetaVideo).join("")}</div></details>` : ""}
     <p class="meta">¿Ya tienes el guion escrito? <a href="#" data-nuevo>Pégalo aquí</a>.</p>
     <div hidden>
     </div>`;
@@ -921,7 +926,9 @@ function pasoGuion(v) {
     </div>
     <details class="a-mano" ${v.frases.length ? "open" : ""}><summary>${v.frases.length ? "Revisar y editar el guion" : "…o pégalo a mano"}</summary>
       <textarea class="campo guion" id="guion">${esc(v.guion)}</textarea>
-      <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button></div>
+      ${v.repetido ? `<p class="aviso-repetido">⚠ Este guion se parece un ${Math.round(v.repetido.parecido * 100)} % a «${esc(v.repetido.titulo)}», hecho hace ${v.repetido.dias} días. Está en pausa para no subir el mismo vídeo: pulsa «Cambiar guion».</p>` : ""}
+      <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button>
+        <button class="${v.repetido ? "primario" : "boton"}" type="button" id="otro-guion" title="El mismo tema contado de otra forma: otro gancho, otro ángulo y otros datos">↻ Cambiar guion</button></div>
     </details>
   </section>`;
 }
@@ -1229,6 +1236,7 @@ function enlazarVideo(p) {
   $("abrir-carpeta").onclick = () => enviar("/api/m/carpeta");
   if (p === 1) {
     $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });
+    $("otro-guion").onclick = () => { if (confirm("¿Escribo otro guion para este tema? El actual se sustituye (los planos de las frases que se repitan se conservan).")) enviar("/api/m/otro-guion"); };
     $("generar-guion").onclick = () => {
       if (v.frases.length && !confirm("Esto reemplaza el guion actual por uno nuevo. ¿Seguir?")) return;
       enviar("/api/m/guion-ia", { opciones: leerOpcionesIA($("guion-ia")) });

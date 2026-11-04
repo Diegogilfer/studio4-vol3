@@ -3884,3 +3884,34 @@ def test_prensa_reciente_elige_noticias_del_juego(monkeypatch):
     monkeypatch.setattr(prensa, "texto_articulo", lambda url: f"Texto completo de {url}. " * 40)
     r = prensa.buscar("lo que harán los jugadores el primer día de GTA 6")
     assert [x["url"] for x in r] == ["u2", "u3"] and "(B, 2026-11-02)" in r[0]["titulo"]
+
+
+def test_guion_repetido_en_20_dias_se_detecta_y_no_se_confunde(aislado):
+    """Un guion casi igual a otro del mismo canal de hace menos de 20 días se detecta; otro tema del mismo juego no."""
+    from studio4 import montaje, repetidos
+    viejo = montaje.crear("Lo que GTA 6 hereda de The Warriors",
+                          "The Warriors salió en 2005. Rockstar Toronto lo creó con bandas de Nueva York. GTA 6 hereda sus peleas cuerpo a cuerpo.")
+    montaje.modificar(viejo, lambda p: p.update(canal="fourlevel"))
+    mismo = "GTA 6 hereda de The Warriors las peleas cuerpo a cuerpo. Rockstar Toronto creó The Warriors en 2005 con bandas de Nueva York."
+    otro = "La policía de GTA 6 tiene seis estrellas. Los agentes recuerdan tu cara y patrullan los barrios de Leonida de noche."
+    rep = repetidos.buscar(mismo, "GTA VI y The Warriors", "fourlevel")
+    assert rep and rep["id"] == viejo and rep["parecido"] >= repetidos.UMBRAL_GUION
+    assert repetidos.buscar(otro, "La policía de GTA 6", "fourlevel") is None
+    assert repetidos.buscar(mismo, "x", "arigab") is None                       # otro canal, no cuenta
+    assert repetidos.buscar(mismo, "x", "fourlevel", dias=-1) is None           # fuera de plazo, no cuenta
+    assert "NO lo repitas" in repetidos.evitar(rep)
+
+
+def test_lista_con_portada_desde_el_principio_y_estado(aislado, tmp_path, monkeypatch):
+    """Cada vídeo de la lista lleva su imagen (miniatura, foto o el primer plano) y su estado; «Cambiar guion» existe."""
+    from studio4 import montaje, rutas_montaje
+    _banco_falso(tmp_path, monkeypatch)
+    mid = montaje.crear("Prueba", "Primera frase del vídeo con seis palabras. Segunda frase también con seis palabras.")
+    assert next(v for v in montaje.listar() if v["id"] == mid)["portada"] == ""
+    montaje.usar_fuente(mid, "fuenteA")
+    montaje.asignar(mid, 1, "fuenteA", 2)
+    v = next(v for v in montaje.listar() if v["id"] == mid)
+    assert v["portada"] == "/fv/fuenteA/002.jpg" and not v["repetido"] and not v["ocupado"]
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert 'id="otro-guion"' in js and "/api/m/otro-guion" in js and "Terminados (" in js
+    assert hasattr(montaje, "otro_guion") and rutas_montaje.post  # la ruta existe (se prueba sin lanzar la IA)

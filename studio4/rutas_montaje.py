@@ -168,6 +168,9 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/nube/sincronizar":   # subir ya a la nube (además de cada 30 min)
         from . import nube
         return "json", {"ok": True, "subidos": nube.sincronizar()}
+    if ruta == "/api/m/otro-guion":   # «Cambiar guion»: el mismo tema contado de otra forma
+        montaje.otro_guion(mid)
+        return "json", {"ok": True}
     if ruta == "/api/m/archivar":   # un vídeo a medias que no se va a terminar sale de la lista
         montaje.archivar(str(d.get("id", "")))
         return "json", {"ok": True}
