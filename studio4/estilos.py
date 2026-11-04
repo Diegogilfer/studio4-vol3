@@ -136,7 +136,28 @@ ESTILOS["isometrico"] = {
     "montaje": {"ritmo": "medio", "transicion": "fundido", "musica": "misterio", "subtitulos": "viral"},
     "imagen": "Lo hace Claude con código: una maqueta isométrica por frase (la IA solo describe la escena)",
     "video": "No hace falta: el montaje le pone movimiento lento", "coste": "gratis", "animar": 0}
-HECHO_POR_CLAUDE = {"gameplay", "stickman", "pixelart", "motion", "tipografia", "vectorial", "collage", "isometrico"}
+ESTILOS["explicado"] = {
+    "nombre": "Explicado animado (Shorts)", "para": "Shorts diarios de curiosidades con infografías animadas (FourLevel)",
+    "visual": "", "genera": False, "generador": "explicado",
+    "guion": ("Short de 45-60 s con esta fórmula: 1) primera frase = gancho exagerado PERO verdadero («X es tan real que "
+              "Rockstar tuvo que cambiar Y»); 2) el dato con nombre propio y su fuente (quién lo contó, en qué entrevista); "
+              "3) a mitad, un giro con «pero lo más loco…» que sube la apuesta; 4) cierre con una pregunta concreta para "
+              "comentar; 5) la última frase queda abierta y enlaza con la primera, para que el Short se repita en bucle. "
+              "Frases cortas, ritmo rápido, cero relleno"),
+    "montaje": {"ritmo": "rapido", "transicion": "corte", "musica": "acción", "subtitulos": "palabra"},
+    "imagen": "Lo hace Claude con código: infografías animadas (reloj, contador, multitud, mapa…) + material oficial",
+    "video": "No hace falta", "coste": "gratis", "animar": 0}
+ESTILOS["explicado_historia"] = {
+    "nombre": "Explicado animado (historias)", "para": "Historias reales largas con infografías pausadas (ARIGAB)",
+    "visual": "", "genera": False, "generador": "explicado",
+    "guion": ("historia real larga y pausada: abre en el momento más intrigante (en frío), después vuelve al principio; "
+              "cada bloque termina con una pequeña intriga que empuja al siguiente; nombres, fechas y lugares concretos; "
+              "separa lo comprobado de la leyenda; cierra con una pregunta para comentar"),
+    "montaje": {"ritmo": "lento", "transicion": "fundido", "musica": "misterio", "subtitulos": "cine"},
+    "imagen": "Lo hace Claude con código: infografías de archivo (líneas de tiempo, mapas, cifras) + fotos reales",
+    "video": "No hace falta", "coste": "gratis", "animar": 0}
+HECHO_POR_CLAUDE = {"gameplay", "stickman", "pixelart", "motion", "tipografia", "vectorial", "collage", "isometrico",
+                    "explicado", "explicado_historia"}
 for _k, _e in ESTILOS.items():
     _e["hecho_por"] = "claude" if _k in HECHO_POR_CLAUDE else "modelo"
 POR_DEFECTO = "documental"

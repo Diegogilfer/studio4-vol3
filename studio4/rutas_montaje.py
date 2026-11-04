@@ -76,10 +76,21 @@ def get(ruta: str, query: dict[str, list[str]]) -> tuple[str, Any] | None:
         return "json", {"enlace": escaleta.herramienta()}
     if ruta == "/api/m/radar":   # juegos/temas en tendencia ahora (varias webs de juegos + GTA Wiki)
         return "json", radar.para_panel(canales.activo()["id"])
-    if ruta == "/api/m/agenda":   # la agenda del canal activo: fecha de publicar, tema y si ya se creó
+    if ruta == "/api/m/agenda":   # la agenda del canal activo (o de todos, para Sofi Calendar): fecha, tema y estado
         from . import agenda
+        if q("canal") == "todos":
+            nombres = {c["id"]: c["nombre"] for c in canales.listar()}
+            estados = {v["id"]: v for v in montaje.listar()}
+            filas = [{**v, "canal_nombre": nombres.get(v["canal"], v["canal"]),
+                      "paso": (estados.get(v["video"]) or {}).get("paso"), "listo": bool((estados.get(v["video"]) or {}).get("final")),
+                      "ocupado": bool((estados.get(v["video"]) or {}).get("ocupado")), "fase": (estados.get(v["video"]) or {}).get("fase", ""),
+                      "portada": (estados.get(v["video"]) or {}).get("portada", "")} for v in agenda.listar()]
+            return "json", {"antelacion": agenda.ANTELACION_DIAS, "videos": filas}
         c = canales.activo()
         return "json", {"canal": c["nombre"], "antelacion": agenda.ANTELACION_DIAS, "videos": agenda.listar(c["id"])}
+    if ruta == "/api/m/avisos":   # los avisos de Studio 4 desde el número `desde` (los lee Sofi Calendar)
+        from . import vigilante
+        return "json", {"avisos": vigilante.avisos(int(q("desde") or 0))}
     if ruta == "/api/m/higgsfield":   # clave, plan (mínima/media) y tope por vídeo
         from . import higgsfield
         return "json", higgsfield.estado()
@@ -168,6 +179,12 @@ def post(ruta: str, d: dict[str, Any]) -> tuple[str, Any]:
     if ruta == "/api/m/nube/sincronizar":   # subir ya a la nube (además de cada 30 min)
         from . import nube
         return "json", {"ok": True, "subidos": nube.sincronizar()}
+    if ruta == "/api/m/graficos":   # infografías animadas para el guion actual
+        montaje.poner_graficos(mid)
+        return "json", {"ok": True}
+    if ruta == "/api/m/grafico/quitar":
+        montaje.quitar_grafico(mid, int(d.get("n", 0)))
+        return "json", {"ok": True}
     if ruta == "/api/m/otro-guion":   # «Cambiar guion»: el mismo tema contado de otra forma
         montaje.otro_guion(mid)
         return "json", {"ok": True}

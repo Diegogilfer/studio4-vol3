@@ -22,7 +22,7 @@ PALETAS = {
 }
 POR_DEFECTO = {"activos": True, "paleta": "amarillo", "posicion": "abajo", "tamano": "normal", "gancho": True,
                "estilo": "viral", "sonidos": True}
-ESTILOS = {"viral": "Viral", "cine": "Cine"}
+ESTILOS = {"viral": "Viral", "cine": "Cine", "palabra": "Una palabra"}
 
 
 def _ts(s: float) -> str:
@@ -281,6 +281,7 @@ Style: Main,Arial Black,{tam},{pal['texto']},{pal['texto']},&H00000000,&H8000000
 Style: Gancho,Arial Black,{tam_gancho},&H00FFFFFF,&H00FFFFFF,&H00000000,&HA0000000,-1,0,0,0,100,100,0,0,3,14,0,8,{int(ancho * 0.08)},{int(ancho * 0.08)},{int(alto * 0.07)},1
 Style: Cine,Arial,{tam_cine},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2.6,1.2,2,{int(ancho * 0.08)},{int(ancho * 0.08)},{margen_cine},1
 Style: {estilo_sonido}
+Style: Palabra,Arial Black,{int(tam * (1.7 if vertical else 1.35))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,8,3,5,0,0,0,1
 Style: Cifra,Arial Black,{int(tam * (2.8 if vertical else 2.7))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,7,4,5,0,0,0,1
 
 [Events]
@@ -291,7 +292,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         eventos.append(f"Dialogue: 1,{_ts(inicio_gancho)},{_ts(inicio_gancho + segundos_gancho)},Gancho,,0,0,0,,"
                        f"{_limpia(gancho).upper()}")
 
-    if a["activos"] and cine:
+    if a["activos"] and a["estilo"] == "palabra":   # una sola palabra en el centro, al ritmo de la voz (Shorts explicados)
+        x, y = ancho // 2, int(alto * (0.74 if vertical else 0.78))
+        for i, p in enumerate(palabras):
+            fin = palabras[i + 1]["ini"] if i + 1 < len(palabras) and palabras[i + 1]["ini"] - p["fin"] < 0.4 else p["fin"] + 0.25
+            larga = len(_limpia(p["palabra"])) > 5 or p["palabra"].rstrip().endswith((".", "!", "?"))
+            color = pal["resalte"] if larga and i % 3 == 0 else pal["texto"]
+            eventos.append(f"Dialogue: 0,{_ts(p['ini'])},{_ts(max(fin, p['ini'] + 0.08))},Palabra,,0,0,0,,"
+                           + "{" + rf"\pos({x},{y})\c{color}\fscx80\fscy80\t(0,90,\fscx106\fscy106)\t(90,160,\fscx100\fscy100)" + "}"
+                           + _limpia(p["palabra"]).upper())
+    elif a["activos"] and cine:
         max_linea = 30 if vertical else 42
         frases = _frases(palabras, max_linea * 2)
         for n, frase in enumerate(frases):
@@ -313,7 +323,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                           for j, t in enumerate(textos)]
                 eventos.append(f"Dialogue: 0,{_ts(ini)},{_ts(max(fin, ini + 0.08))},Main,,0,0,0,,{' '.join(partes)}")
 
-    if a.get("cifras", True) and palabras:   # cifras animadas (se pueden apagar con «cifras»: False)
+    if a.get("cifras", True) and palabras and a["estilo"] != "palabra":   # en los explicados, la cifra ya es un gráfico   # cifras animadas (se pueden apagar con «cifras»: False)
         eventos += _eventos_cifras(palabras, ancho, alto, pal["resalte"])
 
     if a["sonidos"]:

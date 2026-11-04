@@ -45,8 +45,52 @@ def _guardar(e: dict[str, Any]) -> None:
     ESTADO.write_text(json.dumps(e, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+AVISOS = config.PRODUCCIONES / "_avisos.jsonl"   # lo que Studio 4 tiene que contarte: Sofi Calendar lo lee de aquí
+SOFI = "http://127.0.0.1:8790/"
+
+
+def _sofi_abierta() -> bool:
+    try:
+        urllib.request.urlopen(SOFI, timeout=2)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def avisos(desde: int = 0) -> list[dict[str, Any]]:
+    """Los avisos guardados con número mayor que `desde` (para Sofi Calendar)."""
+    try:
+        lineas = AVISOS.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    salida = []
+    for linea in lineas[-200:]:
+        try:
+            a = json.loads(linea)
+        except ValueError:
+            continue
+        if a.get("n", 0) > desde:
+            salida.append(a)
+    return salida
+
+
+def _guardar_aviso(titulo: str, texto: str) -> None:
+    previos = avisos()
+    n = (previos[-1]["n"] if previos else 0) + 1
+    AVISOS.parent.mkdir(parents=True, exist_ok=True)
+    with AVISOS.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"n": n, "titulo": titulo, "texto": texto, "hora": time.strftime("%Y-%m-%d %H:%M")}, ensure_ascii=False) + "\n")
+
+
 def notificar_windows(titulo: str, texto: str) -> bool:
-    """Un aviso del sistema (la campana de Windows). Falla en silencio si no se puede."""
+    """Un aviso: se guarda para Sofi Calendar y, si Sofi-Manager está abierto, lo enseña ELLA (un solo aviso, no dos).
+    Sin Sofi, sale la campana de Windows de Studio 4. Falla en silencio si no se puede."""
+    try:
+        _guardar_aviso(titulo, texto)
+    except OSError:
+        pass
+    if _sofi_abierta():
+        return True
     ps = ("[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; "
           "$t=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); "
           "$x=$t.GetElementsByTagName('text'); "

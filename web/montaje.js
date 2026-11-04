@@ -929,7 +929,8 @@ function pasoGuion(v) {
       ${v.frases.length ? flowMiniHTML(v) : ""}
       ${v.repetido ? `<p class="aviso-repetido">⚠ Este guion se parece un ${Math.round(v.repetido.parecido * 100)} % a «${esc(v.repetido.titulo)}», hecho hace ${v.repetido.dias} días. Está en pausa para no subir el mismo vídeo: pulsa «Cambiar guion».</p>` : ""}
       <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button>
-        <button class="${v.repetido ? "primario" : "boton"}" type="button" id="otro-guion" title="El mismo tema contado de otra forma: otro gancho, otro ángulo y otros datos">↻ Cambiar guion</button></div>
+        <button class="${v.repetido ? "primario" : "boton"}" type="button" id="otro-guion" title="El mismo tema contado de otra forma: otro gancho, otro ángulo y otros datos">↻ Cambiar guion</button>
+        <button class="boton" type="button" id="poner-graficos" title="Infografías animadas hechas con código en las frases donde ayudan (cifras, mapas, decisiones…)">✦ Infografías animadas</button></div>
     </details>
   </section>`;
 }
@@ -1001,6 +1002,7 @@ function pasoMontaje(v, conClip) {
           <input class="campo rotulo" data-rotulo="${f.n}" value="${esc(f.rotulo || "")}" placeholder="Rótulo (opcional): THE WARRIORS · 2005">
           <button class="boton" type="button" data-panel="${f.n}">${f.panel ? "Editar panel" : "Panel de texto"}</button>
           <button class="boton" type="button" data-imagen="${f.n}">${f.imagen ? "Cambiar imagen" : "Imagen"}</button>
+          ${f.grafico ? `<button class="boton" type="button" data-grafico-quitar="${f.n}" title="Quitar la infografía de esta frase">✦ ${esc(f.grafico.tipo)} ✕</button>` : ""}
           ${f.video?.higgsfield ? `<button class="boton" type="button" data-hf-quitar="${f.n}" title="Vuelve a la imagen fija">Quitar animación</button>`
             : f.imagen && !f.video && datos.higgsfield?.disponible ? `<button class="boton" type="button" data-hf-animar="${f.n}"
               title="Higgsfield convierte esta imagen en un clip de 5 s">Animar · ${datos.higgsfield.coste_clip.toFixed(2).replace(".", ",")} $</button>` : ""}
@@ -1238,6 +1240,7 @@ function enlazarVideo(p) {
   $("abrir-carpeta").onclick = () => enviar("/api/m/carpeta");
   if (p === 1) {
     $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });
+    $("poner-graficos").onclick = () => enviar("/api/m/graficos");
     $("otro-guion").onclick = () => { if (confirm("¿Escribo otro guion para este tema? El actual se sustituye (los planos de las frases que se repitan se conservan).")) enviar("/api/m/otro-guion"); };
     $("generar-guion").onclick = () => {
       if (v.frases.length && !confirm("Esto reemplaza el guion actual por uno nuevo. ¿Seguir?")) return;
@@ -1365,7 +1368,7 @@ function enlazarVideo(p) {
 // delegación: lo que se repite por frase, el banco, abrir y nuevo
 $("vista").addEventListener("click", (ev) => {
   const el = ev.target.closest("[data-elegir],[data-panel],[data-guardar-panel],[data-quitar-panel],[data-usar],[data-copiar],[data-abrir],[data-nuevo],"
-    + "[data-imagen],[data-poner-url],[data-buscar-img],[data-quitar-imagen],[data-elegir-img],[data-hf-animar],[data-hf-quitar],[data-subir],[data-bajar],[data-quitar-clip]");
+    + "[data-imagen],[data-poner-url],[data-buscar-img],[data-quitar-imagen],[data-elegir-img],[data-hf-animar],[data-hf-quitar],[data-subir],[data-bajar],[data-quitar-clip],[data-grafico-quitar]");
   if (!el) return;
   // imágenes por frase: enlace, archivo de tu PC o búsqueda en las fuentes del canal
   if (el.dataset.imagen) { const f = document.querySelector(`[data-imagen-form="${el.dataset.imagen}"]`); f.hidden = !f.hidden; return; }
@@ -1403,6 +1406,7 @@ En este vídeo van ${(h.gastado || 0).toFixed(2).replace(".", ",")} $ de un tope
     return enviar("/api/m/higgsfield/animar", { n: Number(el.dataset.hfAnimar) });
   }
   if (el.dataset.hfQuitar) return enviar("/api/m/higgsfield/quitar", { n: Number(el.dataset.hfQuitar) });
+  if (el.dataset.graficoQuitar) return enviar("/api/m/grafico/quitar", { n: Number(el.dataset.graficoQuitar) });
   if (el.dataset.usar) return enviar("/api/m/usar-fuente", { fuente: el.dataset.usar });
   if (el.dataset.copiar !== undefined) {
     navigator.clipboard.writeText(el.dataset.copiar).then(() => { el.textContent = "Copiado"; setTimeout(() => { el.textContent = "Copiar"; }, 1500); });

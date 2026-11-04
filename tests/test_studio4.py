@@ -3944,3 +3944,28 @@ def test_miniaturas_de_referencia_ensenan_el_estilo_al_prompt(tmp_path, monkeypa
     assert (tmp_path / "refs" / "fourlevel" / f["archivo"]).exists() is False or True
     txt = miniaturas_ref.para_prompt("fourlevel")
     assert "MINIATURAS QUE EL CANAL YA USÓ" in txt and "otra" in txt and miniaturas_ref.para_prompt("arigab") == ""
+
+
+def test_explicado_animado_graficos_por_frase_y_render(aislado, tmp_path, monkeypatch):
+    """Infografías hechas con código: la IA elige tipo y datos por frase (sin repetir tipo seguido), se ven en el
+    montaje como cualquier plano y se pueden quitar; los dos temas (neón rápido / archivo pausado) se dibujan."""
+    from studio4 import deepseek, estilos, explicado, montaje, subtitulos
+    assert {"explicado", "explicado_historia"} <= set(estilos.ESTILOS) and estilos.ESTILOS["explicado"]["hecho_por"] == "claude"
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: {"frases": [
+        {"n": 1, "tipo": "contador", "datos": {"valor": 212, "unidad": "GB"}}, {"n": 2, "tipo": "contador", "datos": {"valor": 3}},
+        {"n": 3, "tipo": "inventado"}, {"n": 4, "tipo": "personas", "datos": {"n": 12}}]})
+    mid = montaje.crear("Prueba", "La predescarga de GTA 6 pesa 212 GB en consola. Son tres versiones distintas del mismo juego. Nadie sabe todavía qué pasará ese día. Hay muchísimos peatones distintos por las calles.")
+    assert montaje._poner_graficos(mid) == 2
+    fr = {f["n"]: f for f in montaje.cargar(mid)["frases"]}
+    assert fr[1]["grafico"]["tipo"] == "contador" and "grafico" not in fr[2] and "grafico" not in fr[3] and fr[4]["grafico"]["n"] == 12
+    assert montaje.con_imagen(fr[1]) and not montaje.con_imagen(fr[2])
+    montaje.quitar_grafico(mid, 1)
+    assert "grafico" not in montaje.cargar(mid)["frases"][0]
+    for tema in ("neon", "archivo"):
+        v = explicado.renderizar({"tipo": "reloj", "centro": "GTA VI"}, 0.4, tmp_path / f"{tema}.mp4", 640, 360, tema, fps=10)
+        assert abs(medios.duracion(v) - 0.4) < 0.15
+    assert '"tipo": "mapa"' in explicado.html({"tipo": "mapa", "puntos": ["A"]}, 2, 1080, 1920, "archivo") and "archivo" in explicado.html({}, 1, 1920, 1080, "archivo")
+    w = lambda x, i: {"palabra": x, "ini": i, "fin": i + 0.3}  # noqa: E731
+    t = subtitulos.construir([w("Hola", 0), w("72", 0.4), w("millones", 0.8)], tmp_path / "p.ass", 1080, 1920, {"estilo": "palabra"}).read_text(encoding="utf-8")
+    assert t.count(",Palabra,,") == 3 and ",Cifra,," not in t and r"\fscx80" in t

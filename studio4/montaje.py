@@ -178,7 +178,7 @@ def archivar(mid: str) -> None:
 
 def con_imagen(f: dict[str, Any]) -> bool:
     """La frase ya tiene qué enseñar: un plano de vídeo, un panel de texto o una imagen."""
-    return bool(f.get("clip") or f.get("panel") or f.get("imagen") or f.get("isometrico") or f.get("video"))
+    return bool(f.get("clip") or f.get("panel") or f.get("imagen") or f.get("isometrico") or f.get("video") or f.get("grafico"))
 
 
 def paso_actual(p: dict[str, Any]) -> int:
@@ -887,6 +887,8 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     generador = estilos.ESTILOS[o["estilo"]].get("generador")
     if generador == "isometrico":   # cada frase con su maqueta hecha con código: no hace falta material de vídeo
         _ilustrar_isometrico(mid)
+    if generador == "explicado" and o["estilo"] == "explicado":   # Shorts explicados: una palabra en el centro
+        modificar(mid, lambda q: q.update(subtitulos={**(q.get("subtitulos") or SUBS_POR_DEFECTO), "estilo": "palabra"}))
     if buscar_material and inv and not generador:
         _avisar(mid, "Bajando el mejor material", 72)
         candidatos = sorted((v for e in inv for v in e["videos"] if 20 <= (v.get("duracion") or 0) <= 15 * 60),
@@ -903,6 +905,9 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     if cargar(mid)["fuentes"]:
         _avisar(mid, "Mirando los planos y eligiendo el de cada frase", 88)
         proponer(mid)
+    if generador == "explicado":
+        _avisar(mid, "Eligiendo las infografías animadas", 92)
+        _poner_graficos(mid)
     p = cargar(mid)
     modificar(mid, lambda q: q.update(
         titulo=escrito.get("titulo_provisional") or q["titulo"],
@@ -1132,6 +1137,42 @@ def carpeta_imagenes(mid: str) -> Path:
     c = carpeta(mid) / "imagenes"
     c.mkdir(exist_ok=True)
     return c
+
+
+def _canal_o_none(p: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return canales.obtener(p.get("canal") or "")
+    except ValueError:
+        return None
+
+
+def _poner_graficos(mid: str) -> int:
+    """La IA elige qué frases llevan infografía y con qué datos (del guion). Devuelve cuántas."""
+    from . import explicado
+    p = cargar(mid)
+    elegidos = explicado.proponer(p["frases"], p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid)
+
+    def cambio(q):
+        for f in q["frases"]:
+            f.pop("grafico", None)
+            if f["n"] in elegidos:
+                f["grafico"] = elegidos[f["n"]]
+        q.update(previa="", final=None, short=None)
+    modificar(mid, cambio)
+    return len(elegidos)
+
+
+def poner_graficos(mid: str) -> None:
+    """Botón «Infografías animadas»: las elige para el guion actual (se pueden quitar una a una)."""
+    _en_fondo(mid, "Infografías", lambda: _poner_graficos(mid))
+
+
+def quitar_grafico(mid: str, n: int) -> None:
+    def cambio(q):
+        f = next((x for x in q["frases"] if x["n"] == n), None)
+        if f is not None and f.pop("grafico", None) is not None:
+            q.update(previa="", final=None, short=None)
+    modificar(mid, cambio)
 
 
 def _ilustrar_isometrico(mid: str, todas: bool = False) -> int:
@@ -1664,17 +1705,23 @@ def _rotulo_png(texto: str, color: str, destino: Path, escala: float) -> Path:
     return destino
 
 
-def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
+def _render(mid: str, final: bool, avisar: Callable[[str, int], None], vertical: bool = False) -> Path:
+    """`vertical`: el vídeo entero montado en 9:16 de verdad (Shorts explicados): las infografías y los subtítulos se
+    diseñan para el móvil en vez de meter el 16:9 en medio de un fondo desenfocado."""
     p = cargar(mid)
     base = carpeta(mid)
-    ancho, alto = (ANCHO, ALTO) if final else (ANCHO_PREVIA, ALTO_PREVIA)
-    escala = ancho / ANCHO
-    trabajo = base / ("render" if final else "render_previa")
+    if vertical:
+        ancho, alto = (1080, 1920) if final else (540, 960)
+    else:
+        ancho, alto = (ANCHO, ALTO) if final else (ANCHO_PREVIA, ALTO_PREVIA)
+    escala = max(ancho, alto) / ANCHO
+    sufijo = "_vertical" if vertical else ""
+    trabajo = base / (("render" if final else "render_previa") + sufijo)
     shutil.rmtree(trabajo, ignore_errors=True)
     trabajo.mkdir(parents=True)
     # Los trozos ya montados se guardan por su huella (todo lo que los define): si una frase no cambia, su trozo
     # no se vuelve a montar. Cambiar un plano rehace ese plano y los paneles que lo tocan, no el vídeo entero.
-    cache = base / ("cache" if final else "cache_previa")
+    cache = base / (("cache" if final else "cache_previa") + sufijo)
     cache.mkdir(exist_ok=True)
     en_uso: set[Path] = set()
 
@@ -1752,6 +1799,15 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             if nuevo_bloque:   # la pausa larga antes del panel no queda vacía
                 eventos.append((cursor - 0.9, "subida", 0.5))
             eventos += [(cursor + 0.8 + j * 0.42, "pop", 0.9) for j in range(len(f["panel"].get("items", [])))]
+        elif f.get("grafico"):   # infografía animada hecha con código (estilo «Explicado»), a la duración de la frase
+            from . import explicado
+            tema = explicado.tema_de(_canal_o_none(p))
+            seg = cache / f"{huella('grafico', explicado.VERSION, f['grafico'], tema, round(d, 3))}.mp4"
+            if not seg.exists():
+                explicado.renderizar(f["grafico"], d, seg, ancho, alto, tema)
+            en_uso.add(seg)
+            usados.append({"frase": f["n"], "fuente": "Infografía animada de Studio 4", "canal": "", "url": "", "imagen": True})
+            eventos += [(cursor + 0.05, "whoosh", 0.3), (cursor + 0.35, "pop", 0.6)]
         elif f.get("video"):   # un clip de vídeo real (stock libre): a la duración exacta de la frase, con entrada suave
             seg = cache / f"{huella('video', f['video']['archivo'], round(d, 3))}.mp4"
             if not seg.exists():
@@ -1911,7 +1967,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             viejo.unlink(missing_ok=True)
     pista = musica.elegir(p)   # la canción de la Biblioteca de audio de YouTube (o ninguna: cama suave o nada)
     cancion = musica.ruta(pista["archivo"]) if pista else None
-    if final:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
+    if final and not vertical:   # «Fuentes y créditos»: cada fragmento con su segundo exacto, por si hay una reclamación
         _creditos(base, p, usados, pista)
         if pista:
             musica.apuntar_uso(pista["archivo"], mid)
@@ -1931,7 +1987,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
         lecho = sonido.silencio(total, trabajo / "silencio.wav")
     else:
         lecho = sonido.cama(total, trabajo / "cama.wav")   # el fondo suave propio: nunca silencio
-    destino = base / ("final_16x9.mp4" if final else "previa.mp4")
+    destino = base / (("short_9x16.mp4" if vertical else "final_16x9.mp4") if final else ("previa_9x16.mp4" if vertical else "previa.mp4"))
     # En dos pasos: primero el sonido a un archivo y luego la imagen con ese sonido. Todo en una sola orden, FFmpeg se
     # quedaba atascado a mitad del vídeo (esperando audio y vídeo a la vez) y no terminaba nunca.
     avisar("Subtítulos, voz y efectos" if final else "Efectos y fondo", 88)
@@ -2264,7 +2320,12 @@ def _hacer_final(mid: str) -> None:
     subtitulos.srt((v.get("pausas") or v).get("palabras") or [], carpeta(mid) / "subtitulos.srt")
     _avisar(mid, "Short 9:16 y cuadrado 1:1", 92)   # los 3 formatos siempre, sin pedirlos aparte
     desde, hasta = tramo_corto(q)
-    _hacer_short(mid, desde, hasta)
+    if q.get("estilo") in ("explicado", "explicado_historia") and (q.get("voz") or {}).get("duracion", 999) <= 62:
+        # Short explicado: se monta OTRA VEZ en vertical de verdad (infografías y subtítulos pensados para el móvil)
+        vertical = _render(mid, True, lambda f, n: _avisar(mid, f"Vertical · {f}", n), vertical=True)
+        modificar(mid, lambda r: r.update(short={"archivo": vertical.name, "desde": 0.0, "hasta": medios.duracion(vertical), "nativo": True}))
+    else:
+        _hacer_short(mid, desde, hasta)
     _hacer_cuadrado(mid, desde, hasta)
     _avisar(mid, "Textos para publicar", 96)
     try:
