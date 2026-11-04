@@ -774,10 +774,21 @@ def otro_guion(mid: str) -> None:
         modificar(mid, lambda r: (r.update(titulo=escrito.get("titulo_provisional") or r["titulo"]),
                                   r.update(repetido={"id": rep["id"], "titulo": rep["titulo"], "dias": rep["dias"],
                                                      "parecido": rep["parecido"], "hecho": repetidos.marca()}) if rep else r.pop("repetido", None)))
+        _prompt_miniatura_temprano(mid)
         if cargar(mid)["fuentes"]:
             _avisar(mid, "Poniendo un plano en cada frase nueva", 80)
             proponer(mid)
     _en_fondo(mid, "Guion", fase)
+
+
+def _prompt_miniatura_temprano(mid: str) -> None:
+    """El prompt de la miniatura para Flow en cuanto hay guion: la haces mientras el vídeo se monta."""
+    try:
+        from . import paquete
+        texto = paquete.prompt_miniatura_flow(cargar(mid))
+        modificar(mid, lambda q: q.update(miniatura_flow=texto))
+    except Exception as e:  # noqa: BLE001 - el vídeo sigue; el prompt se puede pedir con su botón
+        logger.info("Prompt de miniatura temprano: %s", e)
 
 
 def guion_con_ia(mid: str, opciones: dict[str, Any] | None = None) -> None:
@@ -871,6 +882,7 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
         _avisar(mid, f"En pausa: se parece demasiado a «{rep['titulo'][:40]}». Pulsa «Cambiar guion» o cambia el tema", 60)
         return
     modificar(mid, lambda q: q.pop("repetido", None))
+    _prompt_miniatura_temprano(mid)
     ganchos = escrito[version].get("ganchos") or []
     generador = estilos.ESTILOS[o["estilo"]].get("generador")
     if generador == "isometrico":   # cada frase con su maqueta hecha con código: no hace falta material de vídeo
@@ -2566,10 +2578,41 @@ def render_basico(mid: str, opciones: dict[str, Any] | None = None) -> None:
 # --- Textos para publicar y miniatura -------------------------------------------------------------------------------
 SISTEMA_TEXTOS = """Eres editor de un canal de YouTube de videojuegos en español latino. Con el guion de un vídeo
 escribe lo necesario para publicarlo. Reglas: nada de clickbait engañoso; lo no confirmado se presenta como avance
-o rumor; nunca menciones a otros youtubers ni canales. Para que llamen más la atención, pon 1 o 2 emojis o símbolos (🔥 ⏳ 💰 ⚠️ ✅ ➡️ 🎮) en cada título y en la descripción, sin
-llenarlo todo. Devuelve JSON:
-{"titulos": ["3 títulos de máx. 70 caracteres, distintos"], "titulo_short": "título del Short, máx. 60 caracteres, con emojis y #Shorts", "descripcion": "3-5 frases, primera línea con gancho",
+o rumor; nunca menciones a otros youtubers ni canales. Para que llamen más la atención, pon 1 o 2 emojis o símbolos (🔥 ⏳ 💰 ⚠️ ✅ ➡️ 🎮) en cada título, sin
+llenarlo todo. La descripción NO es un bloque plano: un gancho de una línea, un resumen corto y 3-5 puntos clave, cada uno
+con el emoji que mejor lo dibuja (🚓 policía, 🌴 Vice City, 💰 dinero, 🎵 música, 📅 fechas, 🕹️ jugabilidad…). Devuelve JSON:
+{"titulos": ["3 títulos de máx. 70 caracteres, distintos"], "titulo_short": "título del Short, máx. 60 caracteres, con emojis y #Shorts",
+ "gancho": "una línea que engancha, con 1 emoji al principio", "resumen": "2-3 frases sobre qué cuenta el vídeo",
+ "puntos": [{"emoji": "🚓", "texto": "un dato clave del vídeo, máx. 90 caracteres"}],
+ "cierre": "una línea que invite a comentar con una pregunta concreta sobre el tema",
  "hashtags": ["5 a 8, con #"], "texto_miniatura": "2 a 4 palabras en mayúsculas para la miniatura"}"""
+
+
+_NEGRITA = {**{chr(ord("A") + i): chr(0x1D5D4 + i) for i in range(26)}, **{chr(ord("0") + i): chr(0x1D7EC + i) for i in range(10)}}
+LINEA = "━━━━━━━━━━━━━━━━━━━━"
+
+
+def _titulo_seccion(t: str) -> str:
+    """Encabezado en negrita de verdad dentro de YouTube (letras Unicode); los acentos y la Ñ se quedan como están."""
+    return "".join(_NEGRITA.get(c, c) for c in t.upper())
+
+
+def descripcion_premium(d: dict[str, Any], capitulos: list[str], creditos: str, hashtags: list[str]) -> str:
+    """La descripción con secciones, iconos y separadores (lo que sale en YouTube tal cual al pegarla)."""
+    partes = [str(d.get("gancho") or "").strip(), "", str(d.get("resumen") or d.get("descripcion") or "").strip()]
+    puntos = [x for x in (d.get("puntos") or []) if isinstance(x, dict) and x.get("texto")][:5]
+    if puntos:
+        partes += ["", LINEA, f"📌 {_titulo_seccion('En este vídeo')}", *[f"{x.get('emoji') or '▸'} {str(x['texto']).strip()}" for x in puntos]]
+    if capitulos:
+        partes += ["", LINEA, f"⏱️ {_titulo_seccion('Capítulos')}", *capitulos]
+    if d.get("cierre"):
+        partes += ["", LINEA, f"💬 {str(d['cierre']).strip()}"]
+    partes += ["", "🔔 Suscríbete y activa la campanita para no perderte el próximo."]
+    if creditos:
+        partes += ["", LINEA, f"🎬 {_titulo_seccion('Créditos')}", creditos.strip()]
+    if hashtags:
+        partes += ["", " ".join(hashtags)]
+    return "\n".join(partes).strip()
 
 
 def hacer_textos(mid: str) -> dict[str, Any]:
@@ -2598,6 +2641,9 @@ def hacer_textos(mid: str) -> dict[str, Any]:
     revision = empaque.revisar(textos, p["frases"][0]["texto"] if p["frases"] else "", duracion or 9999)
     textos["capitulos"] = revision.pop("capitulos")
     textos["revision"] = revision
+    if not textos["descripcion"]:   # el formato nuevo trae gancho + resumen + puntos
+        textos["descripcion"] = " ".join(x for x in (str(d.get("gancho", "")), str(d.get("resumen", ""))) if x)
+    textos["descripcion_completa"] = descripcion_premium(d, textos["capitulos"], textos["creditos"], textos["hashtags"])
     modificar(mid, lambda q: q.update(textos=textos, fuentes_titulos=creditos))
     return textos
 
@@ -2612,6 +2658,12 @@ def gancho_continuidad(mid: str, datos_b64: str, texto: str = "") -> dict[str, A
     imagen = poner_imagen(mid, n, datos_b64=datos_b64, credito="Google Flow")
     texto = (texto or (p.get("textos") or {}).get("texto_miniatura") or p["titulo"])[:40].upper()
     miniatura(mid, texto, [{"imagen": imagen["archivo"]}])
+    try:   # la imagen de Flow pasa a ser referencia del canal: los próximos prompts aprenden de ella
+        from . import miniaturas_ref
+        miniaturas_ref.guardar(p["canal"], carpeta_imagenes(mid) / imagen["archivo"], p["titulo"], p.get("miniatura_flow") or "",
+                               texto, mid)
+    except Exception as e:  # noqa: BLE001
+        logger.info("Referencia de miniatura: %s", e)
     modificar(mid, lambda q: q.update(continuidad={"frase": n, "imagen": imagen["archivo"], "texto": texto,
                                                    "hecho": time.strftime("%Y-%m-%d %H:%M")}))
     return {"frase": n, "imagen": imagen["archivo"]}

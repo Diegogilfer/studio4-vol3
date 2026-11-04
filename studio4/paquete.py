@@ -55,6 +55,9 @@ def textos_para_publicar(p: dict[str, Any], base: Path) -> str:
     rev = (t.get("revision") or {}).get("titulos") or []
     partes = ["TÍTULO (elige uno; nota del empaque entre paréntesis)"]
     partes += [f"- {x}" + (f" ({rev[k]['nota']}/100)" if k < len(rev) else "") for k, x in enumerate(t.get("titulos") or [p["titulo"]])]
+    if t.get("descripcion_completa"):   # la descripción con secciones e iconos: se pega tal cual en YouTube
+        partes += ["", "DESCRIPCIÓN (pégala tal cual)", t["descripcion_completa"]]
+        return "\n".join(partes).strip() + "\n"
     partes += ["", "DESCRIPCIÓN", t.get("descripcion", "")]
     if t.get("capitulos"):
         partes += ["", "⏱️ Capítulos:", *t["capitulos"]]
@@ -84,7 +87,10 @@ def prompt_miniatura_flow(p: dict[str, Any]) -> str:
     try:
         from . import deepseek
         if deepseek.disponible():
-            base = str(deepseek.generar_json(SISTEMA_FLOW, f"TÍTULO: {p['titulo']}\nGUION (inicio): {(p.get('guion') or '')[:1500]}",
+            from . import miniaturas_ref
+            refs = miniaturas_ref.para_prompt(p.get("canal") or "")
+            base = str(deepseek.generar_json(SISTEMA_FLOW, f"TÍTULO: {p['titulo']}\nGUION (inicio): {(p.get('guion') or '')[:1500]}"
+                                             + (f"\n\n{refs}" if refs else ""),
                                              temperatura=0.6, detalle="prompt de miniatura (Flow)", produccion=p["id"]).get("prompt") or base)
     except Exception:  # noqa: BLE001 - sin IA, el prompt base ya sirve
         pass

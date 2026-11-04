@@ -926,6 +926,7 @@ function pasoGuion(v) {
     </div>
     <details class="a-mano" ${v.frases.length ? "open" : ""}><summary>${v.frases.length ? "Revisar y editar el guion" : "…o pégalo a mano"}</summary>
       <textarea class="campo guion" id="guion">${esc(v.guion)}</textarea>
+      ${v.frases.length ? flowMiniHTML(v) : ""}
       ${v.repetido ? `<p class="aviso-repetido">⚠ Este guion se parece un ${Math.round(v.repetido.parecido * 100)} % a «${esc(v.repetido.titulo)}», hecho hace ${v.repetido.dias} días. Está en pausa para no subir el mismo vídeo: pulsa «Cambiar guion».</p>` : ""}
       <div class="fila"><button class="boton" type="button" id="guardar-guion">Guardar cambios del guion</button>
         <button class="${v.repetido ? "primario" : "boton"}" type="button" id="otro-guion" title="El mismo tema contado de otra forma: otro gancho, otro ángulo y otros datos">↻ Cambiar guion</button></div>
@@ -1134,7 +1135,7 @@ function subsRapidosHTML(v) {
 function pasoFinal(v) {
   const t = v.textos;
   const fotosMini = v.frases.filter((f) => f.clip);
-  const descripcion = t ? [t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", (t.hashtags || []).join(" ")].join("\n") : "";
+  const descripcion = t ? (t.descripcion_completa || [t.descripcion, "", ...(t.capitulos || []), "", t.creditos, "", (t.hashtags || []).join(" ")].join("\n")) : "";
   return `<section class="paso">
     ${pasoCab(5, "Final", "Voz, planos en alta calidad, subtítulos, logo y música. Luego el Short, los textos y la miniatura.")}
     ${vozMusicaHTML(v)}
@@ -1183,7 +1184,7 @@ function pasoFinal(v) {
           <button class="boton" data-copiar="${esc(x)}">Copiar</button></div>`; }).join("")}
       ${t.revision?.gancho?.mal?.length ? `<p class="meta">Gancho (primera frase): ${t.revision.gancho.mal.map(esc).join(" · ")}</p>` : ""}
       ${t.revision?.aviso_capitulos ? `<p class="meta">${esc(t.revision.aviso_capitulos)}</p>` : ""}
-        <div class="copiable"><p>${esc(descripcion)}</p><button class="boton" data-copiar="${esc(descripcion)}">Copiar</button></div>`
+        <div class="copiable descripcion-yt"><p>${esc(descripcion)}</p><button class="boton" data-copiar="${esc(descripcion)}">Copiar</button></div>`
         : `<p class="meta">Se escriben solos al montar el vídeo final.</p>`}
       <div class="fila"><button class="boton" type="button" id="rehacer-textos">${t ? "Rehacer textos" : "Escribir textos"}</button></div>
     </div>` : ""}
@@ -1233,6 +1234,7 @@ const enviar = async (ruta, extra = {}) => {
 
 function enlazarVideo(p) {
   const v = datos.video;
+  enlazarFlowMini();   // la caja de Flow sale en el paso del guion y en el de la miniatura
   $("abrir-carpeta").onclick = () => enviar("/api/m/carpeta");
   if (p === 1) {
     $("guardar-guion").onclick = () => enviar("/api/m/guion", { guion: $("guion").value });

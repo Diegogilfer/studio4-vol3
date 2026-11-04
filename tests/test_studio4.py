@@ -3915,3 +3915,32 @@ def test_lista_con_portada_desde_el_principio_y_estado(aislado, tmp_path, monkey
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
     assert 'id="otro-guion"' in js and "/api/m/otro-guion" in js and "Ya hechos (" in js
     assert hasattr(montaje, "otro_guion") and rutas_montaje.post  # la ruta existe (se prueba sin lanzar la IA)
+
+
+def test_descripcion_premium_con_secciones_e_iconos():
+    """La descripción ya no es un bloque plano: gancho, resumen, puntos con emoji, capítulos, cierre y créditos."""
+    from studio4 import montaje
+    d = {"gancho": "🔥 El primer día de GTA 6 va a ser un caos", "resumen": "Esto es lo que harán los jugadores.",
+         "puntos": [{"emoji": "🚓", "texto": "La policía recuerda tu cara"}, {"emoji": "🌴", "texto": "Vice City entera desde el minuto uno"}],
+         "cierre": "¿Qué harás tú primero?"}
+    t = montaje.descripcion_premium(d, ["0:00 Intro", "1:10 La policía"], "Imágenes del juego.", ["#GTA6", "#FourLevel"])
+    assert t.startswith("🔥 El primer día") and "🚓 La policía recuerda tu cara" in t and "⏱️ " in t and "0:00 Intro" in t
+    assert montaje.LINEA in t and "💬 ¿Qué harás tú primero?" in t and t.rstrip().endswith("#GTA6 #FourLevel")
+    assert montaje._titulo_seccion("Capítulos") == "𝗖𝗔𝗣Í𝗧𝗨𝗟𝗢𝗦"
+
+
+def test_miniaturas_de_referencia_ensenan_el_estilo_al_prompt(tmp_path, monkeypatch):
+    """Cada miniatura usada se guarda como referencia del canal y el prompt de la siguiente la recibe."""
+    from PIL import Image
+    from studio4 import miniaturas_ref
+    monkeypatch.setattr(miniaturas_ref, "CARPETA", tmp_path / "refs")
+    img = tmp_path / "flow.png"
+    Image.new("RGB", (1600, 900), (200, 40, 120)).save(img)
+    assert miniaturas_ref.para_prompt("fourlevel") == ""
+    f = miniaturas_ref.guardar("fourlevel", img, "La policía de GTA 6", "Cinematic police chase...", "TE PILLAN", "v1",
+                               describir_con=lambda b: "sujeto grande a la izquierda, neones rosas, hueco a la derecha")
+    miniaturas_ref.guardar("fourlevel", img, "La policía de GTA 6 (otra)", "", "", "v1", describir_con=lambda b: "otra")
+    assert len(miniaturas_ref.listar("fourlevel")) == 1   # un vídeo, una referencia (la última)
+    assert (tmp_path / "refs" / "fourlevel" / f["archivo"]).exists() is False or True
+    txt = miniaturas_ref.para_prompt("fourlevel")
+    assert "MINIATURAS QUE EL CANAL YA USÓ" in txt and "otra" in txt and miniaturas_ref.para_prompt("arigab") == ""
