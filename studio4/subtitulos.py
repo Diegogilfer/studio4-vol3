@@ -171,6 +171,83 @@ def traducir_srt(texto: str, idioma: str, generar) -> str:
     return "\n\n".join(partes) + "\n"
 
 
+# --- Cifras animadas: cuando la voz dice un número importante, aparece grande y cuenta hasta él --------------------
+_NUM = re.compile(r"^(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)(%?)$")
+_UNIDADES = {"millones", "millón", "mil", "años", "año", "%", "dólares", "euros", "veces", "días", "horas", "minutos",
+             "kilómetros", "metros", "personas", "jugadores", "copias", "vistas", "misiones", "segundos", "siglos"}
+CIFRA_SEPARACION = 6.0   # como mucho una cifra cada tantos segundos: que destaque, no que sature
+
+
+def _valor(token: str) -> float | None:
+    m = _NUM.match(token)
+    if not m:
+        return None
+    t = m.group(1)
+    if re.match(r"^\d{1,3}([.,]\d{3})+$", t):
+        t = re.sub(r"[.,]", "", t)
+    else:
+        t = t.replace(",", ".")
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def cifras(palabras: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Los números que merecen cifra en pantalla: con unidad («72 millones», «13 años», «40 %»), años (1872) o
+    números de 10 en adelante. Cada uno con su segundo exacto en la voz."""
+    salida: list[dict[str, Any]] = []
+    for i, w in enumerate(palabras):
+        token = _limpia(w.get("palabra", w.get("texto", ""))).strip(".,;:!?¿¡«»\"()")
+        v = _valor(token)
+        if v is None:
+            continue
+        sig = [_limpia(x.get("palabra", x.get("texto", ""))).strip(".,;:!?¿¡«»\"()").lower() for x in palabras[i + 1:i + 4]]
+        unidad = ""
+        if token.endswith("%"):
+            unidad = "%"
+        elif sig and sig[0] in _UNIDADES:
+            unidad = sig[0]
+            if sig[0] in ("millones", "millón", "mil") and len(sig) >= 3 and sig[1] == "de":
+                unidad = f"{sig[0]} de {sig[2]}"
+        anio = not unidad and 1500 <= v <= 2100 and v == int(v)
+        if not unidad and not anio and v < 10:
+            continue
+        if salida and w["ini"] - salida[-1]["ini"] < CIFRA_SEPARACION:
+            continue
+        salida.append({"ini": w["ini"], "valor": v, "unidad": unidad, "anio": anio, "decimales": 0 if v == int(v) else 1})
+    return salida
+
+
+def _fmt(v: float, decimales: int, anio: bool) -> str:
+    if anio:
+        return str(int(v))
+    t = f"{v:,.{decimales}f}"
+    return t.replace(",", "X").replace(".", ",").replace("X", ".")   # 72.000 · 1,5 (a la española)
+
+
+def _eventos_cifras(palabras: list[dict[str, Any]], ancho: int, alto: int, color: str) -> list[str]:
+    eventos = []
+    x, y = ancho // 2, int(alto * (0.36 if alto > ancho else 0.3))
+    tam_u = 72 if alto > ancho else 64
+    for c in cifras(palabras):
+        t0, pasos, cuenta = c["ini"], 12, 0.7
+        desde = c["valor"] - 40 if c["anio"] else 0.0
+        for k in range(pasos + 1):
+            ini = t0 + cuenta * k / pasos
+            fin = t0 + cuenta * (k + 1) / pasos if k < pasos else t0 + 2.6
+            v = desde + (c["valor"] - desde) * (1 - (1 - k / pasos) ** 3)   # arranca rápido y frena al llegar
+            v = round(v, c["decimales"]) if k < pasos else c["valor"]
+            numero = _fmt(v, c["decimales"], c["anio"]) + ("%" if c["unidad"] == "%" else "")
+            escala = 70 + min(30, k * 8)   # crece mientras cuenta (cada paso es un evento aparte)
+            entra = (r"\fad(160,0)" if k == 0 else "") + (rf"\fscx{escala}\fscy{escala}" if escala < 100 else "")
+            sale = r"\fad(0,300)\t(0,140,\fscx112\fscy112)\t(140,320,\fscx100\fscy100)" if k == pasos else ""
+            unidad = (r"\N{\fs" + str(tam_u) + r"\c&H00FFFFFF&}" + _limpia(c["unidad"]).upper()) if c["unidad"] not in ("", "%") else ""
+            eventos.append(f"Dialogue: 3,{_ts(ini)},{_ts(fin)},Cifra,,0,0,0,,"
+                           + "{" + rf"\pos({x},{y}){entra}{sale}\c{color}" + "}" + numero + unidad)
+    return eventos
+
+
 def construir(palabras: list[dict[str, Any]], destino: Path, ancho: int, alto: int,
               ajustes: dict[str, Any] | None = None, gancho: str = "", segundos_gancho: float = 3.0,
               sonidos: list[dict[str, Any]] | None = None, inicio_gancho: float = 0.0) -> Path:
@@ -204,6 +281,7 @@ Style: Main,Arial Black,{tam},{pal['texto']},{pal['texto']},&H00000000,&H8000000
 Style: Gancho,Arial Black,{tam_gancho},&H00FFFFFF,&H00FFFFFF,&H00000000,&HA0000000,-1,0,0,0,100,100,0,0,3,14,0,8,{int(ancho * 0.08)},{int(ancho * 0.08)},{int(alto * 0.07)},1
 Style: Cine,Arial,{tam_cine},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,2.6,1.2,2,{int(ancho * 0.08)},{int(ancho * 0.08)},{margen_cine},1
 Style: {estilo_sonido}
+Style: Cifra,Arial Black,{int(tam * (2.8 if vertical else 2.7))},&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,7,4,5,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -234,6 +312,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 partes = [f"{{\\c{pal['resalte']}\\fscx108\\fscy108}}{t}{{\\c{pal['texto']}\\fscx100\\fscy100}}" if j == i else t
                           for j, t in enumerate(textos)]
                 eventos.append(f"Dialogue: 0,{_ts(ini)},{_ts(max(fin, ini + 0.08))},Main,,0,0,0,,{' '.join(partes)}")
+
+    if a.get("cifras", True) and palabras:   # cifras animadas (se pueden apagar con «cifras»: False)
+        eventos += _eventos_cifras(palabras, ancho, alto, pal["resalte"])
 
     if a["sonidos"]:
         for s in sonidos or []:

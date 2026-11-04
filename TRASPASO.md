@@ -165,3 +165,9 @@
 - 2026-10-29 · Claude · Chats que proponen y lanzan (propuestas.py), plano por frase mirando el material (catalogo.py),
   material solo del juego del vídeo, chat minimizable, Campañas (campanas.py). Plan de Black Friday en Claude Docs.
   Pendiente: probar emparejar planos en un vídeo real; instalador, licencias y tienda (ver el plan).
+- 2026-11-04 · Claude · Fuera Sofi y los chats del panel (formulario «Crear vídeo»). Google: YouTube y Drive con
+  conexiones separadas. Higgsfield (animar la imagen de una frase, plan mínima/media y tope por vídeo). Gancho de
+  continuidad (imagen de Flow = miniatura + primer plano). Agenda (agenda.py: crea cada vídeo 3 días antes, en su
+  canal). Procesos sin ventana de consola (studio4/__init__.py). El final saca SIEMPRE 16:9 + Short 9:16 + cuadrado
+  1:1 (tramo_corto), transiciones leves variadas entre planos (_transiciones) y cifras animadas en los subtítulos
+  (subtitulos.cifras). Un acceso directo por canal (iniciar.bat <canal>).

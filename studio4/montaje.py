@@ -1794,6 +1794,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                 colas[seg] = cola_frase
         piezas.append(seg)
         cursor += d
+    animaciones: set[Path] = set()
     for k, pieza in enumerate(piezas):   # las animaciones, con el último fotograma del anterior y el primero del siguiente
         if pieza not in animadas:
             continue
@@ -1805,6 +1806,7 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
                        siguiente.name if siguiente else "")
         hecha = cache / f"{clave}.mp4"
         piezas[k] = hecha
+        animaciones.add(hecha)
         en_uso.add(hecha)
         if hecha.exists():
             continue
@@ -1820,6 +1822,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
             else:
                 escena["sale"] = str(_fotograma(piezas[k + 1], trabajo / f"{pieza.stem}_sale.png", ultimo=False))
         animacion.renderizar([escena], dur, hecha, ancho, alto)
+    avisar("Transiciones entre planos", 77)
+    piezas = _transiciones(p, piezas, animaciones, cache, en_uso, eventos, ancho, alto)
     for viejo in cache.iterdir():   # lo que ya no usa este vídeo (planos cambiados) se borra
         if viejo not in en_uso:
             viejo.unlink(missing_ok=True)
@@ -1836,6 +1840,8 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None]) -> Path:
     medios.ffmpeg("-f", "concat", "-safe", "0", "-i", str(lista), "-c", "copy", str(cuerpo))
     total = medios.duracion(cuerpo)
     avisar("Diseño de sonido", 82)
+    if final and (p.get("subtitulos") or {}).get("cifras", True):   # la cifra animada aterriza con un golpe suave
+        eventos += [(c["ini"] + 0.7, "impacto", 0.5) for c in subtitulos.cifras(palabras or [])]
     fx = sonido.pista(eventos, total, trabajo / "fx.wav")
     if cancion:
         lecho = cancion
@@ -2174,12 +2180,85 @@ def _hacer_final(mid: str) -> None:
         json.dumps(linea.desde_montaje(q, {fid: fuente(fid) for fid in q["fuentes"]}), ensure_ascii=False, indent=1), encoding="utf-8")
     v = q.get("voz") or {}   # los subtítulos aparte, para subirlos a YouTube
     subtitulos.srt((v.get("pausas") or v).get("palabras") or [], carpeta(mid) / "subtitulos.srt")
+    _avisar(mid, "Short 9:16 y cuadrado 1:1", 92)   # los 3 formatos siempre, sin pedirlos aparte
+    desde, hasta = tramo_corto(q)
+    _hacer_short(mid, desde, hasta)
+    _hacer_cuadrado(mid, desde, hasta)
     _avisar(mid, "Textos para publicar", 96)
     try:
         hacer_textos(mid)
     except Exception as e:  # noqa: BLE001 - el vídeo ya está; los textos se pueden repetir
         logger.warning("Textos: %s", e)
     _revisar(mid, destino, final=True)
+
+
+def tramo_corto(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
+    """El tramo para el Short y el cuadrado: desde el principio (el gancho) hasta el final de la última frase que cabe
+    en `maximo` segundos; si el vídeo entero cabe, el vídeo entero."""
+    palabras = (p.get("voz", {}).get("pausas") or p.get("voz") or {}).get("palabras") or []
+    if not palabras:
+        return 0.0, maximo
+    if palabras[-1]["fin"] <= maximo:
+        return 0.0, round(palabras[-1]["fin"] + 0.4, 2)
+    cierres = [w["fin"] for w in palabras if w["fin"] <= maximo and re.search(r"[.!?…]$", w.get("texto", w.get("palabra", "")).strip())]
+    fin = cierres[-1] if cierres and cierres[-1] >= 15 else max(w["fin"] for w in palabras if w["fin"] <= maximo)
+    return 0.0, round(min(fin + 0.4, 60.0), 2)
+
+
+# --- Transiciones leves entre planos -------------------------------------------------------------------------------
+# Entre frases ya no hay siempre corte seco: cada plano entra con un efecto corto (0,2–0,35 s), variado y sin repetir
+# el anterior. La rejilla y los paneles conservan la suya. No cambia la duración: la voz sigue sincronizada.
+EFECTOS_JUEGOS = ("zoom", "destello", "corte", "glitch", "desenfoque", "zoom", "corte", "barrido")
+EFECTOS_HISTORIAS = ("fundido", "zoom", "corte", "desenfoque", "destello", "fundido", "corte", "barrido")
+FX_VERSION = 1
+
+
+def _filtro_efecto(efecto: str, ancho: int, alto: int) -> str:
+    n = max(6, int(config.FPS * 0.35))
+    return {
+        "destello": "fade=t=in:st=0:d=0.22:color=white",
+        "fundido": "fade=t=in:st=0:d=0.3",
+        "zoom": (f"zoompan=z='if(lt(on,{n}),1.12-0.12*on/{n},1)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+                 f":d=1:s={ancho}x{alto}:fps={config.FPS}"),
+        "desenfoque": "boxblur=22:enable='lt(t,0.1)',boxblur=9:enable='between(t,0.1,0.24)'",
+        "glitch": "rgbashift=rh=14:bh=-14:enable='lt(t,0.16)',noise=alls=22:allf=t:enable='lt(t,0.16)'",
+        "barrido": (f"gblur=sigma=18:steps=1:enable='lt(t,0.12)',"
+                    f"crop=iw:ih:x='if(lt(t,0.18),(0.18-t)/0.18*iw*0.06,0)':y=0,scale={ancho}:{alto}"),
+    }.get(efecto, "")
+
+
+def _transiciones(p: dict[str, Any], piezas: list[Path], animaciones: set[Path], cache: Path, en_uso: set[Path],
+                  eventos: list, ancho: int, alto: int) -> list[Path]:
+    if p.get("transiciones") is False:   # se pueden apagar por vídeo
+        return piezas
+    try:
+        juegos = canales.es_de_juegos(canales.obtener(p.get("canal") or ""))
+    except ValueError:
+        juegos = False
+    lista = EFECTOS_JUEGOS if juegos else EFECTOS_HISTORIAS
+    semilla = int(hashlib.sha1(p["id"].encode()).hexdigest()[:6], 16)   # cada vídeo, su propio orden
+    salida, anterior, cursor = [], "", 0.0
+    for k, pieza in enumerate(piezas):
+        dur = medios.duracion(pieza)
+        efecto = ""
+        if k > 0 and pieza not in animaciones and piezas[k - 1] not in animaciones and dur > 1.2:
+            efecto = lista[(semilla + k) % len(lista)]
+            if efecto == anterior:   # nunca el mismo dos veces seguidas
+                efecto = lista[(semilla + k + 1) % len(lista)]
+        if efecto and efecto != "corte":
+            hecha = cache / f"fx_{hashlib.sha1(repr(('fx', FX_VERSION, pieza.name, efecto, ancho, alto)).encode()).hexdigest()[:20]}.mp4"
+            if not hecha.exists():
+                medios.ffmpeg("-i", str(pieza), "-an", "-vf", f"{_filtro_efecto(efecto, ancho, alto)},setsar=1,fps={config.FPS}",
+                              "-t", f"{dur:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p", str(hecha))
+            en_uso.add(hecha)
+            if efecto in ("zoom", "barrido", "glitch"):
+                eventos.append((cursor, "whoosh", 0.22))
+            salida.append(hecha)
+        else:
+            salida.append(pieza)
+        anterior = efecto or anterior
+        cursor += dur
+    return salida
 
 
 # --- Short vertical sacado del 16:9 ---------------------------------------------------------------------------------

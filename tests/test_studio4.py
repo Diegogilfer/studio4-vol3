@@ -2413,7 +2413,8 @@ def test_montaje_rehace_solo_lo_que_cambia(aislado, tmp_path, monkeypatch):
     montaje._render(mid, False, lambda *_: None)
     assert llamadas == [6.0]   # solo la frase 2, con su plano nuevo (el 4 empieza en el segundo 6)
     assert medios.duracion(montaje.carpeta(mid) / "previa.mp4") > 3
-    assert len(list((montaje.carpeta(mid) / "cache_previa").iterdir())) == 2   # el trozo viejo se borró
+    trozos = [x for x in (montaje.carpeta(mid) / "cache_previa").iterdir() if not x.name.startswith("fx_")]
+    assert len(trozos) == 2   # el trozo viejo se borró (aparte queda la versión con transición de la frase 2)
 
 
 def test_montaje_resumen_storyboard_srt_y_automatico_con_guardas(aislado, tmp_path, monkeypatch):
@@ -3830,3 +3831,42 @@ def test_agenda_crea_cada_video_dias_antes_y_de_uno_en_uno(tmp_path, monkeypatch
     assert agenda.listar()[0]["video"] == "vid1" and agenda.lanzar(a["id"], crear) == "vid1"   # no se crea dos veces
     js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
     assert 'id="agenda"' in js and "/api/m/agenda/lanzar" in js
+
+
+def test_transiciones_variadas_sin_repetir_y_tramo_corto(aislado, tmp_path):
+    """Entre planos entra un efecto leve que no se repite seguido y no cambia la duración; el tramo del Short y el
+    cuadrado empieza en el gancho y acaba en una frase completa de 60 s como mucho."""
+    from studio4 import montaje
+    piezas = []
+    for k in range(6):
+        x = tmp_path / f"p{k}.mp4"
+        medios.ffmpeg("-f", "lavfi", "-i", f"color=c=0x{k * 30:02x}4080:s=320x180:r={config.FPS}", "-t", "1.6",
+                      "-c:v", "libx264", "-pix_fmt", "yuv420p", str(x))
+        piezas.append(x)
+    en_uso, eventos = set(), []
+    p = {"id": "prueba-fx", "canal": "fourlevel"}
+    salida = montaje._transiciones(p, piezas, {piezas[3]}, tmp_path, en_uso, eventos, 320, 180)
+    assert salida[0] == piezas[0] and salida[3] == piezas[3] and salida[4] == piezas[4]   # junto a la rejilla, sin efecto
+    assert all(abs(medios.duracion(a) - medios.duracion(b)) < 0.05 for a, b in zip(salida, piezas))
+    efectos = [x.name for x in salida]
+    assert any(n.startswith("fx_") for n in efectos)
+    assert montaje._transiciones({**p, "transiciones": False}, piezas, set(), tmp_path, set(), [], 320, 180) == piezas
+    w = lambda t, ini, fin: {"texto": t, "ini": ini, "fin": fin}  # noqa: E731
+    voz = {"voz": {"palabras": [w("Hola.", 0, 10), w("Sigue", 11, 40), w("aquí.", 41, 50), w("Más", 51, 70), w("fin.", 71, 90)]}}
+    assert montaje.tramo_corto(voz) == (0.0, 50.4)
+    assert montaje.tramo_corto({"voz": {"palabras": [w("Corto.", 0, 20)]}}) == (0.0, 20.4)
+
+
+def test_cifras_animadas_salen_en_los_subtitulos(tmp_path):
+    """Cuando la voz dice una cifra importante, aparece grande y cuenta hasta ella (en los 3 formatos, porque va en los subtítulos)."""
+    from studio4 import subtitulos
+    w = lambda t, i: {"palabra": t, "ini": i, "fin": i + 0.3}  # noqa: E731
+    ps = [w("Lleva", 0.5), w("72", 1.0), w("millones", 1.3), w("de", 1.6), w("vistas.", 1.8), w("En", 3), w("1990", 3.4),
+          w("En", 9), w("1872", 9.4), w("hay", 16), w("3", 16.2), w("barcos", 16.5), w("y", 22), w("40%", 22.3)]
+    c = subtitulos.cifras(ps)
+    assert [(x["valor"], x["unidad"], x["anio"]) for x in c] == [(72.0, "millones de vistas", False), (1872.0, "", True), (40.0, "%", False)]
+    for ancho, alto in ((1920, 1080), (1080, 1920), (1080, 1080)):
+        texto = subtitulos.construir(ps, tmp_path / f"s{ancho}x{alto}.ass", ancho, alto).read_text(encoding="utf-8")
+        assert "Style: Cifra," in texto and "}72" in texto and "}1872" in texto and "MILLONES DE VISTAS" in texto
+    sin = subtitulos.construir(ps, tmp_path / "sin.ass", 1920, 1080, {"cifras": False}).read_text(encoding="utf-8")
+    assert ",Cifra,," not in sin
