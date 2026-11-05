@@ -2609,14 +2609,8 @@ def automatico(mid: str, pago_ok: bool = False) -> None:
     def fase():
         _avisar(mid, "Storyboard", 2)
         storyboard(mid)
-        _hacer_final(mid)
+        _hacer_final(mid)   # ya saca los 3 formatos (Short vertical nativo si es un «explicado», y el 1:1)
         q = cargar(mid)
-        desde, hasta = tramo_short(q)
-        _avisar(mid, "Short vertical", 98)
-        _hacer_short(mid, desde, hasta)
-        if q.get("formatos", {}).get("cuadrado", True):   # el 1:1 para el feed (por defecto sí; el render básico lo decide)
-            _avisar(mid, "Clip 1:1 para el feed", 99)
-            _hacer_cuadrado(mid, desde, hasta)
         con_imagen = [f["clip"] for f in q["frases"] if f.get("clip")]
         if con_imagen:
             _avisar(mid, "Miniatura", 99)
