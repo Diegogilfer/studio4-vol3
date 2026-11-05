@@ -4067,3 +4067,13 @@ def test_drive_sube_solo_los_videos_por_mes_y_dia(aislado, tmp_path, monkeypatch
         raise RuntimeError("403 Client Error: Forbidden for url: https://www.googleapis.com/drive/v3/files?q=x")
     monkeypatch.setattr(drive, "subir_carpeta", falla)
     assert paquete.subir_a_drive(mid) == "" and "Habilitar" in montaje.cargar(mid)["paquete"]["drive_error"]
+
+
+def test_animacion_ligada_al_scroll_en_el_panel():
+    """Barra de progreso arriba y bloques que entran al aparecer, con animation-timeline (sin JS, y quietos si el
+    sistema pide menos movimiento)."""
+    css = (config.WEB / "montaje.css").read_text(encoding="utf-8")
+    html = (config.WEB / "montaje.html").read_text(encoding="utf-8")
+    assert 'id="progreso-scroll"' in html
+    assert "animation-timeline: scroll(root block)" in css and "animation-timeline: view()" in css
+    assert "@supports (animation-timeline: scroll())" in css and css.count("prefers-reduced-motion") >= 2

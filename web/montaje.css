@@ -789,3 +789,25 @@ body { background-color: var(--fondo); color: var(--texto); }
 .descripcion-yt { position: relative; padding: 18px 20px; border-radius: 16px; background: linear-gradient(160deg, rgba(255, 62, 165, .08), rgba(46, 230, 255, .06)), var(--caja);
   border: 1px solid color-mix(in srgb, var(--rosa) 30%, var(--borde)); box-shadow: 0 10px 40px rgba(0, 0, 0, .25); backdrop-filter: blur(10px); }
 .descripcion-yt p { white-space: pre-wrap; line-height: 1.6; margin: 0 0 12px; }
+
+/* Animación ligada al scroll (animation-timeline): una barra fina arriba marca cuánto llevas recorrido y los bloques
+   entran suaves al aparecer en pantalla. Sin JavaScript; los navegadores que no lo soportan lo ven todo normal. */
+#progreso-scroll { display: none; }
+@supports (animation-timeline: scroll()) {
+  #progreso-scroll { display: block; position: fixed; inset: 0 0 auto 0; height: 3px; z-index: 60; pointer-events: none;
+    background: linear-gradient(90deg, var(--rosa), var(--violeta), var(--cian)); transform-origin: 0 50%;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--rosa) 60%, transparent);
+    animation: progreso-scroll linear both; animation-timeline: scroll(root block); }
+  @keyframes progreso-scroll { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .videos > .tarjeta, .frase, .paso, .idea, .mantenimiento, .agenda-fila, .copiable, .descripcion-yt, .flow-mini {
+    animation: entra-scroll linear both; animation-timeline: view(); animation-range: entry 0% cover 28%; }
+  @keyframes entra-scroll {
+    from { opacity: 0; transform: translateY(42px) scale(.97); filter: blur(6px); }
+    to { opacity: 1; transform: none; filter: none; } }
+  .linea-tiempo .clip, .linea .clip { animation: clip-scroll linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
+  @keyframes clip-scroll { from { opacity: .2; transform: scaleY(.6); } to { opacity: 1; transform: none; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  #progreso-scroll, .videos > .tarjeta, .frase, .paso, .idea, .mantenimiento, .agenda-fila, .copiable, .descripcion-yt, .flow-mini,
+  .linea-tiempo .clip, .linea .clip { animation: none !important; }
+}
