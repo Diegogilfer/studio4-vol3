@@ -2339,12 +2339,9 @@ def _hacer_final(mid: str) -> None:
     subtitulos.srt((v.get("pausas") or v).get("palabras") or [], carpeta(mid) / "subtitulos.srt")
     _avisar(mid, "Short 9:16 y cuadrado 1:1", 92)   # los 3 formatos siempre, sin pedirlos aparte
     desde, hasta = tramo_corto(q)
-    if q.get("estilo") in ("explicado", "explicado_historia") and (q.get("voz") or {}).get("duracion", 999) <= 62:
-        # Short explicado: se monta OTRA VEZ en vertical de verdad (infografías y subtítulos pensados para el móvil)
-        vertical = _render(mid, True, lambda f, n: _avisar(mid, f"Vertical · {f}", n), vertical=True)
-        modificar(mid, lambda r: r.update(short={"archivo": vertical.name, "desde": 0.0, "hasta": medios.duracion(vertical), "nativo": True}))
-    else:
-        _hacer_short(mid, desde, hasta)
+    # El Short sale del vídeo normal 16:9 (centrado sobre su fondo desenfocado), como siempre: decidido por el autor.
+    # _render(..., vertical=True) sigue disponible, pero no se usa al terminar.
+    _hacer_short(mid, desde, hasta)
     _hacer_cuadrado(mid, desde, hasta)
     _avisar(mid, "Textos para publicar", 96)
     try:
