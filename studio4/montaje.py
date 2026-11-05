@@ -2168,7 +2168,11 @@ def rehacer_subtitulos(mid: str) -> None:
         _pasada_imagen(q, trabajo, cuerpo, trabajo / "mezcla.wav", carpeta(mid) / q["final"]["archivo"], palabras,
                        ANCHO, ALTO, 1.0, medios.duracion(cuerpo), True)
         subtitulos.srt(palabras, carpeta(mid) / "subtitulos.srt")
-        if q.get("short"):
+        if q.get("shorts"):
+            for k, t in enumerate(q["shorts"], 1):
+                _avisar(mid, f"Subtítulos nuevos en el Short {k}", 60)
+                _hacer_short(mid, t["desde"], t["hasta"], k=k, cierre=True)
+        elif q.get("short"):
             _avisar(mid, "Subtítulos nuevos en el Short", 60)
             _hacer_short(mid, q["short"]["desde"], q["short"]["hasta"])
         if q.get("cuadrado"):
@@ -2420,10 +2424,13 @@ def _hacer_final(mid: str) -> None:
     subtitulos.srt((v.get("pausas") or v).get("palabras") or [], carpeta(mid) / "subtitulos.srt")
     _avisar(mid, "Short 9:16 y cuadrado 1:1", 92)   # los 3 formatos siempre, sin pedirlos aparte
     desde, hasta = tramo_corto(q)
-    # El Short sale del vídeo normal 16:9 (centrado sobre su fondo desenfocado), como siempre: decidido por el autor.
-    # _render(..., vertical=True) sigue disponible, pero no se usa al terminar.
-    _hacer_short(mid, desde, hasta)
-    _hacer_cuadrado(mid, desde, hasta)
+    # 3 Shorts/Reels DISTINTOS sacados del vídeo (cada uno un tramo con su gancho y su final), y el 1:1 del mejor
+    tramos = _hacer_shorts(mid)
+    if tramos:
+        _hacer_cuadrado(mid, tramos[0]["desde"], tramos[0]["hasta"])
+    else:   # vídeo demasiado corto para trocearlo: el de siempre
+        _hacer_short(mid, desde, hasta)
+        _hacer_cuadrado(mid, desde, hasta)
     _avisar(mid, "Textos para publicar", 96)
     try:
         hacer_textos(mid)
@@ -2519,10 +2526,13 @@ def montar_short(mid: str, desde: float, hasta: float) -> None:
     _en_fondo(mid, "Short", lambda: _hacer_short(mid, desde, hasta))
 
 
-def _hacer_short(mid: str, desde: float, hasta: float) -> None:
+def _hacer_short(mid: str, desde: float, hasta: float, k: int = 0, cierre: bool = False) -> str:
+    """Un tramo del vídeo en vertical. `k`: el Short número k de los 3 (short_k_9x16.mp4); `cierre`: los últimos
+    segundos llevan «La historia completa, en el canal». Devuelve el nombre del archivo."""
     q = cargar(mid)
     base = carpeta(mid)
-    trabajo = base / "render_short"
+    nombre = f"short_{k}_9x16.mp4" if k else "short_9x16.mp4"
+    trabajo = base / (f"render_short_{k}" if k else "render_short")
     shutil.rmtree(trabajo, ignore_errors=True)
     trabajo.mkdir()
     _avisar(mid, "Encuadrando en vertical", 20)
@@ -2535,6 +2545,11 @@ def _hacer_short(mid: str, desde: float, hasta: float) -> None:
     if subs.get("activos", True):
         ass = subtitulos.construir(palabras, trabajo / "subs.ass", 1080, 1920,
                                    {"estilo": subs["estilo"], "posicion": subs["posicion"], "tamano": subs["tamano"], "paleta": subs.get("paleta", "amarillo")})
+        if cierre:   # el Short acaba invitando al vídeo largo (arriba, sin tapar los subtítulos)
+            dur = hasta - desde
+            with ass.open("a", encoding="utf-8") as fh:
+                fh.write(f"Dialogue: 5,{subtitulos._ts(max(0.0, dur - 2.4))},{subtitulos._ts(dur)},Gancho,,0,0,0,,"
+                         "{\\fad(250,0)}LA HISTORIA COMPLETA, EN EL CANAL ▶\n")
         puestos = f",ass={ass.name}"
     capas, marca = _capas_marca(q, desde, hasta, 1080, 1920, "[base]", 2, emojis=True)
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
@@ -2546,8 +2561,10 @@ def _hacer_short(mid: str, desde: float, hasta: float) -> None:
                   f"[fondo][centro]overlay=0:(H-h)/2-120{puestos}[base];{marca}",
                   "-map", "[v]", "-map", "1:a", "-t", f"{hasta - desde:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
-                  str(base / "short_9x16.mp4"), cwd=trabajo)
-    modificar(mid, lambda r: r.update(short={"archivo": "short_9x16.mp4", "desde": desde, "hasta": hasta}))
+                  str(base / nombre), cwd=trabajo)
+    if not k:
+        modificar(mid, lambda r: r.update(short={"archivo": nombre, "desde": desde, "hasta": hasta}))
+    return nombre
 
 
 def montar_cuadrado(mid: str, desde: float, hasta: float) -> None:
@@ -2669,6 +2686,86 @@ def _capas_marca(q: dict[str, Any], desde: float, hasta: float, ancho: int, alto
                        f"{actual}[e{k}]overlay=(W-w)/2:{int(alto * 0.13)}:enable='between(t,{a:.2f},{b:.2f})'[c{k}];")
             actual, k = f"[c{k}]", k + 1
     return entradas, cadena + f"{actual}null[v]"
+
+
+_CONECTORES = re.compile(r"^(y|e|pero|por eso|aun así|aún así|desde ahí|porque|así que|además|entonces|o|ni|también)\b", re.I)
+_FUERTES = re.compile(r"\b(nadie|nunca|secreto|oculto|loco|increíble|prohibid|rompi|récord|primer|único|gratis|millones?|gigas?|gb)\b", re.I)
+
+
+def _nota_gancho(texto: str) -> float:
+    """Lo que vale una frase para ABRIR un Short: dato concreto, nombre del tema, palabras fuertes, corta, y nunca un
+    conector («y…», «pero…», «por eso…»: suenan a mitad de historia)."""
+    t = texto.strip()
+    if _CONECTORES.match(t):
+        return -5.0
+    nota = 2.0 * bool(re.search(r"\d", t)) + 1.5 * bool(re.search(r"\b(gta|rockstar|vice city|leonida|jason|luc[ií]a)\b", t, re.I))
+    nota += 1.0 * bool(_FUERTES.search(t)) + (1.0 if len(t.split()) <= 14 else 0.0)
+    return nota
+
+
+def tramos_shorts(p: dict[str, Any], n: int = 3) -> list[dict[str, Any]]:
+    """Los n mejores tramos (ver _tramos_shorts); si en un vídeo corto no salen n, se acepta un tramo algo más corto."""
+    tramos = _tramos_shorts(p, n)
+    if len(tramos) < n:
+        tramos = _tramos_shorts(p, n, flexible=True) or tramos
+    return tramos
+
+
+def _tramos_shorts(p: dict[str, Any], n: int = 3, flexible: bool = False) -> list[dict[str, Any]]:
+    """Los n mejores tramos del vídeo para Shorts/Reels, SIN solaparse: cada uno empieza en una frase que engancha y
+    acaba al cerrar un bloque (o en una frase completa), de 20 a 58 s (en un vídeo corto, más cortos para que salgan 3)."""
+    tiempos = (p.get("voz") or {}).get("pausas", {}).get("tiempos") or (p.get("voz") or {}).get("tiempos") or _tiempos_estimados(p)
+    frases = p["frases"]
+    if not tiempos or len(tiempos) != len(frases):
+        return []
+    total = tiempos[-1][1]
+    maximo = min(58.0, max(18.0, total / 2.2))
+    minimo = min(20.0, maximo * 0.6) * (0.65 if flexible else 1.0)
+    candidatos = []
+    for i in range(len(frases)):
+        nota_i = _nota_gancho(frases[i]["texto"])
+        if nota_i < 0:
+            continue
+        for j in range(i, len(frases)):   # todos los finales posibles: si uno choca con otro Short, otro más corto vale
+            dur = tiempos[j][1] - tiempos[i][0]
+            if dur > maximo:
+                break
+            if dur < minimo:
+                continue
+            fin_bloque = j + 1 == len(frases) or frases[j + 1]["bloque"] != frases[j]["bloque"]
+            nota = nota_i * 3 + (3.0 if fin_bloque else 0.0) + sum(1.0 for f in frases[i:j + 1] if re.search(r"\d", f["texto"])) * 0.5
+            candidatos.append({"i": i, "j": j, "nota": nota})
+    elegidos: list[dict[str, Any]] = []
+    for c in sorted(candidatos, key=lambda c: -c["nota"]):
+        if all(c["j"] < e["i"] or c["i"] > e["j"] for e in elegidos):
+            elegidos.append(c)
+        if len(elegidos) == n:
+            break
+    salida = []
+    for c in sorted(elegidos, key=lambda c: c["i"]):
+        texto = frases[c["i"]]["texto"].strip().rstrip(".")
+        salida.append({"desde": round(max(0.0, tiempos[c["i"]][0] - 0.15), 2), "hasta": round(tiempos[c["j"]][1] + 0.45, 2),
+                       "frases": [frases[c["i"]]["n"], frases[c["j"]]["n"]], "titulo": (texto[:70] + " #Shorts").strip()})
+    return salida
+
+
+def _hacer_shorts(mid: str) -> list[dict[str, Any]]:
+    """Los 3 Shorts/Reels distintos del vídeo (short_1/2/3_9x16.mp4). Devuelve sus tramos (el mejor primero)."""
+    q = cargar(mid)
+    tramos = tramos_shorts(q)
+    if len(tramos) < 2:
+        return []
+    for viejo in carpeta(mid).glob("short_*9x16.mp4"):   # nada de Shorts de un montaje anterior
+        viejo.unlink(missing_ok=True)
+    hechos = []
+    for k, t in enumerate(tramos, 1):
+        _avisar(mid, f"Short {k} de {len(tramos)}", 92)
+        archivo = _hacer_short(mid, t["desde"], t["hasta"], k=k, cierre=True)
+        hechos.append({**t, "archivo": archivo})
+    mejor = max(hechos, key=lambda t: _nota_gancho(q["frases"][[f["n"] for f in q["frases"]].index(t["frases"][0])]["texto"]))
+    modificar(mid, lambda r: r.update(shorts=hechos, short={"archivo": hechos[0]["archivo"], "desde": hechos[0]["desde"],
+                                                           "hasta": hechos[0]["hasta"]}))
+    return [mejor] + [t for t in hechos if t is not mejor]
 
 
 def tramo_short(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:

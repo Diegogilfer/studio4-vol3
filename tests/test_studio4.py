@@ -4077,3 +4077,26 @@ def test_animacion_ligada_al_scroll_en_el_panel():
     assert 'id="progreso-scroll"' in html
     assert "animation-timeline: scroll(root block)" in css and "animation-timeline: view()" in css
     assert "@supports (animation-timeline: scroll())" in css and css.count("prefers-reduced-motion") >= 2
+
+
+def test_tres_shorts_distintos_del_video():
+    """De cada vídeo salen hasta 3 Shorts DISTINTOS, sin solaparse, que nunca empiezan con un conector («y…», «pero…»)
+    y acaban en frase completa; nunca el vídeo entero repetido."""
+    from studio4 import montaje
+    textos = ["GTA 6 va a ocupar 212 GB en tu consola.", "Lo confirmó Rockstar.", "Y no pesa igual en todo.", "Rockstar avisa del cambio.",
+              "Aun así son muchos gigas.", "Por eso empieza antes.", "El 10 de noviembre arranca la predescarga.", "En Xbox también.",
+              "Desde ahí quedan nueve días.", "Pero lo más loco es la caja.", "El 12 de noviembre llegan las cajas.", "Pagas 80 dólares igual.",
+              "No hay disco en la caja.", "Y ojo con el PC.", "El 19 de noviembre sale.", "¿Te queda espacio?"]
+    frases = [{"n": k + 1, "texto": t, "bloque": k // 4} for k, t in enumerate(textos)]
+    tiempos = [[k * 3.7 + 0.2, k * 3.7 + 3.4] for k in range(len(textos))]
+    p = {"frases": frases, "voz": {"pausas": {"tiempos": tiempos}}}
+    tramos = montaje.tramos_shorts(p)
+    assert len(tramos) == 3
+    for a, b in zip(tramos, tramos[1:]):
+        assert a["hasta"] <= b["desde"] + 0.5   # no se solapan
+    total = tiempos[-1][1]
+    for t in tramos:
+        assert t["hasta"] - t["desde"] < total * 0.6   # un trozo, no el vídeo entero
+        primera = textos[t["frases"][0] - 1]
+        assert not primera.lower().startswith(("y ", "pero", "por eso", "aun así", "desde ahí"))
+        assert t["titulo"].endswith("#Shorts")

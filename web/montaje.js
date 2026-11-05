@@ -1153,7 +1153,7 @@ function pasoFinal(v) {
         <div class="fila"><input class="campo corto-t" id="s-desde" value="${reloj(v.short?.desde ?? 0)}">
           <input class="campo corto-t" id="s-hasta" value="${reloj(v.short?.hasta ?? Math.min(45, v.voz?.duracion || 45))}">
           <button class="boton" type="button" id="hacer-short">${v.short ? "Rehacer Short" : "Sacar Short"}</button></div>
-        ${v.short ? `<video class="vertical" controls preload="metadata" src="/m/${esc(v.id)}/short_9x16.mp4?v=${encodeURIComponent(v.actualizado)}"></video>` : `<p class="meta">Elige de qué segundo a qué segundo (máx. 60).</p>`}
+        ${v.short ? `<video class="vertical" controls preload="metadata" src="/m/${esc(v.id)}/${esc(v.short.archivo || "short_9x16.mp4")}?v=${encodeURIComponent(v.actualizado)}"></video>` : `<p class="meta">Elige de qué segundo a qué segundo (máx. 60).</p>`}
       </div>
       <div class="textos"><span class="etiqueta">Miniatura</span>
         <div class="fila"><button class="primario" type="button" id="ver-minis">${(v.miniatura_candidatos || []).length ? "Otras opciones" : "Ver opciones para elegir"}</button></div>

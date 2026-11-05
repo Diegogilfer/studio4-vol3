@@ -17,7 +17,7 @@ from typing import Any
 
 from . import canales, escaleta, escenas, extractor, linea, montaje, musica, radar
 
-MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short_9x16\.mp4|cuadrado_1x1\.mp4|miniatura(_c\d)?\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg|paquete\.zip)$")
+MEDIOS = re.compile(r"^(previa\.mp4|final_16x9\.mp4|short(_\d)?_9x16\.mp4|cuadrado_1x1\.mp4|miniatura(_c\d)?\.jpg|voz\.wav|voz_propia\.wav|subtitulos(\.[a-z]{2,8})?\.srt|storyboard\.jpg|paquete\.zip)$")
 
 
 class NoExiste(Exception):

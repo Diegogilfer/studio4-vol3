@@ -120,9 +120,16 @@ def preparar(mid: str) -> Path:
     (destino / "Miniaturas").mkdir(parents=True)
     (destino / "Subtítulos").mkdir()
     (destino / "Proyecto (para reeditar)").mkdir()
+    shorts = p.get("shorts") or []
     for origen, nombre in FORMATOS:
+        if origen == "short_9x16.mp4" and shorts:
+            continue   # hay 3 Shorts distintos: van en su carpeta
         if (base / origen).exists():
             shutil.copy2(base / origen, destino / nombre)
+    for k, t in enumerate(shorts, 1):
+        if (base / t["archivo"]).exists():
+            (destino / "Shorts").mkdir(exist_ok=True)
+            shutil.copy2(base / t["archivo"], destino / "Shorts" / f"Short {k} · {_nombre_limpio(t.get('titulo', ''), 60)}.mp4")
     if (base / "miniatura.jpg").exists():
         shutil.copy2(base / "miniatura.jpg", destino / "Miniaturas" / "miniatura elegida.jpg")
     for k, c in enumerate(p.get("miniatura_candidatos") or [], 1):
@@ -144,13 +151,14 @@ def preparar(mid: str) -> Path:
         for f in destino.rglob("*"):
             if f.is_file():
                 z.write(f, Path(destino.name) / f.relative_to(destino))
-    limpia = entregar_en_escritorio(base, canal, _nombre_limpio(p["titulo"]), fecha, programado=bool(p.get("programado")))
+    limpia = entregar_en_escritorio(base, canal, _nombre_limpio(p["titulo"]), fecha, programado=bool(p.get("programado")), shorts=shorts)
     montaje.modificar(mid, lambda q: q.update(paquete={"carpeta": str(destino), "zip": "paquete.zip", "hecho": time.strftime("%Y-%m-%d %H:%M"),
                                                        "escritorio": str(limpia) if limpia else ""}))
     return destino
 
 
-def entregar_en_escritorio(base: Path, canal: str, titulo: str, fecha: str, programado: bool = False) -> Path | None:
+def entregar_en_escritorio(base: Path, canal: str, titulo: str, fecha: str, programado: bool = False,
+                           shorts: list[dict[str, Any]] | None = None) -> Path | None:
     """SOLO los 3 vídeos, sin documentos (lo pidió el autor), agrupados por fecha de montaje:
     Escritorio › <canal> › videos <canal> › <fecha> › <título>   (los hechos a mano)
     Escritorio › <canal> › Programados › <fecha> › <título>      (los que creó la agenda)
@@ -161,11 +169,17 @@ def entregar_en_escritorio(base: Path, canal: str, titulo: str, fecha: str, prog
     grupo = "Programados" if programado else f"videos {nombre_canal}"
     destino = ESCRITORIO / nombre_canal / grupo / fecha / titulo
     destino.mkdir(parents=True, exist_ok=True)
-    for viejo in destino.glob("*.mp4"):
+    for viejo in [*destino.glob("*.mp4"), *destino.glob("Shorts/*.mp4")]:
         viejo.unlink(missing_ok=True)
     for origen, final in FORMATOS:
+        if origen == "short_9x16.mp4" and shorts:
+            continue
         if (base / origen).exists():
             shutil.copy2(base / origen, destino / final)
+    for k, t in enumerate(shorts or [], 1):
+        if (base / t["archivo"]).exists():
+            (destino / "Shorts").mkdir(exist_ok=True)
+            shutil.copy2(base / t["archivo"], destino / "Shorts" / f"Short {k} · {_nombre_limpio(t.get('titulo', ''), 60)}.mp4")
     return destino
 
 
