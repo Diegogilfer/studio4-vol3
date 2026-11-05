@@ -136,10 +136,13 @@ def _subir_archivo(archivo: Path, padre: str) -> None:
                 break
 
 
-def subir_carpeta(carpeta: Path, canal: str, avisar=lambda _t: None) -> str:
-    """Sube la carpeta de entrega a «Studio 4/<canal>/<carpeta>», con sus subcarpetas. Devuelve el enlace."""
-    raiz = _carpeta("Studio 4", None)
-    destino = _carpeta(carpeta.name, _carpeta(canal, raiz))
+def subir_carpeta(carpeta: Path, canal: str, avisar=lambda _t: None, ruta: list[str] | None = None) -> str:
+    """Sube la carpeta a «Studio 4/<canal>/<ruta…>/<carpeta>» (p. ej. ruta = [mes, día]), con sus subcarpetas.
+    Devuelve el enlace de la carpeta del vídeo."""
+    padre = _carpeta(canal, _carpeta("Studio 4", None))
+    for nivel in ruta or []:
+        padre = _carpeta(nivel, padre)
+    destino = _carpeta(carpeta.name, padre)
     ids = {carpeta: destino}
     archivos = sorted(f for f in carpeta.rglob("*") if f.is_file())
     for k, f in enumerate(archivos, 1):

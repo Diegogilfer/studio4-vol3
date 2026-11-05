@@ -4046,3 +4046,24 @@ def test_infografias_cuentan_como_imagen_y_entrega_limpia_en_el_escritorio(aisla
     assert sorted(x.name for x in limpia.iterdir()) == sorted(f for _, f in paquete.FORMATOS)
     prog = paquete.entregar_en_escritorio(base, "FourLevel", "Secretos", "2026-11-29", programado=True)
     assert prog == paquete.ESCRITORIO / "FourLevel" / "Programados" / "2026-11-29" / "Secretos"
+
+
+
+def test_drive_sube_solo_los_videos_por_mes_y_dia(aislado, tmp_path, monkeypatch):
+    """A Drive va la carpeta limpia (solo los 3 vídeos) en Studio 4/<canal>/<mes>/<día>/<título>; si la API está
+    apagada, el aviso dice en español qué hacer."""
+    from studio4 import drive, montaje, paquete
+    mid = montaje.crear("Prueba", "GTA 6 va a ocupar hasta 212 gigabytes en tu consola. Y la predescarga empieza el día diez.")
+    limpia = tmp_path / "Desktop" / "FourLevel" / "videos FourLevel" / "2026-11-05" / "Prueba"
+    limpia.mkdir(parents=True)
+    (limpia / "1 Vídeo final.mp4").write_bytes(b"v")
+    montaje.modificar(mid, lambda p: p.update(canal="fourlevel", paquete={"carpeta": str(tmp_path), "escritorio": str(limpia), "hecho": "2026-11-05 10:00"}))
+    monkeypatch.setattr(drive, "conectado", lambda: True)
+    llamadas = []
+    monkeypatch.setattr(drive, "subir_carpeta", lambda c, canal, ruta=None, **k: llamadas.append((c, canal, ruta)) or "https://drive/x")
+    assert paquete.subir_a_drive(mid) == "https://drive/x"
+    assert llamadas == [(limpia, "FourLevel", ["2026-11", "2026-11-05"])]
+    def falla(*a, **k):
+        raise RuntimeError("403 Client Error: Forbidden for url: https://www.googleapis.com/drive/v3/files?q=x")
+    monkeypatch.setattr(drive, "subir_carpeta", falla)
+    assert paquete.subir_a_drive(mid) == "" and "Habilitar" in montaje.cargar(mid)["paquete"]["drive_error"]

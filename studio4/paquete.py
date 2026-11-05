@@ -181,17 +181,24 @@ def subir_a_drive(mid: str) -> str:
     """Sube la carpeta de entrega a Drive si Google está conectado (si no, no hace nada). Devuelve el enlace."""
     from . import drive
     p = montaje.cargar(mid)
-    carpeta_local = Path((p.get("paquete") or {}).get("carpeta", ""))
+    pk = p.get("paquete") or {}
+    # a Drive va lo mismo que al Escritorio: solo los 3 vídeos, por mes y por día (lo pidió el autor)
+    limpia = Path(pk.get("escritorio") or "")
+    carpeta_local = limpia if pk.get("escritorio") and limpia.is_dir() else Path(pk.get("carpeta", ""))
     if not drive.conectado() or not carpeta_local.is_dir():
         return ""
+    dia = str(pk.get("hecho") or time.strftime("%Y-%m-%d"))[:10]
     try:
         canal = canales.obtener(p.get("canal") or "fourlevel")["nombre"]
     except ValueError:
         canal = "Canal"
     try:
-        enlace = drive.subir_carpeta(carpeta_local, canal)
+        enlace = drive.subir_carpeta(carpeta_local, canal, ruta=[dia[:7], dia])
     except Exception as e:  # noqa: BLE001 - el vídeo ya está en tu PC: Drive se reintenta con su botón
         motivo = str(e)[:300]
+        if "403" in motivo and ("drive.googleapis.com" in motivo or "/drive/v3/" in motivo):
+            motivo = ("Google no deja subir: activa la Google Drive API en tu proyecto de Google Cloud (APIs y servicios › "
+                      "Biblioteca › Google Drive API › Habilitar), espera 2 minutos y pulsa «Subir a Drive».")
         montaje.modificar(mid, lambda q: q.setdefault("paquete", {}).update(drive_error=motivo))
         return ""
     montaje.modificar(mid, lambda q: q.setdefault("paquete", {}).update(drive=enlace, drive_error="", drive_subido=time.strftime("%Y-%m-%d %H:%M")))
