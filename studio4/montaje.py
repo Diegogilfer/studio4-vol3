@@ -1505,6 +1505,35 @@ def proponer(mid: str, rellenar: bool = False) -> int:
     return hechas
 
 
+def _video_real(mid: str, f: dict[str, Any], consulta: str) -> bool:
+    """Un clip REAL de archivo (Pixabay: uso comercial) para una frase del mundo real; Gemini mira un fotograma y solo
+    se queda si enseña lo que dice la frase. Devuelve si lo puso."""
+    import requests
+    from . import calidad_imagen, imagenes_libres
+    carpeta_v = carpeta(mid) / "videos"
+    carpeta_v.mkdir(exist_ok=True)
+    try:
+        candidatos = imagenes_libres.videos_pixabay(consulta, 4)
+    except Exception as e:  # noqa: BLE001
+        logger.info("Vídeo real «%s»: %s", consulta, e)
+        return False
+    for c in candidatos:
+        try:
+            datos = requests.get(c["url"], headers=imagenes_libres.UA, timeout=90).content
+        except requests.RequestException:
+            continue
+        nombre = f"{f['n']:03d}_real.mp4"
+        (carpeta_v / nombre).write_bytes(datos)
+        foto = fotograma_de(carpeta_v / nombre)
+        if not foto or not calidad_imagen.aprobada(calidad_imagen.revisar(foto, f["texto"])):
+            (carpeta_v / nombre).unlink(missing_ok=True)
+            continue
+        v = {"archivo": nombre, "credito": f"Vídeo: {c['autor']} (Pixabay)", "url": c["pagina"]}
+        modificar(mid, lambda q, n=f["n"]: next(z for z in q["frases"] if z["n"] == n).update(video=v))
+        return True
+    return False
+
+
 def _rellenar_con_infografias(mid: str) -> int:
     """Las frases que se quedaron sin plano reciben una infografía elegida para lo que dicen (con foto real si nombran
     algo concreto); si la IA no propone nada, una con sus palabras clave. Nunca un plano cualquiera."""
@@ -1514,6 +1543,13 @@ def _rellenar_con_infografias(mid: str) -> int:
     if not vacias:
         return 0
     elegidos = explicado.proponer(vacias, p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid)
+    for f in vacias:   # lo que pasa en el mundo real: vídeo de archivo real (si no hay uno que encaje, infografía)
+        g = elegidos.get(f["n"]) or {}
+        if g.get("tipo") == "video_real":
+            elegidos.pop(f["n"])
+            if _video_real(mid, f, g["video"]):
+                continue
+    vacias = [f for f in cargar(mid)["frases"] if not con_imagen(f)]
     for f in vacias:
         if f["n"] not in elegidos:   # lo mínimo: la idea de la frase en grande
             claves = [w for w in re.findall(r"[\wáéíóúñÁÉÍÓÚÑ]+", f["texto"]) if len(w) > 3][:3]
@@ -2486,9 +2522,20 @@ def tramo_corto(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
 # --- Transiciones leves entre planos -------------------------------------------------------------------------------
 # Entre frases ya no hay siempre corte seco: cada plano entra con un efecto corto (0,2–0,35 s), variado y sin repetir
 # el anterior. La rejilla y los paneles conservan la suya. No cambia la duración: la voz sigue sincronizada.
-EFECTOS_JUEGOS = ("zoom", "destello", "corte", "glitch", "desenfoque", "zoom", "corte", "barrido")
+EFECTOS_JUEGOS = ("empuje", "destello", "corte", "enfoque", "glitch", "zoom", "corte", "desenfoque", "empuje", "barrido")
 EFECTOS_HISTORIAS = ("fundido", "zoom", "corte", "desenfoque", "destello", "fundido", "corte", "barrido")
-FX_VERSION = 2
+FX_VERSION = 3
+
+
+def _esquinas(ancho: int, alto: int) -> list[tuple[int, int, int, int]]:
+    """Las 8 barritas de las 4 esquinas de un visor centrado (el «enfoque» del canal de referencia)."""
+    w, h = int(ancho * 0.34), int(alto * 0.4)
+    x0, y0, largo, g = (ancho - w) // 2, (alto - h) // 2, max(24, ancho // 22), max(4, ancho // 300)
+    cajas = []
+    for x, y, dx, dy in ((x0, y0, 1, 1), (x0 + w, y0, -1, 1), (x0, y0 + h, 1, -1), (x0 + w, y0 + h, -1, -1)):
+        cajas.append((x if dx > 0 else x - largo, y if dy > 0 else y - g, largo, g))
+        cajas.append((x if dx > 0 else x - g, y if dy > 0 else y - largo, g, largo))
+    return cajas
 
 
 def _filtro_efecto(efecto: str, ancho: int, alto: int) -> str:
@@ -2496,6 +2543,15 @@ def _filtro_efecto(efecto: str, ancho: int, alto: int) -> str:
     return {
         "destello": "fade=t=in:st=0:d=0.22:color=white",
         "fundido": "fade=t=in:st=0:d=0.3",
+        # «empuje»: entra acercándose deprisa con desenfoque de movimiento (zoom + estela) y se asienta
+        "empuje": (f"split=2[ea][eb];[ea]trim=end_frame={n},setpts=PTS-STARTPTS,"
+                   f"zoompan=z='1.28-0.28*on/{n}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS},"
+                   f"tmix=frames=3,gblur=sigma=6:steps=1,trim=end_frame={n},setpts=N/{config.FPS}/TB[ec];"
+                   f"[eb]trim=start_frame={n},setpts=PTS-STARTPTS[ed];[ec][ed]concat=n=2:v=1:a=0"),
+        # «enfoque»: esquinas de visor que se cierran sobre el centro, como si la cámara fijara el objetivo
+        "enfoque": ",".join(
+            f"drawbox=x={x}:y={y}:w={w}:h={h}:color=white@0.9:t=fill:enable='between(t,0.05,1.1)'"
+            for (x, y, w, h) in _esquinas(ancho, alto)),
         # zoompan sobre el plano entero se atasca a 1080p: solo se aplica a los primeros n fotogramas y se une al resto
         "zoom": (f"split=2[za][zb];[za]trim=end_frame={n},setpts=PTS-STARTPTS,"
                  f"zoompan=z='1.12-0.12*on/{n}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s={ancho}x{alto}:fps={config.FPS},"

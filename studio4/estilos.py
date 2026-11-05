@@ -147,6 +147,19 @@ ESTILOS["explicado"] = {
     "montaje": {"ritmo": "rapido", "transicion": "corte", "musica": "acción", "subtitulos": "palabra"},
     "imagen": "Lo hace Claude con código: infografías animadas (reloj, contador, multitud, mapa…) + material oficial",
     "video": "No hace falta", "coste": "gratis", "animar": 0}
+ESTILOS["reportaje"] = {
+    "nombre": "Reportaje gamer (largo)", "para": "Vídeos largos de 8-12 min que monetizan (FourLevel)",
+    "visual": "", "genera": False, "generador": "explicado",
+    "guion": ("vídeo largo de 8 a 12 minutos. APERTURA EN FRÍO (primeros 30 s): 4-5 datos del mundo real, uno por frase, "
+              "rápidos y con cifra o lugar («las vallas del Barça-Madrid anunciaban…», «en Miami ya se vende…»); después la "
+              "PROMESA del vídeo («hoy te cuento una por una… y la última es la más grande») y un bucle abierto que se cierra al "
+              "final. Una sola frase para pedir like/suscripción y «vamos al lío». El cuerpo, en capítulos con un orden claro "
+              "(p. ej. del día de salida a dentro de 10 años), cada uno abre con un dato potente y cierra enlazando con el "
+              "siguiente. Cada dato con su fuente (quién lo dijo o lo calculó). Mezcla lo del juego con lo del mundo real "
+              "(empresas, ciudades, dinero, gente). Tono cercano y con energía"),
+    "montaje": {"ritmo": "rapido", "transicion": "corte", "musica": "acción", "subtitulos": "viral"},
+    "imagen": "Material oficial del juego + vídeo real de archivo (Pixabay) + fotos reales + infografías hechas con código",
+    "video": "No genera", "coste": "gratis", "animar": 0}
 ESTILOS["explicado_historia"] = {
     "nombre": "Explicado animado (historias)", "para": "Historias reales largas con infografías pausadas (ARIGAB)",
     "visual": "", "genera": False, "generador": "explicado",
@@ -157,7 +170,7 @@ ESTILOS["explicado_historia"] = {
     "imagen": "Lo hace Claude con código: infografías de archivo (líneas de tiempo, mapas, cifras) + fotos reales",
     "video": "No hace falta", "coste": "gratis", "animar": 0}
 HECHO_POR_CLAUDE = {"gameplay", "stickman", "pixelart", "motion", "tipografia", "vectorial", "collage", "isometrico",
-                    "explicado", "explicado_historia"}
+                    "explicado", "explicado_historia", "reportaje"}
 for _k, _e in ESTILOS.items():
     _e["hecho_por"] = "claude" if _k in HECHO_POR_CLAUDE else "modelo"
 POR_DEFECTO = "documental"

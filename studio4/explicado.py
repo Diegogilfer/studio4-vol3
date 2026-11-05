@@ -395,6 +395,9 @@ __TIPOS__
 Reglas: usa un gráfico solo donde ayuda a entender o impacta (cifras, comparaciones, decisiones, multitudes, lugares,
 cambios); __PROPORCION__ No repitas el mismo tipo dos frases seguidas. Textos de los gráficos CORTOS y en
 mayúsculas (máx. 3 palabras por etiqueta), datos SOLO del guion (nunca inventes cifras). Sin logos ni personajes reales.
+VÍDEO REAL: si la frase cuenta una escena del mundo real que se puede filmar (gente en una oficina, un estadio lleno,
+un café, una ciudad, dinero, un aeropuerto, una cola de gente), pon tipo "ninguno" y en "datos" "video": búsqueda corta
+en INGLÉS para un banco de vídeos de archivo (p. ej. "busy office workers", "football stadium crowd").
 FOTO REAL: si la frase habla de algo real y concreto que se pueda fotografiar (un producto como una consola, un
 lugar real, un objeto), añade en "datos" "foto": búsqueda corta en INGLÉS con su nombre exacto (p. ej. "PlayStation 5",
 "Xbox Series X"); en una comparación de dos cosas reales, "foto_a" y "foto_b". Nunca para personajes de videojuegos.
@@ -424,6 +427,13 @@ def proponer(frases: list[dict[str, Any]], titulo: str, tema: str = "neon", prod
     anterior = ""
     for x in d.get("frases") or []:
         tipo = str(x.get("tipo", ""))
+        datos_x = x.get("datos") if isinstance(x.get("datos"), dict) else {}
+        if datos_x.get("video"):   # vídeo de archivo del mundo real: lo pone montaje (no es una infografía)
+            try:
+                salida[int(x["n"])] = {"tipo": "video_real", "video": str(datos_x["video"])[:80]}
+            except (KeyError, TypeError, ValueError):
+                pass
+            continue
         if tipo not in TIPOS or tipo == anterior:
             anterior = ""
             continue

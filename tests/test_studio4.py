@@ -4119,3 +4119,30 @@ def test_planos_sin_repetir_entre_videos_y_sin_relleno_al_azar(aislado, tmp_path
     fr = montaje.cargar(mid)["frases"]
     assert fr[0]["grafico"]["tipo"] == "contador" and fr[1]["grafico"]["tipo"] == "chips" and all(montaje.con_imagen(f) for f in fr)
     assert not any(f.get("clip") for f in fr)   # nada de planos al azar
+
+
+def test_estilo_reportaje_transiciones_nuevas_y_video_real(aislado, tmp_path, monkeypatch):
+    """Lo aprendido del canal de referencia: estilo «Reportaje» para los largos, transiciones «empuje» y «enfoque» que
+    no cambian la duración, y vídeo real de archivo para las frases del mundo real (solo si Gemini ve que encaja)."""
+    from studio4 import calidad_imagen, estilos, imagenes_libres, montaje
+    assert "reportaje" in estilos.ESTILOS and "APERTURA EN FRÍO" in estilos.ESTILOS["reportaje"]["guion"]
+    assert {"empuje", "enfoque"} <= set(montaje.EFECTOS_JUEGOS)
+    base = tmp_path / "b.mp4"
+    medios.ffmpeg("-f", "lavfi", "-i", f"testsrc2=s=640x360:r={config.FPS}", "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(base))
+    for e in ("empuje", "enfoque"):
+        v = tmp_path / f"{e}.mp4"
+        medios.ffmpeg("-i", str(base), "-an", "-vf", f"{montaje._filtro_efecto(e, 640, 360)},setsar=1,fps={config.FPS}", "-t", "3",
+                      "-c:v", "libx264", "-pix_fmt", "yuv420p", str(v))
+        assert abs(medios.duracion(v) - 3) < 0.1
+    mid = montaje.crear("Prueba", "Más de 30 millones de personas faltarán al trabajo ese mismo día. Y la predescarga empieza el día diez.")
+    monkeypatch.setattr(imagenes_libres, "videos_pixabay", lambda q, n=4: [{"url": "u", "autor": "Ana", "pagina": "p"}])
+
+    class R:
+        content = base.read_bytes()
+    import requests
+    monkeypatch.setattr(requests, "get", lambda *a, **k: R())
+    monkeypatch.setattr(calidad_imagen, "revisar", lambda img, frase: {"nota": 5, "encaja": True})
+    f = montaje.cargar(mid)["frases"][0]
+    assert montaje._video_real(mid, f, "busy office workers")
+    v = montaje.cargar(mid)["frases"][0]["video"]
+    assert v["credito"] == "Vídeo: Ana (Pixabay)" and (montaje.carpeta(mid) / "videos" / v["archivo"]).exists()
