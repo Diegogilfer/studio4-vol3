@@ -3771,28 +3771,6 @@ def test_procesos_sin_ventana_y_prompt_de_flow_en_el_panel(monkeypatch):
         rutas_montaje.post("/api/m/miniatura/flow", {"id": "no-existe"})
 
 
-def test_higgsfield_respeta_plan_y_tope_y_anima_la_imagen(tmp_path, monkeypatch):
-    """Sin clave no se ofrece; con clave, el plan limita los clips por vídeo y el tope en $ nunca se pasa."""
-    from studio4 import higgsfield
-    monkeypatch.setattr(higgsfield, "AJUSTES", tmp_path / "hf.json")
-    monkeypatch.setattr(higgsfield, "_credencial", lambda: "")
-    assert not higgsfield.disponible()
-    higgsfield.guardar_ajustes("minima", 1.0)
-    p = {"higgsfield": {"clips": 0, "gastado": 0.0}}
-    higgsfield.comprobar(p)                                   # el gancho sí
-    with pytest.raises(ValueError, match="Plan Mínima"):
-        higgsfield.comprobar({"higgsfield": {"clips": 1, "gastado": 0.35}})
-    higgsfield.guardar_ajustes("media", 0.5)
-    with pytest.raises(ValueError, match="tope"):
-        higgsfield.comprobar({"higgsfield": {"clips": 1, "gastado": 0.35}})
-    with pytest.raises(ValueError):
-        higgsfield.guardar_ajustes(tope=50)
-    assert higgsfield._url_video({"status": "completed", "video": {"url": "https://x/v.mp4"}}) == "https://x/v.mp4"
-    assert higgsfield._url_video({"videos": [{"url": "https://x/a.mp4"}]}) == "https://x/a.mp4"
-    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
-    assert "data-hf-animar" in js and "confirm(" in js and "[data-subir],[data-bajar],[data-quitar-clip]" in js
-
-
 def test_gancho_de_continuidad_miniatura_y_primer_plano_con_la_misma_imagen(aislado, tmp_path, monkeypatch):
     """La imagen de Google Flow es a la vez la miniatura (con texto) y el primer plano: el vídeo arranca en la miniatura."""
     import base64
@@ -3856,7 +3834,9 @@ def test_transiciones_variadas_sin_repetir_y_tramo_corto(aislado, tmp_path):
     assert montaje._transiciones({**p, "transiciones": False}, piezas, set(), tmp_path, set(), [], 320, 180) == piezas
     w = lambda t, ini, fin: {"texto": t, "ini": ini, "fin": fin}  # noqa: E731
     voz = {"voz": {"palabras": [w("Hola.", 0, 10), w("Sigue", 11, 40), w("aquí.", 41, 50), w("Más", 51, 70), w("fin.", 71, 90)]}}
-    assert montaje.tramo_corto(voz) == (0.0, 50.4)
+    assert montaje.tramo_corto(voz) == (0.0, 90.4)   # cabe en un Short (hasta 3 min): el vídeo entero, con su final
+    largo = {"voz": {"palabras": [w("Hola.", 0, 10), w("Sigue", 11, 40), w("aquí.", 41, 50), w("Más", 51, 200), w("fin.", 201, 300)]}}
+    assert montaje.tramo_corto(largo) == (0.0, 50.4)   # vídeo largo: hasta la última frase completa que cabe
     assert montaje.tramo_corto({"voz": {"palabras": [w("Corto.", 0, 20)]}}) == (0.0, 20.4)
 
 

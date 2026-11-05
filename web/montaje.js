@@ -628,7 +628,6 @@ async function vistaHerramientas() {
     } catch (e) { aviso(e); }
   };
   const g = await seguro("/api/m/google");
-  const hf = await seguro("/api/m/higgsfield");
   seguro("/api/m/conexiones").then((c) => {
     if (!c || !$("conexiones")) return;
     $("conexiones").innerHTML = `<section class="mantenimiento"><span class="etiqueta">Google</span>
@@ -637,19 +636,10 @@ async function vistaHerramientas() {
       <div class="fila"><span class="meta"><b>Google Drive</b> · ${g.drive ? "conectado: cada vídeo terminado sube su carpeta a Studio 4/&lt;canal&gt;" : "sin conectar (solo verá las carpetas que suba Studio 4)"}</span>
         <a class="${g.drive ? "boton" : "primario"}" href="/drive/conectar">${g.drive ? "Volver a conectar" : "Conectar Google Drive"}</a></div>`
       : `<p class="meta">Falta la credencial de Google Cloud (secrets/youtube_client.json).</p>`}</section>
-      ${hf ? `<section class="mantenimiento"><span class="etiqueta">Higgsfield · animar imágenes de Flow</span>
-        <div class="fila"><span class="meta">${hf.disponible ? `Conectado. Cada clip de 5 s cuesta unos ${hf.coste_clip.toFixed(2).replace(".", ",")} $ y siempre te pregunta antes.`
-          : "Sin clave: guárdala en el almacén de Windows como «Studio4» → HIGGSFIELD_KEY (clave:secreto)."}</span></div>
-        <div class="fila"><select class="campo" id="hf-plan">${Object.entries(hf.planes).map(([id, x]) => `<option value="${id}" ${id === hf.plan ? "selected" : ""}>${esc(x.nombre)} · ${esc(x.detalle)}</option>`).join("")}</select>
-          <input class="campo corto-t" id="hf-tope" type="number" min="0.1" max="5" step="0.1" value="${hf.tope}" title="Tope en $ por vídeo">
-          <button class="boton" type="button" id="hf-guardar">Guardar</button></div></section>` : ""}
       <section class="mantenimiento"><span class="etiqueta">Conexiones (las mismas claves del proyecto anterior)</span>
       <div class="conexiones">${c.conexiones.map((x) => `<div class="conexion ${x.conectada ? "si" : ""}">
         <i></i><div><b>${esc(x.api)}</b><small>${esc(x.uso)}</small></div><span>${x.conectada ? (x.pago ? "Conectada · de pago" : "Conectada · gratis") : "Sin conectar"}</span></div>`).join("")}</div></section>`;
-    if ($("hf-guardar")) $("hf-guardar").onclick = async () => {
-      try { await api("/api/m/higgsfield/ajustes", { plan: $("hf-plan").value, tope: Number($("hf-tope").value) }); $("hf-guardar").textContent = "Guardado"; }
-      catch (e) { aviso(e); }
-    };
+
   });
   try {
     const m = await api("/api/m/mantenimiento");
@@ -777,7 +767,7 @@ function flowMiniHTML(v) {   // la miniatura hecha en Google Flow: prompt para c
       <a class="boton" href="https://labs.google/fx/tools/flow" target="_blank" rel="noopener">Abrir Google Flow</a></div>
     <span class="etiqueta">Gancho de continuidad</span>
     ${v.continuidad ? `<p class="meta">Hecho: la imagen de Flow es la miniatura y el primer plano del vídeo (frase ${v.continuidad.frase}).
-      ${(v.frases || []).find((f) => f.n === v.continuidad.frase)?.video ? "Además, el gancho está animado." : datos.higgsfield?.disponible ? "Puedes animarlo con «Animar» en esa frase." : "Lleva movimiento lento; con Higgsfield podrás animarlo."}</p>`
+      Lleva movimiento lento de cámara.</p>`
       : `<p class="meta">Sube aquí la imagen que hiciste en Flow: será la miniatura (con su texto) y el vídeo empezará justo en ella.</p>`}
     <div class="fila"><input class="campo" type="file" accept="image/*" id="flow-imagen">
       <button class="${v.continuidad ? "boton" : "primario"}" type="button" id="hacer-continuidad">${v.continuidad ? "Cambiar imagen" : "Hacer gancho de continuidad"}</button></div></div>`;
@@ -1006,9 +996,6 @@ function pasoMontaje(v, conClip) {
           <button class="boton" type="button" data-panel="${f.n}">${f.panel ? "Editar panel" : "Panel de texto"}</button>
           <button class="boton" type="button" data-imagen="${f.n}">${f.imagen ? "Cambiar imagen" : "Imagen"}</button>
           ${f.grafico ? `<button class="boton" type="button" data-grafico-quitar="${f.n}" title="Quitar la infografía de esta frase">✦ ${esc(f.grafico.tipo)} ✕</button>` : ""}
-          ${f.video?.higgsfield ? `<button class="boton" type="button" data-hf-quitar="${f.n}" title="Vuelve a la imagen fija">Quitar animación</button>`
-            : f.imagen && !f.video && datos.higgsfield?.disponible ? `<button class="boton" type="button" data-hf-animar="${f.n}"
-              title="Higgsfield convierte esta imagen en un clip de 5 s">Animar · ${datos.higgsfield.coste_clip.toFixed(2).replace(".", ",")} $</button>` : ""}
           <button class="boton icono" type="button" data-subir="${f.n}" title="Subir esta escena">▲</button>
           <button class="boton icono" type="button" data-bajar="${f.n}" title="Bajar esta escena">▼</button>
           ${f.clip ? `<button class="boton icono" type="button" data-quitar-clip="${f.n}" title="Quitar el clip (la frase se queda sin plano)">✕</button>` : ""}
@@ -1371,7 +1358,7 @@ function enlazarVideo(p) {
 // delegación: lo que se repite por frase, el banco, abrir y nuevo
 $("vista").addEventListener("click", (ev) => {
   const el = ev.target.closest("[data-elegir],[data-panel],[data-guardar-panel],[data-quitar-panel],[data-usar],[data-copiar],[data-abrir],[data-nuevo],"
-    + "[data-imagen],[data-poner-url],[data-buscar-img],[data-quitar-imagen],[data-elegir-img],[data-hf-animar],[data-hf-quitar],[data-subir],[data-bajar],[data-quitar-clip],[data-grafico-quitar]");
+    + "[data-imagen],[data-poner-url],[data-buscar-img],[data-quitar-imagen],[data-elegir-img],[data-subir],[data-bajar],[data-quitar-clip],[data-grafico-quitar]");
   if (!el) return;
   // imágenes por frase: enlace, archivo de tu PC o búsqueda en las fuentes del canal
   if (el.dataset.imagen) { const f = document.querySelector(`[data-imagen-form="${el.dataset.imagen}"]`); f.hidden = !f.hidden; return; }
@@ -1402,13 +1389,6 @@ $("vista").addEventListener("click", (ev) => {
   if (el.dataset.subir) return enviar("/api/m/mover", { n: Number(el.dataset.subir), direccion: -1 });
   if (el.dataset.bajar) return enviar("/api/m/mover", { n: Number(el.dataset.bajar), direccion: 1 });
   if (el.dataset.quitarClip) return enviar("/api/m/quitar-clip", { n: Number(el.dataset.quitarClip) });
-  if (el.dataset.hfAnimar) {
-    const h = datos.higgsfield, coste = h.coste_clip.toFixed(2).replace(".", ",");
-    if (!confirm(`Animar la frase ${el.dataset.hfAnimar} con Higgsfield cuesta unos ${coste} $ de tu saldo.
-En este vídeo van ${(h.gastado || 0).toFixed(2).replace(".", ",")} $ de un tope de ${h.tope.toFixed(2).replace(".", ",")} $. ¿Lo hago?`)) return;
-    return enviar("/api/m/higgsfield/animar", { n: Number(el.dataset.hfAnimar) });
-  }
-  if (el.dataset.hfQuitar) return enviar("/api/m/higgsfield/quitar", { n: Number(el.dataset.hfQuitar) });
   if (el.dataset.graficoQuitar) return enviar("/api/m/grafico/quitar", { n: Number(el.dataset.graficoQuitar) });
   if (el.dataset.usar) return enviar("/api/m/usar-fuente", { fuente: el.dataset.usar });
   if (el.dataset.copiar !== undefined) {

@@ -2432,13 +2432,16 @@ def _hacer_final(mid: str) -> None:
     _revisar(mid, destino, final=True)
 
 
+SHORT_MAXIMO = 178.0   # YouTube admite Shorts de hasta 3 minutos
+
+
 def tramo_corto(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
     """El tramo para el Short y el cuadrado: desde el principio (el gancho) hasta el final de la última frase que cabe
     en `maximo` segundos; si el vídeo entero cabe, el vídeo entero."""
     palabras = (p.get("voz", {}).get("pausas") or p.get("voz") or {}).get("palabras") or []
     if not palabras:
         return 0.0, maximo
-    if palabras[-1]["fin"] <= maximo:
+    if palabras[-1]["fin"] <= SHORT_MAXIMO:   # cabe entero: el Short es el vídeo con su final de verdad, sin cortar
         return 0.0, round(palabras[-1]["fin"] + 0.4, 2)
     cierres = [w["fin"] for w in palabras if w["fin"] <= maximo and re.search(r"[.!?…]$", w.get("texto", w.get("palabra", "")).strip())]
     fin = cierres[-1] if cierres and cierres[-1] >= 15 else max(w["fin"] for w in palabras if w["fin"] <= maximo)
@@ -2511,8 +2514,8 @@ def montar_short(mid: str, desde: float, hasta: float) -> None:
     p = cargar(mid)
     if not p.get("final"):
         raise ValueError("Primero monta el vídeo final.")
-    if not 5 <= hasta - desde <= 60:
-        raise ValueError("Un Short dura entre 5 y 60 segundos.")
+    if not 5 <= hasta - desde <= SHORT_MAXIMO + 2:
+        raise ValueError("Un Short dura entre 5 segundos y 3 minutos.")
     _en_fondo(mid, "Short", lambda: _hacer_short(mid, desde, hasta))
 
 
@@ -2541,7 +2544,7 @@ def _hacer_short(mid: str, desde: float, hasta: float) -> None:
                   "[0:v]split=2[a][b];[a]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
                   "gblur=sigma=30,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
                   f"[fondo][centro]overlay=0:(H-h)/2-120{puestos}[base];{marca}",
-                  "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                  "-map", "[v]", "-map", "1:a", "-t", f"{hasta - desde:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                   str(base / "short_9x16.mp4"), cwd=trabajo)
     modificar(mid, lambda r: r.update(short={"archivo": "short_9x16.mp4", "desde": desde, "hasta": hasta}))
@@ -2552,8 +2555,8 @@ def montar_cuadrado(mid: str, desde: float, hasta: float) -> None:
     p = cargar(mid)
     if not p.get("final"):
         raise ValueError("Primero monta el vídeo final.")
-    if not 5 <= hasta - desde <= 60:
-        raise ValueError("Un clip de feed dura entre 5 y 60 segundos.")
+    if not 5 <= hasta - desde <= SHORT_MAXIMO + 2:
+        raise ValueError("Un clip de feed dura entre 5 segundos y 3 minutos.")
     _en_fondo(mid, "Cuadrado", lambda: _hacer_cuadrado(mid, desde, hasta))
 
 
@@ -2582,7 +2585,7 @@ def _hacer_cuadrado(mid: str, desde: float, hasta: float) -> None:
                   "[0:v]split=2[a][b];[a]scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080,"
                   "gblur=sigma=28,eq=brightness=-0.12[fondo];[b]scale=1080:-2[centro];"
                   f"[fondo][centro]overlay=0:(H-h)/2{puestos}[base];{marca}",
-                  "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                  "-map", "[v]", "-map", "1:a", "-t", f"{hasta - desde:.3f}", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
                   "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
                   str(base / "cuadrado_1x1.mp4"), cwd=trabajo)
     modificar(mid, lambda r: r.update(cuadrado={"archivo": "cuadrado_1x1.mp4", "desde": desde, "hasta": hasta}))
