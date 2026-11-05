@@ -1204,7 +1204,16 @@ def _poner_graficos(mid: str) -> int:
     """La IA elige qué frases llevan infografía y con qué datos (del guion). Devuelve cuántas."""
     from . import explicado
     p = cargar(mid)
-    elegidos = explicado.proponer(p["frases"], p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid)
+    largo = p.get("estilo") == "reportaje" or ((p.get("ia_opciones") or {}).get("duracion") or 0) > 120
+    elegidos = explicado.proponer(p["frases"], p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid, largo=largo)
+    for f in p["frases"]:   # vídeo REAL de archivo para lo que pasa en el mundo real (no es una infografía)
+        g = elegidos.get(f["n"]) or {}
+        if g.get("tipo") == "video_real":
+            elegidos.pop(f["n"])
+            _video_real(mid, f, g["video"])
+    if largo:   # en un vídeo largo la infografía no pisa un plano del juego, salvo las cifras y comparaciones
+        con_plano = {f["n"] for f in p["frases"] if f.get("clip")}
+        elegidos = {n: g for n, g in elegidos.items() if n not in con_plano or g["tipo"] in ("contador", "comparacion")}
 
     for n, g in elegidos.items():   # la foto real de lo que se habla (consola, lugar, producto), con su crédito
         for clave, destino in (("foto", "foto_archivo"), ("foto_a", "foto_a_archivo"), ("foto_b", "foto_b_archivo")):
@@ -1542,7 +1551,8 @@ def _rellenar_con_infografias(mid: str) -> int:
     vacias = [f for f in p["frases"] if not con_imagen(f)]
     if not vacias:
         return 0
-    elegidos = explicado.proponer(vacias, p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid)
+    elegidos = explicado.proponer(vacias, p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid,
+                                  largo=p.get("estilo") == "reportaje")
     for f in vacias:   # lo que pasa en el mundo real: vídeo de archivo real (si no hay uno que encaje, infografía)
         g = elegidos.get(f["n"]) or {}
         if g.get("tipo") == "video_real":

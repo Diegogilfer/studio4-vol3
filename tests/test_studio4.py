@@ -4156,3 +4156,24 @@ def test_un_short_de_60s_no_se_trocea(aislado):
     montaje.modificar(mid, lambda p: p.update(voz={"pausas": {"tiempos": [[0.2, 30.0], [30.5, 60.0]]}}))
     assert montaje._hacer_shorts(mid) == []
     assert montaje.tramo_corto({"voz": {"palabras": [{"palabra": "Fin.", "texto": "Fin.", "ini": 0, "fin": 60}]}}) == (0.0, 60.4)
+
+
+def test_video_largo_infografias_con_mesura_y_video_real(aislado, monkeypatch):
+    """En un vídeo largo, las infografías no pasan de ~3 de cada 10 frases (fuera primero los chips), no pisan los
+    planos del juego (salvo cifras) y el «vídeo real» se pone como vídeo, nunca como tarjeta vacía."""
+    from studio4 import deepseek, explicado, montaje
+    textos = [f"Frase número {k} del vídeo largo con algo que contar." for k in range(1, 11)]
+    mid = montaje.crear("Largo", " ".join(textos))
+    montaje.modificar(mid, lambda p: p.update(estilo="reportaje") or [f.update(clip={"fuente": "A", "plano": f["n"]}) for f in p["frases"][:5]])
+    propuesta = {"frases": [{"n": k, "tipo": "chips", "datos": {"titulo": "X"}} if k % 2 else {"n": k, "tipo": "contador", "datos": {"valor": k}}
+                            for k in range(1, 9)] + [{"n": 9, "tipo": "ninguno", "datos": {"video": "busy office"}}]}
+    monkeypatch.setattr(deepseek, "disponible", lambda: True)
+    monkeypatch.setattr(deepseek, "generar_json", lambda *a, **k: propuesta)
+    puestos = []
+    monkeypatch.setattr(montaje, "_video_real", lambda mid_, f, q: puestos.append((f["n"], q)) or True)
+    montaje._poner_graficos(mid)
+    fr = {f["n"]: f for f in montaje.cargar(mid)["frases"]}
+    graficos = [n for n, f in fr.items() if f.get("grafico")]
+    assert len(graficos) <= 3 and puestos == [(9, "busy office")]
+    assert all(fr[n]["grafico"]["tipo"] != "video_real" for n in graficos)
+    assert all(fr[n]["grafico"]["tipo"] == "contador" for n in graficos if n <= 5)   # sobre un plano, solo cifras

@@ -410,11 +410,20 @@ camino {"pregunta": "¿QUÉ HARÍAS?", "a": "DISTRACCIÓN", "b": "MISIONES"}; co
 "texto": "GTA V"}]}; chips {"titulo": "TAN REAL", "chips": ["CALLES", "PEATONES"]}; edificios {"valor": 16, "etiqueta": "EDIFICIOS MÁS"}."""
 
 
-def proponer(frases: list[dict[str, Any]], titulo: str, tema: str = "neon", produccion: str = "") -> dict[int, dict[str, Any]]:
-    """Qué gráfico lleva cada frase: {n: {"tipo", ...datos}}. FourLevel (neón) ~60 % de frases; ARIGAB (archivo) ~30 %."""
+# Lo que se quita primero cuando sobran infografías: los «chips» son relleno; las cifras y comparaciones, lo valioso
+PRIORIDAD = ("contador", "comparacion", "linea", "camino", "mapa", "personas", "edificios", "reloj", "deslizador", "chips")
+
+
+def proponer(frases: list[dict[str, Any]], titulo: str, tema: str = "neon", produccion: str = "",
+             largo: bool = False) -> dict[int, dict[str, Any]]:
+    """Qué gráfico lleva cada frase: {n: {"tipo", ...datos}}. Short de juegos ~60 % de frases; vídeo largo o historia
+    ~30 % (el resto, imagen real del juego): si la IA se pasa, se quedan las más valiosas (cifras antes que chips)."""
     from . import deepseek, gemini, jsonia
-    proporcion = ("en un Short rápido de videojuegos, más o menos 6 de cada 10 frases llevan gráfico." if tema == "neon"
-                  else "en una historia larga y pausada, solo 3 de cada 10 frases llevan gráfico (el resto, imágenes reales).")
+    if largo or tema != "neon":
+        proporcion = ("en un vídeo LARGO, como mucho 3 de cada 10 frases llevan gráfico: solo donde aporta (cifras, "
+                      "comparaciones, fechas, decisiones, lugares); el resto se ve con imágenes reales del juego.")
+    else:
+        proporcion = "en un Short rápido de videojuegos, más o menos 6 de cada 10 frases llevan gráfico."
     sistema = SISTEMA.replace("__TIPOS__", "\n".join(f"- {k}: {v}" for k, v in TIPOS.items())).replace("__PROPORCION__", proporcion)
     texto = f"TÍTULO: {titulo}\n\n" + "\n".join(f"{f['n']}. {f['texto']}" for f in frases)
     try:
@@ -443,4 +452,10 @@ def proponer(frases: list[dict[str, Any]], titulo: str, tema: str = "neon", prod
             anterior = tipo
         except (KeyError, TypeError, ValueError):
             continue
+    tope = max(1, int(len(frases) * (0.32 if (largo or tema != "neon") else 0.65)))
+    graficos = [n for n, g in salida.items() if g["tipo"] != "video_real"]
+    if len(graficos) > tope:   # sobran: fuera primero los de menos valor (chips), luego los demás por orden
+        orden = sorted(graficos, key=lambda n: -PRIORIDAD.index(salida[n]["tipo"]) if salida[n]["tipo"] in PRIORIDAD else 0)
+        for n in orden[:len(graficos) - tope]:
+            salida.pop(n)
     return salida

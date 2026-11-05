@@ -156,7 +156,9 @@ ESTILOS["reportaje"] = {
               "final. Una sola frase para pedir like/suscripción y «vamos al lío». El cuerpo, en capítulos con un orden claro "
               "(p. ej. del día de salida a dentro de 10 años), cada uno abre con un dato potente y cierra enlazando con el "
               "siguiente. Cada dato con su fuente (quién lo dijo o lo calculó). Mezcla lo del juego con lo del mundo real "
-              "(empresas, ciudades, dinero, gente). Tono cercano y con energía"),
+              "(empresas, ciudades, dinero, gente). Tono cercano y con energía. PROHIBIDO hablar del propio vídeo, de sus "
+              "fuentes o de sus fechas («todo lo que voy a contar…», «las fuentes son…», «repaso…»): se cuenta y punto. Nada "
+              "de capítulos sobre datos que no existen; si algo no se sabe, una frase y se pasa a lo que sí se sabe"),
     "montaje": {"ritmo": "rapido", "transicion": "corte", "musica": "acción", "subtitulos": "viral"},
     "imagen": "Material oficial del juego + vídeo real de archivo (Pixabay) + fotos reales + infografías hechas con código",
     "video": "No genera", "coste": "gratis", "animar": 0}
