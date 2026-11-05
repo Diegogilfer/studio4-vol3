@@ -2577,7 +2577,7 @@ def _hacer_short(mid: str, desde: float, hasta: float, k: int = 0, cierre: bool 
             dur = hasta - desde
             with ass.open("a", encoding="utf-8") as fh:
                 fh.write(f"Dialogue: 5,{subtitulos._ts(max(0.0, dur - 2.4))},{subtitulos._ts(dur)},Gancho,,0,0,0,,"
-                         "{\\fad(250,0)}LA HISTORIA COMPLETA, EN EL CANAL ▶\n")
+                         "{\\an5\\pos(540,1700)\\fs50\\fad(250,0)}LA HISTORIA COMPLETA, EN EL CANAL ▶\n")
         puestos = f",ass={ass.name}"
     capas, marca = _capas_marca(q, desde, hasta, 1080, 1920, "[base]", 2, emojis=True)
     medios.ffmpeg("-ss", f"{desde:.3f}", "-t", f"{hasta - desde:.3f}", "-i", str(base / "render" / "cuerpo.mp4"),
