@@ -185,9 +185,10 @@ def paso_actual(p: dict[str, Any]) -> int:
     """En qué paso va el vídeo (1 a 5), para la lista y para abrir el panel donde toca."""
     if not p["frases"]:
         return 1
-    if not p["fuentes"]:
+    falta = any(not con_imagen(x) for x in p["frases"])   # infografías, fotos y paneles cuentan como imagen
+    if not p["fuentes"] and falta:
         return 2
-    if any(not con_imagen(x) for x in p["frases"]):
+    if falta:
         return 3
     if not p.get("previa"):
         return 4

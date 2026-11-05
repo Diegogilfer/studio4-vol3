@@ -29,6 +29,9 @@ def aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(registro, "_CONSUMO", tmp_path / "consumo.json")
     from studio4 import carpetas, youtube   # las pruebas nunca consultan YouTube ni escriben en tus Vídeos
     monkeypatch.setattr(carpetas, "RAIZ_USUARIO", tmp_path / "Videos")
+    from studio4 import paquete as _paquete
+    (tmp_path / "Desktop").mkdir(exist_ok=True)
+    monkeypatch.setattr(_paquete, "ESCRITORIO", tmp_path / "Desktop")   # nunca en el Escritorio de verdad
     monkeypatch.setattr(config, "YOUTUBE_API_KEY", "")
     monkeypatch.setattr(config, "FAL_KEY", "")   # nunca se gasta saldo de fal en una prueba
     monkeypatch.setattr(config, "DEEPSEEK_API_KEY", "")
@@ -4042,3 +4045,24 @@ def test_foto_real_del_objeto_exacto_y_en_la_mejor_calidad(aislado, tmp_path, mo
     r = montaje._foto_real(mid, 1, "PlayStation 5 console")
     assert r and pedidas == ["u_big"] and (montaje.carpeta_imagenes(mid) / r["archivo"]).exists()
     assert montaje._foto_real(mid, 2, "Xbox Series X") is None   # ninguna con ese nombre: mejor sin foto que otra cosa
+
+
+
+def test_infografias_cuentan_como_imagen_y_entrega_limpia_en_el_escritorio(aislado, tmp_path):
+    """Un vídeo con todas sus frases en infografía puede seguir (no se queda en el paso 2 ni 3), y la entrega deja en
+    el Escritorio SOLO los 3 vídeos (la carpeta completa queda en Studio 4)."""
+    from studio4 import montaje, paquete
+    mid = montaje.crear("Prueba", "GTA 6 va a ocupar hasta 212 gigabytes en tu consola. Y la predescarga empieza el día diez.")
+    montaje.modificar(mid, lambda p: [f.update(grafico={"tipo": "chips", "titulo": "X"}) for f in p["frases"]])
+    assert montaje.paso_actual(montaje.cargar(mid)) == 4
+    js = (config.WEB / "montaje.js").read_text(encoding="utf-8")
+    assert "f.grafico || f.video || f.isometrico" in js and "✦ Infografía" in js
+    base = montaje.carpeta(mid)
+    for origen, _ in paquete.FORMATOS:
+        (base / origen).write_bytes(b"video")
+    (base / "notas.txt").write_text("x", encoding="utf-8")
+    limpia = paquete.entregar_en_escritorio(base, "FourLevel", "Prueba", "2026-11-04")
+    assert limpia == paquete.ESCRITORIO / "FourLevel" / "videos FourLevel" / "2026-11-04" / "Prueba"
+    assert sorted(x.name for x in limpia.iterdir()) == sorted(f for _, f in paquete.FORMATOS)
+    prog = paquete.entregar_en_escritorio(base, "FourLevel", "Secretos", "2026-11-29", programado=True)
+    assert prog == paquete.ESCRITORIO / "FourLevel" / "Programados" / "2026-11-29" / "Secretos"

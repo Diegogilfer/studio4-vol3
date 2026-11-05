@@ -89,6 +89,11 @@ def lanzar(vid: str, crear: Callable[..., str] | None = None) -> str:
             return v["video"]
         mid = crear(v["tema"], v.get("opciones") or {}, canal=v["canal"])
         v.update(estado="creado", video=mid, creado=time.strftime("%Y-%m-%d %H:%M"))
+        try:   # el vídeo sabe que es de la agenda: su entrega va aparte, a «Programados»
+            from . import montaje
+            montaje.modificar(mid, lambda q: q.update(programado={"publicar": v["fecha"], "fila": v["id"]}))
+        except Exception:  # noqa: BLE001 - en las pruebas, `crear` es falso y no hay vídeo
+            pass
         _escribir(videos)
     return mid
 

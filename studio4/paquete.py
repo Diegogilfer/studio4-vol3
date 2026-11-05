@@ -14,6 +14,7 @@ qué es cada cosa y dónde subirla.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import time
@@ -22,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 from . import canales, carpetas, montaje
+
+ESCRITORIO = Path(os.getenv("STUDIO4_ESCRITORIO", str(Path.home() / "Desktop")))   # la entrega limpia: solo los vídeos
 
 FORMATOS = (("final_16x9.mp4", "1 Vídeo final · YouTube (16x9).mp4"),
             ("short_9x16.mp4", "2 Short · YouTube Shorts, TikTok y Reels (9x16).mp4"),
@@ -141,7 +144,28 @@ def preparar(mid: str) -> Path:
         for f in destino.rglob("*"):
             if f.is_file():
                 z.write(f, Path(destino.name) / f.relative_to(destino))
-    montaje.modificar(mid, lambda q: q.update(paquete={"carpeta": str(destino), "zip": "paquete.zip", "hecho": time.strftime("%Y-%m-%d %H:%M")}))
+    limpia = entregar_en_escritorio(base, canal, _nombre_limpio(p["titulo"]), fecha, programado=bool(p.get("programado")))
+    montaje.modificar(mid, lambda q: q.update(paquete={"carpeta": str(destino), "zip": "paquete.zip", "hecho": time.strftime("%Y-%m-%d %H:%M"),
+                                                       "escritorio": str(limpia) if limpia else ""}))
+    return destino
+
+
+def entregar_en_escritorio(base: Path, canal: str, titulo: str, fecha: str, programado: bool = False) -> Path | None:
+    """SOLO los 3 vídeos, sin documentos (lo pidió el autor), agrupados por fecha de montaje:
+    Escritorio › <canal> › videos <canal> › <fecha> › <título>   (los hechos a mano)
+    Escritorio › <canal> › Programados › <fecha> › <título>      (los que creó la agenda)
+    La carpeta completa (miniaturas, textos, proyecto) queda como copia en Vídeos › STUDIO 4."""
+    if not ESCRITORIO.is_dir():
+        return None
+    nombre_canal = _nombre_limpio(canal, 40)
+    grupo = "Programados" if programado else f"videos {nombre_canal}"
+    destino = ESCRITORIO / nombre_canal / grupo / fecha / titulo
+    destino.mkdir(parents=True, exist_ok=True)
+    for viejo in destino.glob("*.mp4"):
+        viejo.unlink(missing_ok=True)
+    for origen, final in FORMATOS:
+        if (base / origen).exists():
+            shutil.copy2(base / origen, destino / final)
     return destino
 
 

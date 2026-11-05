@@ -733,6 +733,9 @@ async function cargarVideo(id) {
 }
 
 function miniaturaDe(f) {
+  if (f.grafico) return f.grafico.foto_archivo
+    ? `<img src="/m/${esc(datos.video.id)}/imagenes/${esc(f.grafico.foto_archivo)}" alt="" loading="lazy"><em>✦ Infografía · ${esc(f.grafico.tipo)}</em>`
+    : `<span>✦ Infografía · ${esc(f.grafico.tipo)}</span>`;
   if (f.panel) return `<span>Panel: ${esc(f.panel.titulo || "texto")}</span>`;
   if (f.imagen) return `<img src="/m/${esc(datos.video.id)}/imagenes/${esc(f.imagen.archivo)}" alt="" loading="lazy"><em>Imagen${f.imagen.credito ? ` · ${esc(f.imagen.credito)}` : ""}</em>`;
   if (!f.clip) return `<span>Elegir plano</span>`;
@@ -829,7 +832,7 @@ function pintarVideo() {
   }
   const p = pasoVisto || paso;
   const estado = (n) => (n < paso || (n === 5 && v.final) ? "hecho" : n === paso ? "toca" : "");
-  const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen).length;
+  const conClip = v.frases.filter((f) => f.clip || f.panel || f.imagen || f.grafico || f.video || f.isometrico).length;
   $("vista").innerHTML = `
     <div class="lienzo sin-chat"><div class="lienzo-main">
     <a class="volver" href="#videos">← Tus vídeos</a>
