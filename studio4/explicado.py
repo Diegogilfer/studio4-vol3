@@ -21,7 +21,7 @@ from typing import Any, Callable
 from . import config
 
 logger = logging.getLogger("studio4.explicado")
-VERSION = 2
+VERSION = 3
 TIPOS = {
     "contador": "una cifra que cuenta hasta su valor, con su unidad (para números, récords, precios, tamaños)",
     "reloj": "una esfera que gira entre dos extremos (día/noche, antes/después, horas, duración)",
@@ -57,6 +57,11 @@ body.archivo .num, body.archivo .grande { font-family: var(--titulo); font-weigh
 .peq { font-size: 26px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--tenue); }
 svg { position: absolute; overflow: visible; }
 #foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.34) saturate(1.15) blur(7px); transform-origin: 50% 45%; }
+#foto.nitida { filter: brightness(.5) saturate(1.05); }
+body.archivo #foto.nitida { filter: brightness(.48) sepia(.3); }
+.tarjeta-foto { position: absolute; border-radius: 26px; overflow: hidden; border: 3px solid var(--borde); background: rgba(255,255,255,.92);
+  box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.tarjeta-foto img { width: 100%; height: 100%; object-fit: contain; display: block; }
 #velo { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,.05), rgba(0,0,0,.6) 75%); }
 body.archivo #foto { filter: brightness(.32) sepia(.45) saturate(.9) blur(7px); }
 #grano { position: absolute; inset: 0; pointer-events: none; opacity: 0; background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
@@ -225,20 +230,31 @@ P.camino = (g) => {
 };
 P.comparacion = (g) => {
   const a = g.a || { nombre: "A", valor: 1 }, b = g.b || { nombre: "B", valor: 2 }, max = Math.max(a.valor, b.valor) || 1;
-  const alto = V ? H * .38 : H * .52, base = cy + alto / 2, sep = V ? W * .2 : W * .13;
+  const conFotos = !!(G.fotos_src && (G.fotos_src.a || G.fotos_src.b));
+  const alto = conFotos ? H * .14 : (V ? H * .38 : H * .52), base = conFotos ? H * .9 : cy + alto / 2, sep = V ? W * .22 : W * .17;
+  const ladoFoto = V ? W * .4 : H * .5, topeFoto = V ? H * .16 : H * .12;
   const piezas = [[a, C.b, -1], [b, C.a, 1]].map(([d, col, sg]) => {
     const barra = div("abs", ""); Object.assign(barra.style, { width: (V ? 190 : 170) + "px", borderRadius: "24px 24px 6px 6px", background: `linear-gradient(180deg, ${col}, ${col}55)`, boxShadow: `0 0 40px ${col}44` });
     const num = div("abs num", ""); num.style.fontSize = (V ? 90 : 80) + "px"; num.style.color = C.t;
     const nom = div("abs peq", ""); nom.textContent = d.nombre; nom.style.color = C.t;
-    return { barra, num, nom, d, x: cx + sg * sep };
+    let foto = null;
+    const src = G.fotos_src?.[sg < 0 ? "a" : "b"];
+    if (src) { foto = div("tarjeta-foto", `<img src="${src}">`); }
+    return { barra, num, nom, d, x: cx + sg * sep, foto };
   });
-  const chip = g.etiqueta ? ponerChip(g.etiqueta, cx, cy - alto / 2 - 190) : null;
+  const chip = g.etiqueta ? ponerChip(g.etiqueta, cx, conFotos ? topeFoto - 90 : cy - alto / 2 - 190) : null;
   return (t) => piezas.forEach((p, i) => {
     const q = sal(tramo(t, (.3 + i * .3) * R, (1.2 + i * .3) * R)), h = alto * (p.d.valor / max) * q, w = parseFloat(p.barra.style.width);
     Object.assign(p.barra.style, { left: p.x - w / 2 + "px", top: base - h + "px", height: h + "px", opacity: tramo(t, 0, .3 * R) });
-    p.num.textContent = fmt(p.d.valor * q, p.d.decimales || 0) + (g.unidad ? " " + g.unidad : ""); p.num.style.left = p.x + "px"; p.num.style.top = base - h - 110 + "px";
+    p.num.textContent = fmt(p.d.valor * q, p.d.decimales || 0) + (g.unidad ? " " + g.unidad : ""); p.num.style.left = p.x + "px";
+    p.num.style.top = (conFotos ? topeFoto + ladoFoto + 24 : base - h - 110) + "px";
     aparece(p.num, tramo(t, (.3 + i * .3) * R, (.6 + i * .3) * R), 10);
     p.nom.style.left = p.x + "px"; p.nom.style.top = base + 26 + "px"; aparece(p.nom, tramo(t, .2 * R, .5 * R));
+    if (p.foto) {   // la foto real de cada lado, encima de su barra
+      const lado = ladoFoto, q2 = tramo(t, (.1 + i * .2) * R, (.5 + i * .2) * R);
+      Object.assign(p.foto.style, { width: lado + "px", height: lado + "px", left: p.x - lado / 2 + "px", top: topeFoto + "px",
+        opacity: cl(q2 * 1.5), transform: `translateY(${(1 - sal(q2)) * 40}px) scale(${mz(.85, 1, sal(q2))})` });
+    }
     if (chip) aparece(chip, tramo(t, .1 * R, .5 * R));
   });
 };
@@ -316,16 +332,18 @@ def _base(ancho: int, alto: int) -> tuple[int, int]:
     return (1080, 1920) if alto > ancho else (1920, 1080)
 
 
-def html(grafico: dict[str, Any], dur: float, ancho: int, alto: int, tema: str = "neon", foto: str = "") -> str:
+def html(grafico: dict[str, Any], dur: float, ancho: int, alto: int, tema: str = "neon", foto: str = "", nitida: bool = False) -> str:
     bw, bh = _base(ancho, alto)
-    return (PLANTILLA.replace("__FOTO__", f'<img id="foto" src="{foto}"><div id="velo"></div>' if foto else "")
+    clase = ' class="nitida"' if nitida else ""
+    return (PLANTILLA.replace("__FOTO__", f'<img id="foto"{clase} src="{foto}"><div id="velo"></div>' if foto else "")
             .replace("__G__", json.dumps(grafico, ensure_ascii=False)).replace("__W__", str(bw)).replace("__H__", str(bh))
             .replace("__ZOOM__", f"{ancho / bw:.4f}").replace("__TEMA__", tema if tema in TEMAS else "neon")
             .replace("__RITMO__", str(TEMAS.get(tema, TEMAS["neon"])["ritmo"])).replace("__DUR__", f"{dur:.3f}"))
 
 
 def renderizar(grafico: dict[str, Any], dur: float, destino: Path, ancho: int = 1920, alto: int = 1080, tema: str = "neon",
-               fps: int = config.FPS, avisar: Callable[[str, int], None] = lambda *_: None, fondo: Path | None = None) -> Path:
+               fps: int = config.FPS, avisar: Callable[[str, int], None] = lambda *_: None, fondo: Path | None = None,
+               nitida: bool = False, fotos: dict[str, Path] | None = None) -> Path:
     """El vídeo del gráfico, sin audio, a la duración exacta de la frase. `fondo`: una imagen del juego que va detrás
     (oscurecida, con zoom lento); sin ella, la rejilla."""
     from playwright.sync_api import sync_playwright
@@ -337,8 +355,13 @@ def renderizar(grafico: dict[str, Any], dur: float, destino: Path, ancho: int = 
         if fondo and Path(fondo).exists():
             foto = f"fondo{Path(fondo).suffix.lower()}"
             shutil.copy(fondo, trabajo / foto)
+        grafico = dict(grafico)
+        for lado, ruta in (fotos or {}).items():   # las fotos reales de la comparación, junto a la página
+            if ruta and Path(ruta).exists():
+                shutil.copy(ruta, trabajo / f"lado_{lado}{Path(ruta).suffix.lower()}")
+                grafico.setdefault("fotos_src", {})[lado] = f"lado_{lado}{Path(ruta).suffix.lower()}"
         pagina = trabajo / "g.html"
-        pagina.write_text(html(grafico, dur, ancho, alto, tema, foto), encoding="utf-8")
+        pagina.write_text(html(grafico, dur, ancho, alto, tema, foto, nitida), encoding="utf-8")
         cuadros = max(1, int(math.ceil(dur * fps)))
         destino.parent.mkdir(parents=True, exist_ok=True)
         ff = subprocess.Popen(["ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "image2pipe", "-framerate", str(fps), "-i", "-",
@@ -372,6 +395,9 @@ __TIPOS__
 Reglas: usa un gráfico solo donde ayuda a entender o impacta (cifras, comparaciones, decisiones, multitudes, lugares,
 cambios); __PROPORCION__ No repitas el mismo tipo dos frases seguidas. Textos de los gráficos CORTOS y en
 mayúsculas (máx. 3 palabras por etiqueta), datos SOLO del guion (nunca inventes cifras). Sin logos ni personajes reales.
+FOTO REAL: si la frase habla de algo real y concreto que se pueda fotografiar (un producto como una consola, un
+lugar real, un objeto), añade en "datos" "foto": búsqueda corta en INGLÉS con su nombre exacto (p. ej. "PlayStation 5",
+"Xbox Series X"); en una comparación de dos cosas reales, "foto_a" y "foto_b". Nunca para personajes de videojuegos.
 Devuelve JSON: {"frases": [{"n": 1, "tipo": "ninguno|contador|reloj|...", "datos": {...}}]} con estos datos por tipo:
 contador {"valor": 212, "unidad": "GB", "etiqueta": "TAMAÑO", "decimales": 0}; reloj {"centro": "GTA VI", "izquierda": "DÍA",
 "derecha": "NOCHE"}; deslizador {"titulo": "REALISMO", "etiqueta": "AJUSTE", "desde": 0.2, "hasta": 0.9, "etiqueta_ini": "MENOS",

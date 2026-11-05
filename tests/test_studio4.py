@@ -4018,3 +4018,27 @@ def test_infografia_con_imagen_del_juego_de_fondo(aislado, tmp_path, monkeypatch
     medios.ffmpeg("-ss", "0.2", "-i", str(v), "-frames:v", "1", str(tmp_path / "c.png"))
     r, g, b = Image.open(tmp_path / "c.png").convert("RGB").getpixel((20, 20))
     assert r > b   # se ve el color de la imagen (oscurecida), no el azul de la rejilla
+
+
+def test_foto_real_del_objeto_exacto_y_en_la_mejor_calidad(aislado, tmp_path, monkeypatch):
+    """Si la frase nombra algo real (una consola), se busca su foto libre: con el nombre EXACTO (la PS2 no vale por la
+    PS5) y, entre las buenas, la de más resolución."""
+    import io
+    import requests
+    from PIL import Image
+    from studio4 import imagenes_libres as il, montaje
+    mid = montaje.crear("Prueba", "La PlayStation 5 pesa mucho más de lo que crees. Y la Xbox también ocupa lo suyo.")
+    cand = [{"titulo": "Sony-PlayStation-2-Console.jpg", "url": "u_ps2", "ancho": 4000, "alto": 3000, "licencia": "dominio público", "fuente": "Wikimedia Commons"},
+            {"titulo": "PlayStation 5 small.jpg", "url": "u_peq", "ancho": 1200, "alto": 1000, "licencia": "cc by-sa", "fuente": "Wikimedia Commons"},
+            {"titulo": "PlayStation 5 and DualSense.jpg", "url": "u_big", "ancho": 3000, "alto": 2000, "licencia": "cc by-sa", "fuente": "Wikimedia Commons"}]
+    monkeypatch.setattr(il, "buscar", lambda *a, **k: cand)
+    pedidas = []
+
+    class R:
+        def __init__(self, url):
+            pedidas.append(url); b = io.BytesIO(); Image.new("RGB", (1200, 800), (9, 9, 9)).save(b, "JPEG"); self.content = b.getvalue()
+        def raise_for_status(self): pass
+    monkeypatch.setattr(requests, "get", lambda url, **k: R(url))
+    r = montaje._foto_real(mid, 1, "PlayStation 5 console")
+    assert r and pedidas == ["u_big"] and (montaje.carpeta_imagenes(mid) / r["archivo"]).exists()
+    assert montaje._foto_real(mid, 2, "Xbox Series X") is None   # ninguna con ese nombre: mejor sin foto que otra cosa

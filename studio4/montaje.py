@@ -1202,6 +1202,14 @@ def _poner_graficos(mid: str) -> int:
     p = cargar(mid)
     elegidos = explicado.proponer(p["frases"], p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid)
 
+    for n, g in elegidos.items():   # la foto real de lo que se habla (consola, lugar, producto), con su crédito
+        for clave, destino in (("foto", "foto_archivo"), ("foto_a", "foto_a_archivo"), ("foto_b", "foto_b_archivo")):
+            if g.get(clave):
+                real = _foto_real(mid, n, str(g[clave]))
+                if real:
+                    g[destino] = real["archivo"]
+                    g.setdefault("creditos", []).append(real["credito"])
+
     def cambio(q):
         for f in q["frases"]:
             f.pop("grafico", None)
@@ -1210,6 +1218,41 @@ def _poner_graficos(mid: str) -> int:
         q.update(previa="", final=None, short=None)
     modificar(mid, cambio)
     return len(elegidos)
+
+
+def _foto_real(mid: str, n: int, consulta: str) -> dict[str, str] | None:
+    """Una foto REAL y libre (Wikimedia, Openverse) de lo que nombra la frase. El título tiene que llevar el nombre
+    exacto (marca y número): «PlayStation 5» no vale con una foto de la PlayStation 2."""
+    import io
+    import requests
+    from PIL import Image
+    from . import imagenes_libres as il
+    claves = [w for w in re.findall(r"[a-z0-9]+", consulta.lower()) if w not in ("console", "photo", "the", "of", "and")]
+    if not claves:
+        return None
+    try:
+        candidatas = il.buscar(consulta, por_fuente=8, fuentes=("commons", "openverse"))
+    except Exception as e:  # noqa: BLE001 - sin foto, la infografía va sobre el plano del juego
+        logger.info("Foto real «%s»: %s", consulta, e)
+        return None
+    def es_la_cosa(c: dict) -> bool:   # el nombre exacto en el título y licencia libre
+        titulo = re.sub(r"[^a-z0-9]+", " ", str(c.get("titulo", "")).lower())
+        return il.licencia_ok(c) and all(re.search(rf"\b{re.escape(k)}\b", titulo) for k in claves)
+    lado = lambda c: min(c.get("ancho") or 0, c.get("alto") or 0)  # noqa: E731
+    buenas = [c for c in candidatas if es_la_cosa(c) and lado(c) >= 1000] or [c for c in candidatas if es_la_cosa(c) and lado(c) >= 600]
+    # la mejor calidad posible: la de más resolución primero
+    for c in sorted(buenas, key=lambda c: -(c.get("ancho") or 0) * (c.get("alto") or 0)):
+        try:
+            r = requests.get(c["url"], headers=il.UA, timeout=40)
+            r.raise_for_status()
+            im = Image.open(io.BytesIO(r.content)).convert("RGB")
+        except Exception:  # noqa: BLE001
+            continue
+        im.thumbnail((1920, 1920))
+        nombre = f"{n:03d}_real_{hashlib.sha1(c['url'].encode()).hexdigest()[:8]}.jpg"
+        im.save(carpeta_imagenes(mid) / nombre, quality=92)
+        return {"archivo": nombre, "credito": f"{c.get('titulo', '')} · {il.credito(c)} · {c.get('pagina') or c['url']}"}
+    return None
 
 
 def poner_graficos(mid: str) -> None:
@@ -1852,10 +1895,15 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None], vertical:
         elif f.get("grafico"):   # infografía animada hecha con código (estilo «Explicado»), a la duración de la frase
             from . import explicado
             tema = explicado.tema_de(_canal_o_none(p))
-            foto = _fondo_grafico(p, k)
-            seg = cache / f"{huella('grafico', explicado.VERSION, f['grafico'], tema, round(d, 3), foto.name if foto else '')}.mp4"
+            g = f["grafico"]
+            real = carpeta_imagenes(mid) / g["foto_archivo"] if g.get("foto_archivo") else None
+            foto = real if real and real.exists() else _fondo_grafico(p, k)
+            lados = {lado: carpeta_imagenes(mid) / g[f"foto_{lado}_archivo"] for lado in ("a", "b") if g.get(f"foto_{lado}_archivo")}
+            seg = cache / f"{huella('grafico', explicado.VERSION, g, tema, round(d, 3), foto.name if foto else '')}.mp4"
             if not seg.exists():
-                explicado.renderizar(f["grafico"], d, seg, ancho, alto, tema, fondo=foto)
+                explicado.renderizar(g, d, seg, ancho, alto, tema, fondo=foto, nitida=bool(real and real.exists()), fotos=lados)
+            for cr in g.get("creditos") or []:
+                usados.append({"frase": f["n"], "fuente": cr, "canal": "", "url": "", "imagen": True})
             en_uso.add(seg)
             usados.append({"frase": f["n"], "fuente": "Infografía animada de Studio 4", "canal": "", "url": "", "imagen": True})
             eventos += [(cursor + 0.05, "whoosh", 0.3), (cursor + 0.35, "pop", 0.6)]
