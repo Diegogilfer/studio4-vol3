@@ -4146,3 +4146,13 @@ def test_estilo_reportaje_transiciones_nuevas_y_video_real(aislado, tmp_path, mo
     assert montaje._video_real(mid, f, "busy office workers")
     v = montaje.cargar(mid)["frases"][0]["video"]
     assert v["credito"] == "Vídeo: Ana (Pixabay)" and (montaje.carpeta(mid) / "videos" / v["archivo"]).exists()
+
+
+def test_un_short_de_60s_no_se_trocea(aislado):
+    """Un vídeo que ya es un Short (hasta 90 s, como los de la agenda de diciembre) no se parte en 3: su Short es él
+    entero. Los 3 Shorts distintos son para los vídeos largos."""
+    from studio4 import montaje
+    mid = montaje.crear("Prueba", "GTA 6 va a ocupar 212 GB en tu consola. Y la predescarga empieza el día diez.")
+    montaje.modificar(mid, lambda p: p.update(voz={"pausas": {"tiempos": [[0.2, 30.0], [30.5, 60.0]]}}))
+    assert montaje._hacer_shorts(mid) == []
+    assert montaje.tramo_corto({"voz": {"palabras": [{"palabra": "Fin.", "texto": "Fin.", "ini": 0, "fin": 60}]}}) == (0.0, 60.4)

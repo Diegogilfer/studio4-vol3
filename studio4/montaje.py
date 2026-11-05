@@ -2504,6 +2504,7 @@ def _hacer_final(mid: str) -> None:
 
 
 SHORT_MAXIMO = 178.0   # YouTube admite Shorts de hasta 3 minutos
+SHORT_ES_ENTERO = 90.0   # un vídeo de hasta 90 s ya es un Short: no se trocea en 3 (eso es para los vídeos largos)
 
 
 def tramo_corto(p: dict[str, Any], maximo: float = 58.0) -> tuple[float, float]:
@@ -2836,6 +2837,9 @@ def _tramos_shorts(p: dict[str, Any], n: int = 3, flexible: bool = False) -> lis
 def _hacer_shorts(mid: str) -> list[dict[str, Any]]:
     """Los 3 Shorts/Reels distintos del vídeo (short_1/2/3_9x16.mp4). Devuelve sus tramos (el mejor primero)."""
     q = cargar(mid)
+    tiempos = (q.get("voz") or {}).get("pausas", {}).get("tiempos") or (q.get("voz") or {}).get("tiempos") or []
+    if tiempos and tiempos[-1][1] <= SHORT_ES_ENTERO:   # el vídeo YA es un Short (los de la agenda de diciembre): entero
+        return []
     tramos = tramos_shorts(q)
     if len(tramos) < 2:
         return []
