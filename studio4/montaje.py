@@ -1158,6 +1158,37 @@ def carpeta_imagenes(mid: str) -> Path:
     return c
 
 
+def _fondo_grafico(p: dict[str, Any], k: int) -> Path | None:
+    """La imagen que va detrás de la infografía de la frase k: el plano del juego de esa frase o, si no tiene, el de la
+    frase con plano más cercana (como hace el canal de referencia: la imagen del juego de fondo y el texto encima)."""
+    frases = p["frases"]
+    for dist in range(len(frases)):
+        for j in (k - dist, k + dist):
+            if 0 <= j < len(frases):
+                c = frases[j].get("clip") or {}
+                if c.get("fuente") and c.get("plano") and (img := _fotograma_plano(c["fuente"], int(c["plano"]))):
+                    return img
+    return None
+
+
+def _fotograma_plano(fid: str, plano: int) -> Path | None:
+    """El fotograma central del plano en la mejor calidad bajada (1080p si la hay; si no, la copia de 360p). Se guarda."""
+    destino = extractor.CACHE / f"{fid}_planos" / f"{plano:03d}_fondo.jpg"
+    if destino.exists():
+        return destino
+    try:
+        meta = fuente(fid)
+        pl = meta["planos"][plano - 1]
+        origen = extractor.CACHE / (meta.get("alta") or meta.get("baja") or "")
+        if not origen.is_file():
+            return None
+        medios.ffmpeg("-ss", f"{(pl['ini'] + pl['fin']) / 2:.2f}", "-i", str(origen), "-frames:v", "1", "-q:v", "2", str(destino))
+        return destino if destino.exists() else None
+    except Exception as e:  # noqa: BLE001 - sin fondo, la infografía va sobre la rejilla
+        logger.info("Fondo de infografía (%s, %s): %s", fid, plano, e)
+        return None
+
+
 def _canal_o_none(p: dict[str, Any]) -> dict[str, Any] | None:
     try:
         return canales.obtener(p.get("canal") or "")
@@ -1821,9 +1852,10 @@ def _render(mid: str, final: bool, avisar: Callable[[str, int], None], vertical:
         elif f.get("grafico"):   # infografía animada hecha con código (estilo «Explicado»), a la duración de la frase
             from . import explicado
             tema = explicado.tema_de(_canal_o_none(p))
-            seg = cache / f"{huella('grafico', explicado.VERSION, f['grafico'], tema, round(d, 3))}.mp4"
+            foto = _fondo_grafico(p, k)
+            seg = cache / f"{huella('grafico', explicado.VERSION, f['grafico'], tema, round(d, 3), foto.name if foto else '')}.mp4"
             if not seg.exists():
-                explicado.renderizar(f["grafico"], d, seg, ancho, alto, tema)
+                explicado.renderizar(f["grafico"], d, seg, ancho, alto, tema, fondo=foto)
             en_uso.add(seg)
             usados.append({"frase": f["n"], "fuente": "Infografía animada de Studio 4", "canal": "", "url": "", "imagen": True})
             eventos += [(cursor + 0.05, "whoosh", 0.3), (cursor + 0.35, "pop", 0.6)]

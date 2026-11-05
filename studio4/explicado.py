@@ -21,7 +21,7 @@ from typing import Any, Callable
 from . import config
 
 logger = logging.getLogger("studio4.explicado")
-VERSION = 1
+VERSION = 2
 TIPOS = {
     "contador": "una cifra que cuenta hasta su valor, con su unidad (para números, récords, precios, tamaños)",
     "reloj": "una esfera que gira entre dos extremos (día/noche, antes/después, horas, duración)",
@@ -56,10 +56,13 @@ html, body { margin: 0; width: __W__px; height: __H__px; overflow: hidden; backg
 body.archivo .num, body.archivo .grande { font-family: var(--titulo); font-weight: 700; }
 .peq { font-size: 26px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--tenue); }
 svg { position: absolute; overflow: visible; }
+#foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(.34) saturate(1.15) blur(7px); transform-origin: 50% 45%; }
+#velo { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,.05), rgba(0,0,0,.6) 75%); }
+body.archivo #foto { filter: brightness(.32) sepia(.45) saturate(.9) blur(7px); }
 #grano { position: absolute; inset: 0; pointer-events: none; opacity: 0; background-image: radial-gradient(rgba(255,255,255,.05) 1px, transparent 1px);
   background-size: 5px 5px; }
 body.archivo #grano { opacity: 1; }
-</style></head><body class="__TEMA__"><canvas id="fondo" width="__W__" height="__H__"></canvas><div id="escena"></div><div id="grano"></div>
+</style></head><body class="__TEMA__">__FOTO__<canvas id="fondo" width="__W__" height="__H__"></canvas><div id="escena"></div><div id="grano"></div>
 <script>
 const G = __G__, W = __W__, H = __H__, R = __RITMO__, DUR = __DUR__, V = H > W;
 const M = Math.min(W, H), cx = W / 2, cy = H / 2;
@@ -79,7 +82,17 @@ const aparece = (n, p, dy) => { n.style.opacity = cl(p * 1.6); n.style.transform
 
 // fondo: rejilla tenue que avanza despacio y motas de luz
 const lz = document.getElementById("fondo").getContext("2d");
+const FOTO = document.getElementById("foto");
 function fondo(t) {
+  if (FOTO) {   // imagen del juego de fondo: zoom lento y solo las motas de luz encima (sin rejilla)
+    FOTO.style.transform = `scale(${1.06 + .06 * t / DUR})`;
+    lz.clearRect(0, 0, W, H);
+    for (let i = 0; i < 28; i++) {
+      const x = azar(i) * W, y = (azar(i + 9) * H - t * (10 + 25 * azar(i + 3)) / R + H) % H;
+      lz.fillStyle = `rgba(255,255,255,${(.12 + .25 * azar(i + 5)) * (.5 + .5 * Math.sin(t * 2 + i))})`; lz.beginPath(); lz.arc(x, y, 1.5 + 2 * azar(i + 7), 0, 7); lz.fill();
+    }
+    return;
+  }
   const g = lz.createRadialGradient(cx, cy * .9, 10, cx, cy, Math.max(W, H) * .75);
   g.addColorStop(0, document.body.classList.contains("archivo") ? "#2a2014" : "#141433"); g.addColorStop(1, getComputedStyle(document.body).getPropertyValue("--fondo"));
   lz.fillStyle = g; lz.fillRect(0, 0, W, H);
@@ -303,23 +316,29 @@ def _base(ancho: int, alto: int) -> tuple[int, int]:
     return (1080, 1920) if alto > ancho else (1920, 1080)
 
 
-def html(grafico: dict[str, Any], dur: float, ancho: int, alto: int, tema: str = "neon") -> str:
+def html(grafico: dict[str, Any], dur: float, ancho: int, alto: int, tema: str = "neon", foto: str = "") -> str:
     bw, bh = _base(ancho, alto)
-    return (PLANTILLA.replace("__G__", json.dumps(grafico, ensure_ascii=False)).replace("__W__", str(bw)).replace("__H__", str(bh))
+    return (PLANTILLA.replace("__FOTO__", f'<img id="foto" src="{foto}"><div id="velo"></div>' if foto else "")
+            .replace("__G__", json.dumps(grafico, ensure_ascii=False)).replace("__W__", str(bw)).replace("__H__", str(bh))
             .replace("__ZOOM__", f"{ancho / bw:.4f}").replace("__TEMA__", tema if tema in TEMAS else "neon")
             .replace("__RITMO__", str(TEMAS.get(tema, TEMAS["neon"])["ritmo"])).replace("__DUR__", f"{dur:.3f}"))
 
 
 def renderizar(grafico: dict[str, Any], dur: float, destino: Path, ancho: int = 1920, alto: int = 1080, tema: str = "neon",
-               fps: int = config.FPS, avisar: Callable[[str, int], None] = lambda *_: None) -> Path:
-    """El vídeo del gráfico, sin audio, a la duración exacta de la frase."""
+               fps: int = config.FPS, avisar: Callable[[str, int], None] = lambda *_: None, fondo: Path | None = None) -> Path:
+    """El vídeo del gráfico, sin audio, a la duración exacta de la frase. `fondo`: una imagen del juego que va detrás
+    (oscurecida, con zoom lento); sin ella, la rejilla."""
     from playwright.sync_api import sync_playwright
     from . import animacion
     trabajo = Path(tempfile.mkdtemp(prefix="s4_expl_", dir=config.PRODUCCIONES))
     try:
         shutil.copy(animacion.FUENTES / "geist-latin-wght-normal.woff2", trabajo / "geist.woff2")
+        foto = ""
+        if fondo and Path(fondo).exists():
+            foto = f"fondo{Path(fondo).suffix.lower()}"
+            shutil.copy(fondo, trabajo / foto)
         pagina = trabajo / "g.html"
-        pagina.write_text(html(grafico, dur, ancho, alto, tema), encoding="utf-8")
+        pagina.write_text(html(grafico, dur, ancho, alto, tema, foto), encoding="utf-8")
         cuadros = max(1, int(math.ceil(dur * fps)))
         destino.parent.mkdir(parents=True, exist_ok=True)
         ff = subprocess.Popen(["ffmpeg", "-v", "error", "-nostdin", "-y", "-f", "image2pipe", "-framerate", str(fps), "-i", "-",
@@ -330,7 +349,7 @@ def renderizar(grafico: dict[str, Any], dur: float, destino: Path, ancho: int = 
                 nav = pw.chromium.launch(channel="msedge", headless=True)
                 pag = nav.new_page(viewport={"width": ancho, "height": alto})
                 pag.goto(pagina.as_uri())
-                pag.wait_for_function("document.fonts.ready")
+                pag.wait_for_function("document.fonts.ready.then(() => [...document.images].every(i => i.complete))")
                 for n in range(cuadros):
                     pag.evaluate(f"window.__s4({n / fps:.5f})")
                     ff.stdin.write(pag.screenshot(type="jpeg", quality=93))

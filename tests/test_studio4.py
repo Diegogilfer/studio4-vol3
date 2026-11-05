@@ -3999,3 +3999,22 @@ def test_material_del_banco_cuando_youtube_bloquea(tmp_path, monkeypatch):
     assert material.CANALES_OFICIALES.search("Rockstar Games")
     assert material.del_banco(material.alias_de("Grand Theft Auto VI", ["GTA 6"])) == ["suyo", "t1"]
     assert material.del_banco(set()) == []
+
+
+def test_infografia_con_imagen_del_juego_de_fondo(aislado, tmp_path, monkeypatch):
+    """La infografía va encima de una imagen del juego (el plano de su frase o el más cercano), no sobre la rejilla."""
+    from PIL import Image
+    from studio4 import explicado, montaje
+    monkeypatch.setattr(montaje, "_fotograma_plano", lambda fid, n: tmp_path / f"{fid}_{n}.jpg")
+    p = {"frases": [{"n": 1}, {"n": 2, "clip": {"fuente": "A", "plano": 3}}, {"n": 3}, {"n": 4, "clip": {"fuente": "B", "plano": 1}}]}
+    assert montaje._fondo_grafico(p, 0).name == "A_3.jpg"      # la más cercana con plano
+    assert montaje._fondo_grafico(p, 3).name == "B_1.jpg"      # la suya
+    assert montaje._fondo_grafico({"frases": [{"n": 1}]}, 0) is None
+    assert 'id="foto"' in explicado.html({"tipo": "chips"}, 2, 1920, 1080, "neon", "fondo.jpg")
+    assert 'id="foto"' not in explicado.html({"tipo": "chips"}, 2, 1920, 1080, "neon")
+    foto = tmp_path / "f.jpg"
+    Image.new("RGB", (640, 360), (200, 60, 20)).save(foto)
+    v = explicado.renderizar({"tipo": "chips", "titulo": "HOLA"}, 0.4, tmp_path / "v.mp4", 640, 360, "neon", fps=10, fondo=foto)
+    medios.ffmpeg("-ss", "0.2", "-i", str(v), "-frames:v", "1", str(tmp_path / "c.png"))
+    r, g, b = Image.open(tmp_path / "c.png").convert("RGB").getpixel((20, 20))
+    assert r > b   # se ve el color de la imagen (oscurecida), no el azul de la rejilla
