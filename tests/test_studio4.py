@@ -3980,3 +3980,22 @@ def test_cambiar_guion_conserva_infografias_e_imagenes_de_las_frases_iguales(ais
     montaje.cambiar_guion(mid, "GTA 6 va a ocupar hasta 212 gigabytes en tu consola. Lo confirmó Rockstar al anunciar la predescarga.")
     fr = montaje.cargar(mid)["frases"]
     assert fr[0]["grafico"]["valor"] == 212 and "grafico" not in fr[1]
+
+
+
+def test_material_del_banco_cuando_youtube_bloquea(tmp_path, monkeypatch):
+    """Si YouTube no deja bajar material (restricción de edad), se usan los vídeos OFICIALES del mismo juego que ya
+    están en el banco: los subidos por el autor primero; nunca los de otros creadores ni los de otro juego."""
+    import json as _json
+    from studio4 import extractor, material
+    monkeypatch.setattr(extractor, "CACHE", tmp_path)
+    def banco(fid, titulo, canal, planos, local=False):
+        (tmp_path / f"{fid}.banco.json").write_text(_json.dumps({"id": fid, "titulo": titulo, "nombre": titulo, "canal": canal,
+                                                                 "planos": [{}] * planos, **({"local": True} if local else {})}), encoding="utf-8")
+    banco("t1", "Grand Theft Auto VI Trailer 1", "Rockstar Games", 41)
+    banco("suyo", "trailer lanzamiento gta vi", "Subido desde tu PC", 29, local=True)
+    banco("otro", "500 DETALLES de GTA VI", "Carrero", 60)
+    banco("gta5", "GTA 5 Official Trailer", "Rockstar Games", 50)
+    assert material.CANALES_OFICIALES.search("Rockstar Games")
+    assert material.del_banco(material.alias_de("Grand Theft Auto VI", ["GTA 6"])) == ["suyo", "t1"]
+    assert material.del_banco(set()) == []

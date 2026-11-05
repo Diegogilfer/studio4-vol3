@@ -31,7 +31,7 @@ BUENO = re.compile(r"\b(tr[aá]iler|trailer|gameplay|walkthrough|no commentary|s
 SIN_VOZ = re.compile(r"no comment(ary)?|sin comentarios?|longplay|cutscenes?|cinem[aá]tic|movie|pel[ií]cula", re.IGNORECASE)
 OFICIAL = re.compile(r"official|oficial", re.IGNORECASE)
 CANALES_OFICIALES = re.compile(r"^(rockstar games|playstation|xbox|nintendo|ubisoft|ea|bethesda|capcom|bandai namco|"
-                               r"square enix|sega|cd projekt red|naughty dog|insomniac games|ign|gamespot|the game awards)",
+                               r"square enix|sega|cd projekt red|naughty dog|insomniac games|ign|gamespot|the game awards)\b",
                                re.IGNORECASE)
 
 SISTEMA = """Eres el documentalista visual de un canal de videojuegos. Para el tema que te den, di qué material
@@ -115,6 +115,27 @@ def del_juego(titulo: str, alias: set[str]) -> bool:
     """¿El vídeo es del juego? Su título tiene que nombrarlo (si no hay alias, no se filtra)."""
     t = f" {_norm(titulo)} "
     return not alias or any(f" {a} " in t for a in alias)
+
+
+def del_banco(alias: set[str], n: int = 4) -> list[str]:
+    """Vídeos ya bajados del MISMO juego y oficiales (de un canal oficial o subidos por el autor), los de más planos
+    primero. Para cuando YouTube no deja bajar material nuevo (p. ej. tráileres con restricción de edad)."""
+    if not alias:
+        return []
+    salida = []
+    for f in extractor.CACHE.glob("*.banco.json"):
+        try:
+            m = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        oficial = m.get("local") or CANALES_OFICIALES.search(str(m.get("canal") or ""))
+        if oficial and del_juego(f"{m.get('titulo', '')} {m.get('nombre', '')}", alias) and m.get("planos"):
+            salida.append((bool(m.get("local")), len(m["planos"]), m["id"]))   # lo que subió el autor primero (alta calidad)
+    return [fid for *_, fid in sorted(salida, reverse=True)[:n]]
+
+
+def alias_del_inventario(inv: list[dict[str, Any]]) -> set[str]:
+    return {a for e in inv for a in (e.get("alias") or [])}
 
 
 def escenas(tema: str, dossier: str = "", produccion: str = "") -> list[dict[str, str]]:

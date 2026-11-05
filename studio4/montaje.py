@@ -899,6 +899,8 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
                 modificar(mid, lambda q, i=meta["id"]: q["fuentes"].append(i) if i not in q["fuentes"] else None)
             except Exception as e:  # noqa: BLE001 - un vídeo que no baja no frena el resto
                 logger.warning("Material automático (%s): %s", v.get("url"), e)
+    if buscar_material and inv and not generador or generador == "explicado":
+        _material_del_banco(mid, inv)
     if not de_juegos and not generador:
         _avisar(mid, "Buscando una imagen o un clip real para cada frase", 80)
         _ilustrar_reales(mid)
@@ -1059,7 +1061,24 @@ def buscar_material(mid: str) -> None:
         _avisar(mid, "Buscando el material real del tema", 20)
         inv = materiales.inventario(p["titulo"], p.get("guion", ""), produccion=mid)
         modificar(mid, lambda q: q.update(material_sugerido=inv))
+        if _material_del_banco(mid, inv) and any(not con_imagen(f) for f in cargar(mid)["frases"]):
+            _avisar(mid, "Poniendo un plano en cada frase", 85)
+            proponer(mid, rellenar=True)
     _en_fondo(mid, "Buscar material", fase)
+
+
+def _material_del_banco(mid: str, inv: list[dict[str, Any]]) -> int:
+    """Si el vídeo se quedó con poco material (YouTube bloquea algunos tráileres por edad), añade los vídeos oficiales
+    del mismo juego que ya están en el banco. Devuelve cuántos añadió."""
+    from . import material as materiales
+    p = cargar(mid)
+    if len(p["fuentes"]) >= 2:
+        return 0
+    nuevas = [fid for fid in materiales.del_banco(materiales.alias_del_inventario(inv)) if fid not in p["fuentes"]]
+    if nuevas:
+        _avisar(mid, f"Usando {len(nuevas)} vídeo(s) oficial(es) del juego que ya estaban en el banco", 74)
+        modificar(mid, lambda q: q["fuentes"].extend(f for f in nuevas if f not in q["fuentes"]))
+    return len(nuevas)
 
 
 def usar_fuente(mid: str, fid: str) -> None:
