@@ -911,6 +911,9 @@ def _fase_ia(mid: str, tema: str, o: dict[str, Any], buscar_material: bool) -> N
     if generador == "explicado":
         _avisar(mid, "Eligiendo las infografías animadas", 92)
         _poner_graficos(mid)
+    if any(not con_imagen(f) for f in cargar(mid)["frases"]):   # sin plano que encaje: infografía, nunca un plano al azar
+        _avisar(mid, "Infografías para las frases sin imagen", 95)
+        _rellenar_con_infografias(mid)
     p = cargar(mid)
     modificar(mid, lambda q: q.update(
         titulo=escrito.get("titulo_provisional") or q["titulo"],
@@ -1496,7 +1499,32 @@ def proponer(mid: str, rellenar: bool = False) -> int:
     except Exception as e:  # noqa: BLE001 - sin Gemini ni DeepSeek: el reparto por turnos de siempre
         logger.warning("Emparejar planos: %s", e)
         return _proponer_por_turnos(mid)
-    return hechas + (_proponer_por_turnos(mid) if rellenar else 0)
+    hechas -= catalogo.revisar_planos(mid, avisar=lambda t: _avisar(mid, t, 93))   # la imagen tiene que contar lo que dice la frase
+    if rellenar:   # nunca un plano al azar: lo que no tiene plano que encaje lleva infografía (o foto real)
+        hechas += _rellenar_con_infografias(mid)
+    return hechas
+
+
+def _rellenar_con_infografias(mid: str) -> int:
+    """Las frases que se quedaron sin plano reciben una infografía elegida para lo que dicen (con foto real si nombran
+    algo concreto); si la IA no propone nada, una con sus palabras clave. Nunca un plano cualquiera."""
+    from . import explicado
+    p = cargar(mid)
+    vacias = [f for f in p["frases"] if not con_imagen(f)]
+    if not vacias:
+        return 0
+    elegidos = explicado.proponer(vacias, p["titulo"], explicado.tema_de(_canal_o_none(p)), produccion=mid)
+    for f in vacias:
+        if f["n"] not in elegidos:   # lo mínimo: la idea de la frase en grande
+            claves = [w for w in re.findall(r"[\wáéíóúñÁÉÍÓÚÑ]+", f["texto"]) if len(w) > 3][:3]
+            elegidos[f["n"]] = {"tipo": "chips", "titulo": " ".join(claves[:2]).upper(), "chips": [w.upper() for w in claves[2:3]]}
+        g = elegidos[f["n"]]
+        for clave, destino in (("foto", "foto_archivo"), ("foto_a", "foto_a_archivo"), ("foto_b", "foto_b_archivo")):
+            if g.get(clave) and (real := _foto_real(mid, f["n"], str(g[clave]))):
+                g[destino] = real["archivo"]
+                g.setdefault("creditos", []).append(real["credito"])
+    modificar(mid, lambda q: [f.update(grafico=elegidos[f["n"]]) for f in q["frases"] if f["n"] in elegidos and not con_imagen(f)])
+    return len(vacias)
 
 
 def proponer_en_fondo(mid: str) -> None:

@@ -4100,3 +4100,22 @@ def test_tres_shorts_distintos_del_video():
         primera = textos[t["frases"][0] - 1]
         assert not primera.lower().startswith(("y ", "pero", "por eso", "aun así", "desde ahí"))
         assert t["titulo"].endswith("#Shorts")
+
+
+def test_planos_sin_repetir_entre_videos_y_sin_relleno_al_azar(aislado, tmp_path, monkeypatch):
+    """Un plano usado en otro vídeo del canal en 30 días cuenta como usado; las frases sin plano que encaje reciben una
+    infografía (nunca un plano cualquiera)."""
+    from studio4 import catalogo, explicado, montaje
+    _banco_falso(tmp_path, monkeypatch)
+    otro = montaje.crear("Otro", "Primera frase del vídeo con seis palabras. Segunda frase también con seis palabras.")
+    montaje.modificar(otro, lambda p: p.update(canal="fourlevel"))
+    montaje.usar_fuente(otro, "fuenteA")
+    montaje.asignar(otro, 1, "fuenteA", 2)
+    assert "fuenteA:2" in catalogo.usados_recientemente("fourlevel")
+    assert "fuenteA:2" not in catalogo.usados_recientemente("fourlevel", excluir=otro)
+    mid = montaje.crear("Prueba", "GTA 6 pesa 212 gigabytes en tu consola de casa. La predescarga empieza el 10 de noviembre.")
+    monkeypatch.setattr(explicado, "proponer", lambda frases, *a, **k: {frases[0]["n"]: {"tipo": "contador", "valor": 212, "unidad": "GB"}})
+    assert montaje._rellenar_con_infografias(mid) == 2
+    fr = montaje.cargar(mid)["frases"]
+    assert fr[0]["grafico"]["tipo"] == "contador" and fr[1]["grafico"]["tipo"] == "chips" and all(montaje.con_imagen(f) for f in fr)
+    assert not any(f.get("clip") for f in fr)   # nada de planos al azar

@@ -31,6 +31,8 @@ SISTEMA_EMPAREJAR = """Eres montador de vídeo. Te doy las frases de un guion y 
 lo que se ve. Para cada frase elige el plano que MEJOR enseña lo que dice la frase (mismo personaje, vehículo, lugar
 o acción). Reglas: un plano solo una vez; no pongas el mismo tipo de imagen en dos frases seguidas si hay otra que
 encaje; si NINGÚN plano tiene que ver con la frase, no la pongas (es mejor dejarla vacía que poner algo sin relación).
+Si la frase habla de algo del MUNDO REAL que el juego no enseña (consolas, fechas de lanzamiento, precios, gigas,
+empresas, ventas), no le pongas plano: irá una infografía o una foto real.
 Devuelve solo JSON: {"asignaciones": [{"n": 1, "plano": "fuente:12", "por_que": "muy corto"}]}"""
 
 
@@ -68,6 +70,51 @@ def catalogar(fid: str, avisar: Callable[[str], None] = lambda _t: None) -> int:
     return hechos
 
 
+DIAS_SIN_REPETIR = 30
+
+
+def usados_recientemente(canal: str, excluir: str = "", dias: int = DIAS_SIN_REPETIR) -> set[str]:
+    """Los planos («fuente:n») que ya salieron en otros vídeos del canal en los últimos `dias` días: no se repiten
+    mientras haya alternativa (si no, todos los vídeos acaban con las mismas imágenes)."""
+    import time as _t
+    from . import montaje
+    limite = _t.strftime("%Y%m%d", _t.localtime(_t.time() - dias * 86400))
+    salida: set[str] = set()
+    for v in montaje.listar():
+        if v["id"] == excluir or (v.get("canal") or "") != canal or v["id"][:8] < limite:
+            continue
+        for f in montaje.cargar(v["id"])["frases"]:
+            c = f.get("clip") or {}
+            if c.get("fuente") and c.get("plano"):
+                salida.add(f"{c['fuente']}:{c['plano']}")
+    return salida
+
+
+def revisar_planos(mid: str, avisar: Callable[[str], None] = lambda _t: None) -> int:
+    """Gemini mira el fotograma de cada plano elegido junto a su frase y quita el que no encaja. Devuelve cuántos quitó."""
+    from . import calidad_imagen, montaje
+    p = montaje.cargar(mid)
+    quitar = []
+    for f in p["frases"]:
+        c = f.get("clip") or {}
+        if not c.get("fuente") or c.get("elegido_por") == "autor" or f.get("grafico"):
+            continue
+        img = _miniatura(c["fuente"], int(c["plano"]))
+        if not img:
+            continue
+        try:
+            r = calidad_imagen.revisar(img, f["texto"])
+        except Exception as e:  # noqa: BLE001 - sin revisión, el plano se queda
+            logger.info("Revisar plano: %s", e)
+            continue
+        if r.get("encaja") is False:
+            quitar.append(f["n"])
+    if quitar:
+        avisar(f"Quitando {len(quitar)} plano(s) que no encajaban con su frase")
+        montaje.modificar(mid, lambda q: [f.pop("clip", None) for f in q["frases"] if f["n"] in quitar])
+    return len(quitar)
+
+
 def emparejar(mid: str, todas: bool = False, avisar: Callable[[str], None] = lambda _t: None) -> dict[str, int]:
     """Cada frase sin imagen (o todas) recibe el plano que mejor enseña lo que dice. Devuelve {puestas, sin_plano}."""
     from . import montaje
@@ -78,12 +125,15 @@ def emparejar(mid: str, todas: bool = False, avisar: Callable[[str], None] = lam
         catalogar(fid, avisar)
     p = montaje.cargar(mid)
     usados = set() if todas else {f"{f['clip']['fuente']}:{f['clip']['plano']}" for f in p["frases"] if f.get("clip")}
-    planos = {}
+    recientes = usados_recientemente(p.get("canal") or "", excluir=mid)
+    planos, repetidos = {}, {}
     for fid in p["fuentes"]:
         for pl in montaje.fuente(fid)["planos"]:
             pid = f"{fid}:{pl['n']}"
             if pl.get("ve") and pl.get("util", True) and pl.get("calidad", 3) >= 3 and not pl.get("pobre") and pid not in usados:
-                planos[pid] = pl["ve"]
+                (repetidos if pid in recientes else planos)[pid] = pl["ve"]
+    if len(planos) < len(p["frases"]) // 2:   # casi nada nuevo: los ya usados entran, pero al final de la lista
+        planos.update(repetidos)
     frases = [f for f in p["frases"] if todas or not montaje.con_imagen(f)]
     if not frases or not planos:
         if frases and not any(pl.get("ve") for fid in p["fuentes"] for pl in montaje.fuente(fid)["planos"]):
